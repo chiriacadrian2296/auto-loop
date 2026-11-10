@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'accounts.dart';
 import 'plan_parser.dart';
 
 enum AgentKind {
@@ -49,7 +50,9 @@ class LoopSettings {
     this.strategy = SplitStrategy.auto,
     this.extraInstructions = '',
     this.skipBlocked = false,
-  });
+    this.profileId = AccountProfile.defaultId,
+    List<AccountProfile>? profiles,
+  }) : profiles = profiles ?? [];
 
   AgentKind agent;
   String codexPath;
@@ -94,6 +97,17 @@ class LoopSettings {
   /// When the agent declares a block BLOCKED, move on instead of pausing.
   bool skipBlocked;
 
+  /// Which set of CLI logins the agent runs with.
+  String profileId;
+
+  /// User-created profiles (the built-in system profile is implicit).
+  final List<AccountProfile> profiles;
+
+  List<AccountProfile> get allProfiles => [AccountProfile.builtIn, ...profiles];
+
+  AccountProfile get profile =>
+      allProfiles.firstWhere((x) => x.id == profileId, orElse: () => AccountProfile.builtIn);
+
   String get executable => agent == AgentKind.codex ? codexPath : claudePath;
 
   Map<String, Object?> toJson() => {
@@ -117,6 +131,8 @@ class LoopSettings {
         'strategy': strategy.name,
         'extraInstructions': extraInstructions,
         'skipBlocked': skipBlocked,
+        'profileId': profileId,
+        'profiles': [for (final x in profiles) x.toJson()],
       };
 
   static LoopSettings fromJson(Map<String, Object?> j) {
@@ -149,6 +165,10 @@ class LoopSettings {
       strategy: pick(SplitStrategy.values, j['strategy'], d.strategy),
       extraInstructions: j['extraInstructions'] as String? ?? '',
       skipBlocked: j['skipBlocked'] as bool? ?? false,
+      profileId: j['profileId'] as String? ?? AccountProfile.defaultId,
+      profiles: [
+        for (final x in (j['profiles'] as List? ?? const [])) ?AccountProfile.fromJson(x),
+      ],
     );
   }
 

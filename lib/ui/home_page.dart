@@ -6,10 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../engine/accounts.dart';
 import '../engine/cli_locator.dart';
 import '../engine/loop_engine.dart';
 import '../engine/loop_state.dart';
 import '../engine/settings.dart';
+import 'accounts_dialog.dart';
 import 'app_theme.dart';
 import 'blocks_panel.dart';
 import 'log_panel.dart';
@@ -40,6 +42,7 @@ class _HomePageState extends State<HomePage> {
   String? _loadError;
   final _versions = <AgentKind, String?>{};
   final _catalogs = <AgentKind, AgentCatalog>{};
+  final _accounts = <AgentKind, AccountStatus?>{};
   Timer? _ticker;
 
   @override
@@ -80,10 +83,20 @@ class _HomePageState extends State<HomePage> {
         }
       }
       _versions[kind] = await cliVersion(path);
-      _catalogs[kind] = await discoverCatalog(kind, path);
+      _accounts[kind] = await accountStatus(kind, path, s.profileId);
+      _catalogs[kind] = await discoverCatalog(kind, path, profileId: s.profileId);
       if (mounted) setState(() {});
     }
     _saveSettings();
+  }
+
+  Future<void> _openAccounts() async {
+    final profile = engine.settings.profileId;
+    await showAccountsDialog(context, settings: engine.settings, locked: engine.isActive, onChanged: _saveSettings);
+    if (!mounted) return;
+    if (profile != engine.settings.profileId) _accounts.clear();
+    setState(() {});
+    await _detectClis();
   }
 
   void _saveSettings() {
@@ -137,6 +150,7 @@ class _HomePageState extends State<HomePage> {
             onToggleTheme: () => widget.themeMode.value = dark
                 ? ThemeMode.light
                 : ThemeMode.dark,
+            onAccounts: _openAccounts,
             onStart: engine.plan == null || active ? null : engine.start,
             onPause: active && !engine.pauseRequested
                 ? engine.requestPause
@@ -159,6 +173,8 @@ class _HomePageState extends State<HomePage> {
                         planPath: _planPath,
                         versions: _versions,
                         catalogs: _catalogs,
+                        accounts: _accounts,
+                        onOpenAccounts: _openAccounts,
                         onPickPlan: _pickPlan,
                         onPickWorkDir: _pickWorkDir,
                         onReloadPlan: _planPath == null || active
@@ -247,6 +263,7 @@ class _TopBar extends StatelessWidget {
     required this.engine,
     required this.dark,
     required this.onToggleTheme,
+    required this.onAccounts,
     this.onStart,
     this.onPause,
     this.onStop,
@@ -254,7 +271,7 @@ class _TopBar extends StatelessWidget {
 
   final LoopEngine engine;
   final bool dark;
-  final VoidCallback onToggleTheme;
+  final VoidCallback onToggleTheme, onAccounts;
   final VoidCallback? onStart, onPause, onStop;
 
   static String _fmt(Duration d) {
@@ -275,6 +292,7 @@ class _TopBar extends StatelessWidget {
     final c = context.colors;
     final plan = engine.plan;
     final state = engine.state;
+    final width = MediaQuery.sizeOf(context).width;
     // The native title bar is hidden: this bar is draggable and carries the
     // window buttons at its top-right corner.
     return Row(
@@ -308,15 +326,21 @@ class _TopBar extends StatelessWidget {
                       style: TextStyle(color: c.muted, fontSize: 13),
                     ),
                   ),
-                  if (plan != null && state != null) ...[
+                  // On narrower windows the stats give way instead of overflowing.
+                  if (plan != null && state != null && width >= 1180) ...[
                     _Stat(
                       value: '${engine.doneCount}/${plan.blocks.length}',
                       label: 'blocchi',
                     ),
-                    _Stat(value: '${state.runs}', label: 'invocazioni'),
+                    if (width >= 1380) _Stat(value: '${state.runs}', label: 'invocazioni'),
                     _Stat(value: _compact(state.totalTokens), label: 'token'),
                     const SizedBox(width: 10),
                   ],
+                  IconButton(
+                    tooltip: 'Account e CLI',
+                    onPressed: onAccounts,
+                    icon: const Icon(Icons.manage_accounts_outlined, size: 21),
+                  ),
                   IconButton(
                     tooltip: dark ? 'Tema chiaro' : 'Tema scuro',
                     onPressed: onToggleTheme,

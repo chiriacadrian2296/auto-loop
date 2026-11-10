@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import 'accounts.dart';
 import 'agents.dart';
 import 'loop_state.dart';
 import 'plan_parser.dart';
@@ -157,7 +158,8 @@ class LoopEngine extends ChangeNotifier {
     }
     _stopRequested = false;
     _pauseRequested = false;
-    _log(LogKind.info, 'Avvio del loop con ${settings.agent.label} su ${p.basename(planPath!)}.');
+    _log(LogKind.info,
+        'Avvio del loop con ${settings.agent.label} (profilo «${settings.profile.name}») su ${p.basename(planPath!)}.');
     try {
       await _loop();
     } catch (e, st) {
@@ -347,6 +349,7 @@ class LoopEngine extends ChangeNotifier {
         stdin: prompt,
         timeout: Duration(minutes: settings.runTimeoutMinutes),
         idleTimeout: Duration(minutes: settings.idleTimeoutMinutes),
+        environment: profileEnvironment(settings.profileId, settings.agent),
         rawLog: raw,
         onLine: (line, stderr) {
           for (final e in stream.handle(line, stderr: stderr)) {

@@ -33,6 +33,7 @@ class ManagedProcess {
     Duration? idleTimeout,
     required void Function(String line, bool stderr) onLine,
     IOSink? rawLog,
+    Map<String, String> environment = const {},
   }) async {
     final ext = executable.toLowerCase();
     final shell = ext.endsWith('.cmd') || ext.endsWith('.bat');
@@ -41,7 +42,7 @@ class ManagedProcess {
       args,
       workingDirectory: workingDirectory,
       runInShell: shell,
-      environment: const {'NO_COLOR': '1', 'FORCE_COLOR': '0', 'GIT_TERMINAL_PROMPT': '0'},
+      environment: {'NO_COLOR': '1', 'FORCE_COLOR': '0', 'GIT_TERMINAL_PROMPT': '0', ...environment},
     );
     final managed = ManagedProcess._(process);
     return (managed, managed._supervise(stdin, timeout, idleTimeout, onLine, rawLog));

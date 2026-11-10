@@ -58,6 +58,22 @@ ha bisogno delle DLL e della cartella `data` accanto).
 Se dopo aver cambiato le icone dell'interfaccia alcune non compaiono nell'.exe, esegui `flutter clean` e ricompila:
 in release Flutter include solo le icone usate, e una build incrementale può riusare il sottoinsieme vecchio.
 
+## Account e profili
+
+Il pannello **Account e CLI** (icona in alto, o la scheda dell'account nella barra laterale) mostra per Codex e Claude
+il percorso della CLI, la versione e l'account collegato (email e piano), con *Accedi*, *Cambia account* ed *Esci*.
+L'accesso si fa nella procedura ufficiale della CLI, in una finestra di terminale che si apre da sola.
+
+Gli account sono organizzati in **profili**:
+
+- **Account di sistema**: gli stessi accessi di Codex e Claude Code già installati sul computer. Uscire da qui
+  scollega anche quelle app, e il pannello lo ricorda prima di farlo.
+- **Profili creati da te** (es. "Lavoro", o uno per un'altra persona): ognuno ha accessi propri, salvati in
+  `%APPDATA%\AutoLoop\profiles\<profilo>` tramite `CODEX_HOME` e `CLAUDE_CONFIG_DIR`. Non toccano gli account di
+  sistema. Eliminando il profilo si cancellano anche i suoi accessi.
+
+Il loop usa sempre il profilo selezionato, e il registro attività lo indica all'avvio.
+
 ## Impostazioni principali
 
 | Impostazione | Effetto |

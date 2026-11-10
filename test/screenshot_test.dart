@@ -8,7 +8,10 @@ import 'package:auto_loop/engine/agents.dart';
 import 'package:auto_loop/engine/loop_engine.dart';
 import 'package:auto_loop/engine/loop_state.dart';
 import 'package:auto_loop/engine/settings.dart';
+import 'package:auto_loop/engine/accounts.dart';
+import 'package:auto_loop/engine/cli_locator.dart';
 import 'package:auto_loop/main.dart';
+import 'package:auto_loop/ui/accounts_dialog.dart';
 import 'package:auto_loop/ui/app_theme.dart';
 import 'package:auto_loop/ui/choice_dialog.dart';
 import 'package:flutter/material.dart';
@@ -197,4 +200,42 @@ void main() {
       });
     }, skip: out == null);
   }
+
+  testWidgets('screenshot accounts dialog', (tester) async {
+    final codex = await tester.runAsync(() => locateCli(AgentKind.codex));
+    final claude = await tester.runAsync(() => locateCli(AgentKind.claude));
+    tester.view.physicalSize = const Size(1100, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final settings = LoopSettings(codexPath: codex ?? '', claudePath: claude ?? '',
+        profiles: [const AccountProfile(id: 'pshot', name: 'Lavoro')]);
+    final key = GlobalKey();
+    late BuildContext ctx;
+    await tester.pumpWidget(RepaintBoundary(
+      key: key,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(Brightness.light),
+        home: Builder(builder: (c) {
+          ctx = c;
+          return const Scaffold();
+        }),
+      ),
+    ));
+    showAccountsDialog(ctx, settings: settings, locked: false, onChanged: () {});
+    // Let the real CLIs answer their status commands.
+    for (var i = 0; i < 12; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 1)));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.runAsync(() async {
+      final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = await boundary.toImage();
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(p.join(out!, 'accounts.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
+    deleteProfileData('pshot');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(minutes: 5));
+  }, skip: out == null);
 }

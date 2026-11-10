@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'accounts.dart';
 import 'settings.dart';
 
 /// Finds the agent CLIs even when they are not on PATH (desktop apps and the
@@ -117,23 +118,26 @@ class AgentCatalog {
 }
 
 /// Asks the CLI itself which models and effort levels it supports.
-Future<AgentCatalog> discoverCatalog(AgentKind kind, String exe) async {
+Future<AgentCatalog> discoverCatalog(AgentKind kind, String exe,
+    {String profileId = AccountProfile.defaultId}) async {
   if (exe.isEmpty || !File(exe).existsSync()) return const AgentCatalog();
   try {
-    return kind == AgentKind.codex ? await _codexCatalog(exe) : await _claudeCatalog(exe);
+    return kind == AgentKind.codex
+        ? await _codexCatalog(exe, profileEnvironment(profileId, kind))
+        : await _claudeCatalog(exe);
   } catch (_) {
     return const AgentCatalog();
   }
 }
 
-Future<AgentCatalog> _codexCatalog(String exe) async {
+Future<AgentCatalog> _codexCatalog(String exe, Map<String, String> env) async {
   // `debug models` refreshes the catalog online; `--bundled` is the offline fallback.
   for (final args in const [
     ['debug', 'models'],
     ['debug', 'models', '--bundled'],
   ]) {
     try {
-      final r = await Process.run(exe, args, stdoutEncoding: utf8)
+      final r = await Process.run(exe, args, environment: env, stdoutEncoding: utf8)
           .timeout(const Duration(seconds: 30));
       if (r.exitCode != 0) continue;
       final catalog = parseCodexCatalog(r.stdout.toString());

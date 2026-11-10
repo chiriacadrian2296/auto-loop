@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../engine/accounts.dart';
 import '../engine/cli_locator.dart';
 import '../engine/plan_parser.dart';
 import '../engine/settings.dart';
 import 'app_theme.dart';
+import 'accounts_dialog.dart';
 import 'choice_dialog.dart';
 
 class SettingsPanel extends StatelessWidget {
@@ -17,6 +19,8 @@ class SettingsPanel extends StatelessWidget {
     required this.planPath,
     required this.versions,
     required this.catalogs,
+    required this.accounts,
+    required this.onOpenAccounts,
     required this.onPickPlan,
     required this.onPickWorkDir,
     required this.onReloadPlan,
@@ -30,15 +34,17 @@ class SettingsPanel extends StatelessWidget {
   final String? workDir, planPath;
   final Map<AgentKind, String?> versions;
   final Map<AgentKind, AgentCatalog> catalogs;
+  final Map<AgentKind, AccountStatus?> accounts;
+  final VoidCallback onOpenAccounts;
   final VoidCallback onPickPlan, onPickWorkDir, onDetect, onChanged, onStrategyChanged;
   final VoidCallback? onReloadPlan;
 
   @override
   Widget build(BuildContext context) {
     final s = settings;
-    final c = context.colors;
     final exe = s.executable;
     final version = versions[s.agent];
+    final account = accounts[s.agent];
     final catalog = catalogs[s.agent] ?? const AgentCatalog();
     final efforts = catalog.effortsFor(s.model);
     final selectedModel = catalog.find(s.model);
@@ -103,38 +109,24 @@ class SettingsPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(version != null ? Icons.check_circle_rounded : Icons.error_rounded,
-                    size: 15, color: version != null ? c.success : c.danger),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    version ?? (exe.isEmpty ? 'CLI non trovata' : 'Versione non rilevata'),
-                    style: TextStyle(fontSize: 12.5, color: version != null ? c.muted : c.danger),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                _TinyIcon(icon: Icons.manage_search_rounded, tooltip: 'Rileva automaticamente', onPressed: onDetect),
-              ],
+            _PathCard(
+              icon: account?.loggedIn == true ? Icons.account_circle_outlined : Icons.no_accounts_outlined,
+              highlighted: version == null || account?.loggedIn == false,
+              title: version == null
+                  ? (exe.isEmpty ? 'CLI non trovata' : 'CLI non avviabile')
+                  : account == null
+                      ? 'Controllo dell\'account…'
+                      : account.loggedIn
+                          ? (account.email ?? 'Connesso')
+                          : 'Non connesso',
+              subtitle: [
+                'Profilo «${s.profile.name}»',
+                if (account?.loggedIn == true && planLabel(account!.plan).isNotEmpty) 'Piano ${planLabel(account.plan)}',
+                if (version == null || account?.loggedIn == false) 'Configura',
+              ].join(' · '),
+              onTap: onOpenAccounts,
             ),
-            const SizedBox(height: 6),
-            _Field(
-              label: 'Eseguibile',
-              child: TextFormField(
-                key: ValueKey('${s.agent}-$exe'),
-                initialValue: exe,
-                style: const TextStyle(fontSize: 12, fontFamily: mono, fontFamilyFallback: monoFallback),
-                onChanged: (v) {
-                  if (s.agent == AgentKind.codex) {
-                    s.codexPath = v.trim();
-                  } else {
-                    s.claudePath = v.trim();
-                  }
-                  onChanged();
-                },
-              ),
-            ),
+            const SizedBox(height: 12),
             _Field(
               label: 'Modello',
               child: _ModelPicker(
