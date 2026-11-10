@@ -15,9 +15,15 @@ import 'blocks_panel.dart';
 import 'log_panel.dart';
 import 'logo.dart';
 import 'settings_panel.dart';
+import 'window_controls.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.engine, required this.prefs, required this.themeMode});
+  const HomePage({
+    super.key,
+    required this.engine,
+    required this.prefs,
+    required this.themeMode,
+  });
 
   final LoopEngine engine;
   final SharedPreferences prefs;
@@ -128,9 +134,13 @@ class _HomePageState extends State<HomePage> {
           _TopBar(
             engine: engine,
             dark: dark,
-            onToggleTheme: () => widget.themeMode.value = dark ? ThemeMode.light : ThemeMode.dark,
+            onToggleTheme: () => widget.themeMode.value = dark
+                ? ThemeMode.light
+                : ThemeMode.dark,
             onStart: engine.plan == null || active ? null : engine.start,
-            onPause: active && !engine.pauseRequested ? engine.requestPause : null,
+            onPause: active && !engine.pauseRequested
+                ? engine.requestPause
+                : null,
             onStop: active ? engine.stopNow : null,
           ),
           Expanded(
@@ -151,7 +161,9 @@ class _HomePageState extends State<HomePage> {
                         catalogs: _catalogs,
                         onPickPlan: _pickPlan,
                         onPickWorkDir: _pickWorkDir,
-                        onReloadPlan: _planPath == null || active ? null : _reload,
+                        onReloadPlan: _planPath == null || active
+                            ? null
+                            : _reload,
                         onDetect: () => _detectClis(force: true),
                         onChanged: _saveSettings,
                         onStrategyChanged: () {
@@ -166,20 +178,31 @@ class _HomePageState extends State<HomePage> {
                     width: 360,
                     child: Panel(
                       child: _loadError != null
-                          ? _EmptyState(icon: Icons.error_outline_rounded, title: 'Piano non caricato', text: _loadError!)
+                          ? _EmptyState(
+                              icon: Icons.error_outline_rounded,
+                              title: 'Piano non caricato',
+                              text: _loadError!,
+                            )
                           : engine.plan == null
-                              ? _EmptyState(
-                                  icon: Icons.description_outlined,
-                                  title: 'Nessun piano',
-                                  text: 'Scegli un file .md o .txt: verrà diviso in blocchi '
-                                      'che l\'agente svolge uno alla volta.',
-                                  action: FilledButton.icon(
-                                    onPressed: _pickPlan,
-                                    icon: const Icon(Icons.upload_file_rounded, size: 18),
-                                    label: const Text('Scegli piano'),
-                                  ),
-                                )
-                              : BlocksPanel(engine: engine, planName: p.basename(_planPath!)),
+                          ? _EmptyState(
+                              icon: Icons.description_outlined,
+                              title: 'Nessun piano',
+                              text:
+                                  'Scegli un file .md o .txt: verrà diviso in blocchi '
+                                  'che l\'agente svolge uno alla volta.',
+                              action: FilledButton.icon(
+                                onPressed: _pickPlan,
+                                icon: const Icon(
+                                  Icons.upload_file_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('Scegli piano'),
+                              ),
+                            )
+                          : BlocksPanel(
+                              engine: engine,
+                              planName: p.basename(_planPath!),
+                            ),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -191,12 +214,21 @@ class _HomePageState extends State<HomePage> {
                             ? null
                             : () {
                                 LoopState.ensureDir(_workDir!);
-                                Process.run('explorer.exe', [LoopState.dirOf(_workDir!)]);
+                                Process.run('explorer.exe', [
+                                  LoopState.dirOf(_workDir!),
+                                ]);
                               },
-                        onOpenProgress: _workDir == null ||
-                                !File(LoopState.progressFileOf(_workDir!)).existsSync()
+                        onOpenProgress:
+                            _workDir == null ||
+                                !File(LoopState.progressFileOf(_workDir!))
+                                    .existsSync()
                             ? null
-                            : () => Process.run('cmd.exe', ['/c', 'start', '', LoopState.progressFileOf(_workDir!)]),
+                            : () => Process.run('cmd.exe', [
+                                '/c',
+                                'start',
+                                '',
+                                LoopState.progressFileOf(_workDir!),
+                              ]),
                       ),
                     ),
                   ),
@@ -227,62 +259,102 @@ class _TopBar extends StatelessWidget {
 
   static String _fmt(Duration d) {
     final h = d.inHours, m = d.inMinutes % 60, s = d.inSeconds % 60;
-    return h > 0 ? '${h}h ${m}m' : (m > 0 ? '${m}m ${s.toString().padLeft(2, '0')}s' : '${s}s');
+    return h > 0
+        ? '${h}h ${m}m'
+        : (m > 0 ? '${m}m ${s.toString().padLeft(2, '0')}s' : '${s}s');
   }
 
   static String _compact(int n) => n >= 1000000
       ? '${(n / 1000000).toStringAsFixed(1)}M'
       : n >= 1000
-          ? '${(n / 1000).toStringAsFixed(1)}k'
-          : '$n';
+      ? '${(n / 1000).toStringAsFixed(1)}k'
+      : '$n';
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final plan = engine.plan;
     final state = engine.state;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 14, 16, 14),
-      child: Row(
-        children: [
-          const LogoMark(size: 30),
-          const SizedBox(width: 12),
-          Text('AutoLoop',
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text)),
-          const SizedBox(width: 22),
-          _StatusPill(engine: engine, format: _fmt),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              engine.statusMessage,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: c.muted, fontSize: 13),
+    // The native title bar is hidden: this bar is draggable and carries the
+    // window buttons at its top-right corner.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: WindowDragArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 18, 18, 16),
+              child: Row(
+                children: [
+                  const LogoMark(size: 30),
+                  const SizedBox(width: 12),
+                  Text(
+                    'AutoLoop',
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                      color: c.text,
+                    ),
+                  ),
+                  const SizedBox(width: 22),
+                  _StatusPill(engine: engine, format: _fmt),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      engine.statusMessage,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: c.muted, fontSize: 13),
+                    ),
+                  ),
+                  if (plan != null && state != null) ...[
+                    _Stat(
+                      value: '${engine.doneCount}/${plan.blocks.length}',
+                      label: 'blocchi',
+                    ),
+                    _Stat(value: '${state.runs}', label: 'invocazioni'),
+                    _Stat(value: _compact(state.totalTokens), label: 'token'),
+                    const SizedBox(width: 10),
+                  ],
+                  IconButton(
+                    tooltip: dark ? 'Tema chiaro' : 'Tema scuro',
+                    onPressed: onToggleTheme,
+                    icon: Icon(
+                      dark
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  _RoundAction(
+                    icon: Icons.pause_rounded,
+                    tooltip: 'Pausa al termine del passo',
+                    onPressed: onPause,
+                  ),
+                  const SizedBox(width: 6),
+                  _RoundAction(
+                    icon: Icons.stop_rounded,
+                    tooltip: 'Ferma ora',
+                    onPressed: onStop,
+                    danger: true,
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed: onStart,
+                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                    label: Text(
+                      engine.phase == LoopPhase.paused ? 'Riprendi' : 'Avvia',
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          if (plan != null && state != null) ...[
-            _Stat(value: '${engine.doneCount}/${plan.blocks.length}', label: 'blocchi'),
-            _Stat(value: '${state.runs}', label: 'invocazioni'),
-            _Stat(value: _compact(state.totalTokens), label: 'token'),
-            const SizedBox(width: 10),
-          ],
-          IconButton(
-            tooltip: dark ? 'Tema chiaro' : 'Tema scuro',
-            onPressed: onToggleTheme,
-            icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, size: 20),
-          ),
-          const SizedBox(width: 4),
-          _RoundAction(icon: Icons.pause_rounded, tooltip: 'Pausa al termine del passo', onPressed: onPause),
-          const SizedBox(width: 6),
-          _RoundAction(icon: Icons.stop_rounded, tooltip: 'Ferma ora', onPressed: onStop, danger: true),
-          const SizedBox(width: 10),
-          FilledButton.icon(
-            onPressed: onStart,
-            icon: const Icon(Icons.play_arrow_rounded, size: 20),
-            label: Text(engine.phase == LoopPhase.paused ? 'Riprendi' : 'Avvia'),
-          ),
-        ],
-      ),
+        ),
+        const WindowButtons(),
+      ],
     );
   }
 }
@@ -296,7 +368,9 @@ class _StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final color = switch (engine.phase) {
-      LoopPhase.running || LoopPhase.verifying || LoopPhase.waiting => c.primary,
+      LoopPhase.running ||
+      LoopPhase.verifying ||
+      LoopPhase.waiting => c.primary,
       LoopPhase.quotaWait => c.warning,
       LoopPhase.finished => c.success,
       LoopPhase.paused || LoopPhase.stopping => c.danger,
@@ -318,17 +392,31 @@ class _StatusPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _PulseDot(color: color, pulsing: engine.phase == LoopPhase.running || engine.phase == LoopPhase.verifying),
+          _PulseDot(
+            color: color,
+            pulsing:
+                engine.phase == LoopPhase.running ||
+                engine.phase == LoopPhase.verifying,
+          ),
           const SizedBox(width: 8),
-          Text(engine.phase.label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+          Text(
+            engine.phase.label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
           if (timer != null) ...[
             const SizedBox(width: 6),
-            Text(timer,
-                style: TextStyle(
-                  color: color.withValues(alpha: 0.8),
-                  fontSize: 12.5,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                )),
+            Text(
+              timer,
+              style: TextStyle(
+                color: color.withValues(alpha: 0.8),
+                fontSize: 12.5,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
           ],
         ],
       ),
@@ -345,8 +433,12 @@ class _PulseDot extends StatefulWidget {
   State<_PulseDot> createState() => _PulseDotState();
 }
 
-class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+class _PulseDotState extends State<_PulseDot>
+    with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  );
 
   @override
   void initState() {
@@ -369,30 +461,33 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
-        dimension: 14,
-        child: AnimatedBuilder(
-          animation: _c,
-          builder: (context, _) => Stack(
-            alignment: Alignment.center,
-            children: [
-              if (widget.pulsing)
-                Container(
-                  width: 6 + 8 * _c.value,
-                  height: 6 + 8 * _c.value,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: widget.color.withValues(alpha: 0.35 * (1 - _c.value)),
-                  ),
-                ),
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: widget.color),
+    dimension: 14,
+    child: AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) => Stack(
+        alignment: Alignment.center,
+        children: [
+          if (widget.pulsing)
+            Container(
+              width: 6 + 8 * _c.value,
+              height: 6 + 8 * _c.value,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.color.withValues(alpha: 0.35 * (1 - _c.value)),
               ),
-            ],
+            ),
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.color,
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 class _Stat extends StatelessWidget {
@@ -409,13 +504,15 @@ class _Stat extends StatelessWidget {
         textBaseline: TextBaseline.alphabetic,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(value,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: c.text,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              )),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: c.text,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
           const SizedBox(width: 5),
           Text(label, style: TextStyle(fontSize: 12, color: c.muted)),
         ],
@@ -425,7 +522,12 @@ class _Stat extends StatelessWidget {
 }
 
 class _RoundAction extends StatelessWidget {
-  const _RoundAction({required this.icon, required this.tooltip, this.onPressed, this.danger = false});
+  const _RoundAction({
+    required this.icon,
+    required this.tooltip,
+    this.onPressed,
+    this.danger = false,
+  });
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
@@ -451,7 +553,12 @@ class _RoundAction extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.icon, required this.title, required this.text, this.action});
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.text,
+    this.action,
+  });
   final IconData icon;
   final String title, text;
   final Widget? action;
@@ -468,13 +575,27 @@ class _EmptyState extends StatelessWidget {
             Container(
               width: 56,
               height: 56,
-              decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(16)),
+              decoration: BoxDecoration(
+                color: c.primarySoft,
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Icon(icon, color: c.primary, size: 26),
             ),
             const SizedBox(height: 16),
-            Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.text)),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: c.text,
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(text, textAlign: TextAlign.center, style: TextStyle(color: c.muted, height: 1.45)),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: c.muted, height: 1.45),
+            ),
             if (action != null) ...[const SizedBox(height: 18), action!],
           ],
         ),

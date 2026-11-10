@@ -5,9 +5,11 @@ import 'engine/loop_engine.dart';
 import 'engine/settings.dart';
 import 'ui/app_theme.dart';
 import 'ui/home_page.dart';
+import 'ui/window_controls.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  setupWindow();
   final prefs = await SharedPreferences.getInstance();
   final engine = LoopEngine(LoopSettings.decode(prefs.getString('settings')));
   runApp(AutoLoopApp(engine: engine, prefs: prefs));
