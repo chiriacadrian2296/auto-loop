@@ -55,6 +55,9 @@ flutter build windows --release
 Il risultato è in `build\windows\x64\runner\Release\`. Per distribuirlo copia **l'intera cartella** (`AutoLoop.exe`
 ha bisogno delle DLL e della cartella `data` accanto).
 
+Se dopo aver cambiato le icone dell'interfaccia alcune non compaiono nell'.exe, esegui `flutter clean` e ricompila:
+in release Flutter include solo le icone usate, e una build incrementale può riusare il sottoinsieme vecchio.
+
 ## Impostazioni principali
 
 | Impostazione | Effetto |
