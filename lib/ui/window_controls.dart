@@ -82,12 +82,13 @@ class _WindowButtonsState extends State<WindowButtons> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         WindowCaptionButton.minimize(brightness: brightness, onPressed: () => _current()?.minimize()),
-        // Windows 11 shows its snap layouts when hovering this button.
-        MaximizeButtonArea(
-          child: _maximized
-              ? WindowCaptionButton.unmaximize(brightness: brightness, onPressed: () => _current()?.unmaximize())
-              : WindowCaptionButton.maximize(brightness: brightness, onPressed: () => _current()?.maximize()),
-        ),
+        // Not wrapped in MaximizeButtonArea: declaring it as the system
+        // maximize button (for the Windows 11 snap flyout) makes Windows
+        // swallow the hover, so it would not highlight like its neighbours.
+        // Snap layouts stay available with Win+Z and by dragging to an edge.
+        _maximized
+            ? WindowCaptionButton.unmaximize(brightness: brightness, onPressed: () => _current()?.unmaximize())
+            : WindowCaptionButton.maximize(brightness: brightness, onPressed: () => _current()?.maximize()),
         WindowCaptionButton.close(brightness: brightness, onPressed: () => _current()?.close()),
       ],
     );

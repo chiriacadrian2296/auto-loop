@@ -9,6 +9,8 @@ import 'package:auto_loop/engine/loop_engine.dart';
 import 'package:auto_loop/engine/loop_state.dart';
 import 'package:auto_loop/engine/settings.dart';
 import 'package:auto_loop/main.dart';
+import 'package:auto_loop/ui/app_theme.dart';
+import 'package:auto_loop/ui/choice_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -127,7 +129,7 @@ void main() {
 
       engine.phase = LoopPhase.idle;
       await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 30));
+      await tester.pump(const Duration(minutes: 5));
     }, skip: out == null);
   }
 
@@ -148,6 +150,51 @@ void main() {
       File(p.join(out!, 'main_empty.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
     });
     await tester.pumpWidget(const SizedBox());
-    await tester.pump(const Duration(seconds: 30));
+    await tester.pump(const Duration(minutes: 5));
   }, skip: out == null);
+
+  for (final dark in [false, true]) {
+    testWidgets('screenshot model dialog ${dark ? 'dark' : 'light'}', (tester) async {
+      tester.view.physicalSize = const Size(900, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final key = GlobalKey();
+      late BuildContext ctx;
+      await tester.pumpWidget(RepaintBoundary(
+        key: key,
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: buildTheme(dark ? Brightness.dark : Brightness.light),
+          home: Builder(builder: (c) {
+            ctx = c;
+            return const Scaffold();
+          }),
+        ),
+      ));
+      showChoiceDialog<String>(
+        context: ctx,
+        title: 'Modello',
+        subtitle: '8 modelli dal catalogo di Codex',
+        selected: 'gpt-6.1-sol',
+        choices: const [
+          Choice(value: '', label: 'Predefinito della CLI', description: 'Il modello configurato nella CLI.'),
+          Choice(value: 'gpt-6.1-sol', label: 'GPT-6.1-Sol', tag: 'gpt-6.1-sol',
+              description: 'Latest workhorse model for coding and everyday work.'),
+          Choice(value: 'gpt-6-astra', label: 'GPT-6-Astra', tag: 'gpt-6-astra',
+              description: 'Frontier model for the hardest problems.'),
+          Choice(value: 'gpt-6-luna', label: 'GPT-6-Luna', tag: 'gpt-6-luna', description: 'Fast and inexpensive.'),
+          Choice(value: 'x', label: 'Altro modello…', description: 'Scrivi il nome completo di un modello.', accent: true),
+        ],
+      );
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      await tester.runAsync(() async {
+        final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+        final image = await boundary.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File(p.join(out!, 'dialog_${dark ? 'dark' : 'light'}.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+    }, skip: out == null);
+  }
 }

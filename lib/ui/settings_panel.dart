@@ -6,6 +6,7 @@ import '../engine/cli_locator.dart';
 import '../engine/plan_parser.dart';
 import '../engine/settings.dart';
 import 'app_theme.dart';
+import 'choice_dialog.dart';
 
 class SettingsPanel extends StatelessWidget {
   const SettingsPanel({
@@ -69,10 +70,15 @@ class SettingsPanel extends StatelessWidget {
             const SizedBox(height: 12),
             _Field(
               label: 'Suddivisione in blocchi',
-              child: _Dropdown<SplitStrategy>(
+              child: _ChoiceCard<SplitStrategy>(
+                icon: Icons.view_agenda_outlined,
+                dialogTitle: 'Suddivisione in blocchi',
+                dialogSubtitle: 'Come dividere il piano: l\'agente svolge un blocco alla volta.',
                 value: s.strategy,
-                values: SplitStrategy.values,
-                label: (v) => v.label,
+                choices: [
+                  for (final v in SplitStrategy.values)
+                    Choice(value: v, label: v.label, description: _strategyInfo[v]!),
+                ],
                 onChanged: (v) {
                   s.strategy = v;
                   onStrategyChanged();
@@ -131,13 +137,7 @@ class SettingsPanel extends StatelessWidget {
             ),
             _Field(
               label: 'Modello',
-              hint: selectedModel?.description.isNotEmpty == true
-                  ? selectedModel!.description
-                  : catalog.isEmpty
-                      ? 'Elenco non disponibile: premi la lente per rilevarlo.'
-                      : '${catalog.models.length} modelli dal ${catalog.source}.',
               child: _ModelPicker(
-                key: ValueKey('model-${s.agent}-${s.model}-${catalog.models.length}'),
                 catalog: catalog,
                 value: s.model,
                 onChanged: (v) {
@@ -154,7 +154,7 @@ class SettingsPanel extends StatelessWidget {
                 child: _EffortPicker(
                   efforts: efforts,
                   value: s.effort,
-                  defaultLabel: selectedModel?.defaultEffort,
+                  defaultLevel: selectedModel?.defaultEffort,
                   onChanged: (v) {
                     s.effort = v;
                     onChanged();
@@ -163,16 +163,27 @@ class SettingsPanel extends StatelessWidget {
               ),
             _Field(
               label: 'Permessi',
-              hint: s.autonomy == Autonomy.full
-                  ? 'Nessuna sandbox né conferma. Solo su progetti sotto git o con backup.'
-                  : s.agent == AgentKind.codex
-                      ? 'Sandbox sulla cartella del progetto: modifica file ed esegue comandi al suo interno.'
-                      : 'Le azioni sicure (modifiche, build, test) sono approvate in automatico, quelle rischiose bloccate.',
-              hintIsWarning: s.autonomy == Autonomy.full,
-              child: _Dropdown<Autonomy>(
+              hint: s.autonomy == Autonomy.full ? 'Usala solo su progetti sotto git o con un backup.' : null,
+              hintIsWarning: true,
+              child: _ChoiceCard<Autonomy>(
+                icon: s.autonomy == Autonomy.full ? Icons.lock_open_rounded : Icons.shield_outlined,
+                dialogTitle: 'Permessi dell\'agente',
+                dialogSubtitle: 'Quanta libertà ha ${s.agent.label} mentre lavora da solo.',
                 value: s.autonomy,
-                values: Autonomy.values,
-                label: (v) => v == Autonomy.full ? 'Accesso completo' : 'Protetta',
+                choices: [
+                  Choice(
+                    value: Autonomy.sandboxed,
+                    label: 'Protetta',
+                    description: s.agent == AgentKind.codex
+                        ? 'Sandbox sulla cartella del progetto: modifica file ed esegue comandi al suo interno.'
+                        : 'Le azioni sicure (modifiche, build, test) sono approvate in automatico, quelle rischiose bloccate.',
+                  ),
+                  const Choice(
+                    value: Autonomy.full,
+                    label: 'Accesso completo',
+                    description: 'Nessuna sandbox e nessuna conferma: può eseguire qualsiasi comando.',
+                  ),
+                ],
                 onChanged: (v) {
                   s.autonomy = v;
                   onChanged();
@@ -195,10 +206,23 @@ class SettingsPanel extends StatelessWidget {
             const SizedBox(height: 10),
             _Field(
               label: 'Quando la quota finisce',
-              child: _Dropdown<QuotaBehavior>(
+              child: _ChoiceCard<QuotaBehavior>(
+                icon: s.quotaBehavior == QuotaBehavior.wait ? Icons.update_rounded : Icons.pause_circle_outline_rounded,
+                dialogTitle: 'Quando la quota finisce',
+                dialogSubtitle: 'Cosa fare quando la CLI segnala il limite di utilizzo.',
                 value: s.quotaBehavior,
-                values: QuotaBehavior.values,
-                label: (v) => v.label,
+                choices: [
+                  Choice(
+                    value: QuotaBehavior.wait,
+                    label: QuotaBehavior.wait.label,
+                    description: 'Aspetta e riprova ogni ${s.quotaWaitMinutes} minuti, finché la quota non torna.',
+                  ),
+                  Choice(
+                    value: QuotaBehavior.stop,
+                    label: QuotaBehavior.stop.label,
+                    description: 'Mette il loop in pausa: lo riprendi tu quando vuoi.',
+                  ),
+                ],
                 onChanged: (v) {
                   s.quotaBehavior = v;
                   onChanged();
@@ -301,11 +325,13 @@ class _PathCard extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     this.highlighted = false,
+    this.trailing = Icons.chevron_right_rounded,
   });
   final IconData icon;
   final String title, subtitle;
   final VoidCallback onTap;
   final bool highlighted;
+  final IconData trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -346,7 +372,7 @@ class _PathCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, size: 18, color: c.muted),
+              Icon(trailing, size: 18, color: c.muted),
             ],
           ),
         ),
@@ -383,26 +409,53 @@ class _Field extends StatelessWidget {
   }
 }
 
-class _Dropdown<T> extends StatelessWidget {
-  const _Dropdown({required this.value, required this.values, required this.label, required this.onChanged});
+/// A tappable card showing the current choice; opens a popup to change it.
+class _ChoiceCard<T> extends StatelessWidget {
+  const _ChoiceCard({
+    required this.icon,
+    required this.dialogTitle,
+    required this.value,
+    required this.choices,
+    required this.onChanged,
+    this.dialogSubtitle,
+  });
+  final IconData icon;
+  final String dialogTitle;
+  final String? dialogSubtitle;
   final T value;
-  final List<T> values;
-  final String Function(T) label;
-  final void Function(T) onChanged;
+  final List<Choice<T>> choices;
+  final ValueChanged<T> onChanged;
 
   @override
-  Widget build(BuildContext context) => DropdownButtonFormField<T>(
-        initialValue: value,
-        isExpanded: true,
-        borderRadius: BorderRadius.circular(12),
-        icon: const Icon(Icons.expand_more_rounded, size: 20),
-        style: TextStyle(fontSize: 13.5, color: context.colors.text, fontFamily: uiFont, fontFamilyFallback: uiFallback),
-        items: [for (final v in values) DropdownMenuItem(value: v, child: Text(label(v)))],
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
-      );
+  Widget build(BuildContext context) {
+    final current = choices.where((c) => c.value == value).firstOrNull;
+    return _PathCard(
+      icon: icon,
+      title: current?.label ?? '$value',
+      subtitle: current?.description ?? '',
+      trailing: Icons.unfold_more_rounded,
+      onTap: () async {
+        final picked = await showChoiceDialog<T>(
+          context: context,
+          title: dialogTitle,
+          subtitle: dialogSubtitle,
+          choices: choices,
+          selected: value,
+        );
+        if (picked != null && picked != value) onChanged(picked);
+      },
+    );
+  }
 }
+
+const _strategyInfo = <SplitStrategy, String>{
+  SplitStrategy.auto: 'Sceglie da solo la struttura del file: titoli, elenchi o checkbox.',
+  SplitStrategy.headings: 'Un blocco per ogni titolo Markdown (## Titolo).',
+  SplitStrategy.numbered: 'Un blocco per ogni voce di un elenco numerato (1. 2. 3.).',
+  SplitStrategy.checkboxes: 'Un blocco per ogni casella (- [ ]); quelle spuntate sono già fatte.',
+  SplitStrategy.bullets: 'Un blocco per ogni voce di un elenco puntato (- voce).',
+  SplitStrategy.whole: 'Tutto il piano come un unico blocco: l\'agente decide come procedere.',
+};
 
 class _Pair extends StatelessWidget {
   const _Pair(this.a, this.b);
@@ -482,12 +535,42 @@ class _Toggle extends StatelessWidget {
 }
 
 class _ModelPicker extends StatelessWidget {
-  const _ModelPicker({super.key, required this.catalog, required this.value, required this.onChanged});
+  const _ModelPicker({required this.catalog, required this.value, required this.onChanged});
   final AgentCatalog catalog;
   final String value;
   final ValueChanged<String> onChanged;
 
   static const _custom = '\u0000custom';
+
+  Future<void> _pick(BuildContext context) async {
+    final picked = await showChoiceDialog<String>(
+      context: context,
+      title: 'Modello',
+      subtitle: catalog.isEmpty
+          ? 'Elenco non rilevato: puoi usare il predefinito o scrivere un nome.'
+          : '${catalog.models.length} modelli dal ${catalog.source}',
+      selected: value,
+      choices: [
+        const Choice(value: '', label: 'Predefinito della CLI', description: 'Il modello configurato nella CLI.'),
+        for (final m in catalog.models)
+          Choice(
+            value: m.id,
+            label: m.label,
+            tag: m.label.toLowerCase() == m.id ? '' : m.id,
+            description: m.description,
+          ),
+        if (value.isNotEmpty && catalog.find(value) == null)
+          Choice(value: value, label: value, tag: 'personalizzato'),
+        const Choice(value: _custom, label: 'Altro modello…', description: 'Scrivi il nome completo di un modello.', accent: true),
+      ],
+    );
+    if (picked == null || !context.mounted) return;
+    if (picked == _custom) {
+      await _askCustom(context);
+    } else {
+      onChanged(picked);
+    }
+  }
 
   Future<void> _askCustom(BuildContext context) async {
     final controller = TextEditingController(text: value);
@@ -515,102 +598,77 @@ class _ModelPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    final known = catalog.find(value) != null;
-    final items = <String, (String, String)>{
-      '': ('Predefinito della CLI', ''),
-      for (final m in catalog.models) m.id: (m.label, m.label.toLowerCase() == m.id ? '' : m.id),
-      if (value.isNotEmpty && !known) value: (value, 'personalizzato'),
-      _custom: ('Altro modello…', ''),
-    };
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      isExpanded: true,
-      borderRadius: BorderRadius.circular(12),
-      icon: const Icon(Icons.expand_more_rounded, size: 20),
-      menuMaxHeight: 420,
-      style: TextStyle(fontSize: 13.5, color: c.text, fontFamily: uiFont, fontFamilyFallback: uiFallback),
-      selectedItemBuilder: (context) => [
-        for (final e in items.entries)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(e.value.$1, overflow: TextOverflow.ellipsis),
-          ),
-      ],
-      items: [
-        for (final e in items.entries)
-          DropdownMenuItem(
-            value: e.key,
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(e.value.$1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: e.key == _custom ? c.primary : c.text,
-                        fontWeight: e.key == _custom ? FontWeight.w600 : null,
-                      )),
-                ),
-                if (e.value.$2.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Text(e.value.$2,
-                      style: TextStyle(
-                          fontSize: 11.5, color: c.muted, fontFamily: mono, fontFamilyFallback: monoFallback)),
-                ],
-              ],
-            ),
-          ),
-      ],
-      onChanged: (v) {
-        if (v == null) return;
-        if (v == _custom) {
-          _askCustom(context);
-        } else {
-          onChanged(v);
-        }
-      },
+    final m = catalog.find(value);
+    final title = value.isEmpty ? 'Predefinito della CLI' : (m?.label ?? value);
+    final subtitle = value.isEmpty
+        ? (catalog.isEmpty ? 'Clicca per scegliere' : '${catalog.models.length} modelli disponibili')
+        : (m?.description.isNotEmpty == true ? m!.description : (m == null ? 'Modello personalizzato' : value));
+    return _PathCard(
+      icon: Icons.auto_awesome_outlined,
+      title: title,
+      subtitle: subtitle,
+      trailing: Icons.unfold_more_rounded,
+      onTap: () => _pick(context),
     );
   }
 }
 
+/// Plain-language meaning of each reasoning level, shared by both CLIs.
+const _effortInfo = <String, (String, String)>{
+  'minimal': ('Minimo', 'Quasi nessun ragionamento: il più veloce.'),
+  'low': ('Basso', 'Risposte rapide, ragionamento leggero.'),
+  'medium': ('Medio', 'Equilibrio tra velocità e profondità.'),
+  'high': ('Alto', 'Più ragionamento per problemi complessi.'),
+  'xhigh': ('Molto alto', 'Ragionamento esteso, più lento.'),
+  'max': ('Massimo', 'Il ragionamento più approfondito.'),
+  'ultra': ('Ultra', 'Il livello più alto disponibile: lento e costoso.'),
+};
+
+String _effortName(String id) => _effortInfo[id]?.$1 ?? id;
+
 class _EffortPicker extends StatelessWidget {
-  const _EffortPicker({required this.efforts, required this.value, required this.onChanged, this.defaultLabel});
+  const _EffortPicker({required this.efforts, required this.value, required this.onChanged, this.defaultLevel});
   final List<String> efforts;
   final String value;
-  final String? defaultLabel;
+  final String? defaultLevel;
   final ValueChanged<String> onChanged;
+
+  Future<void> _pick(BuildContext context) async {
+    final picked = await showChoiceDialog<String>(
+      context: context,
+      title: 'Livello di ragionamento',
+      subtitle: 'Più ragionamento: risultati migliori, ma più tempo e token.',
+      selected: value,
+      choices: [
+        Choice(
+          value: '',
+          label: 'Predefinito',
+          tag: defaultLevel ?? '',
+          description: defaultLevel == null
+              ? 'Il livello configurato nella CLI.'
+              : 'Il livello consigliato per questo modello: ${_effortName(defaultLevel!).toLowerCase()}.',
+        ),
+        for (final e in efforts)
+          Choice(value: e, label: _effortName(e), tag: e, description: _effortInfo[e]?.$2 ?? ''),
+      ],
+    );
+    if (picked != null) onChanged(picked);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    Widget pill(String id, String label) {
-      final selected = value == id;
-      return Material(
-        color: selected ? c.primary : c.field,
-        borderRadius: BorderRadius.circular(99),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(99),
-          onTap: () => onChanged(id),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-            child: Text(label,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : c.muted,
-                )),
-          ),
-        ),
-      );
-    }
-
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        pill('', defaultLabel == null ? 'Predefinito' : 'Predefinito ($defaultLabel)'),
-        for (final e in efforts) pill(e, e),
-      ],
+    final title = value.isEmpty
+        ? (defaultLevel == null ? 'Predefinito' : 'Predefinito · ${_effortName(defaultLevel!).toLowerCase()}')
+        : _effortName(value);
+    final subtitle = value.isEmpty
+        ? '${efforts.length} livelli disponibili'
+        : (_effortInfo[value]?.$2 ?? value);
+    return _PathCard(
+      icon: Icons.psychology_outlined,
+      title: title,
+      subtitle: subtitle,
+      trailing: Icons.unfold_more_rounded,
+      onTap: () => _pick(context),
     );
   }
 }

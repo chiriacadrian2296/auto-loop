@@ -34,6 +34,6 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     // Let the background CLI detection time out inside the fake clock.
-    await tester.pump(const Duration(seconds: 30));
+    await tester.pump(const Duration(minutes: 5));
   });
 }
