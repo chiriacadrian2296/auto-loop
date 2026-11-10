@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../engine/cli_locator.dart';
 import '../engine/plan_parser.dart';
 import '../engine/settings.dart';
 import 'app_theme.dart';
@@ -14,6 +15,7 @@ class SettingsPanel extends StatelessWidget {
     required this.workDir,
     required this.planPath,
     required this.versions,
+    required this.catalogs,
     required this.onPickPlan,
     required this.onPickWorkDir,
     required this.onReloadPlan,
@@ -26,6 +28,7 @@ class SettingsPanel extends StatelessWidget {
   final bool locked;
   final String? workDir, planPath;
   final Map<AgentKind, String?> versions;
+  final Map<AgentKind, AgentCatalog> catalogs;
   final VoidCallback onPickPlan, onPickWorkDir, onDetect, onChanged, onStrategyChanged;
   final VoidCallback? onReloadPlan;
 
@@ -35,6 +38,9 @@ class SettingsPanel extends StatelessWidget {
     final c = context.colors;
     final exe = s.executable;
     final version = versions[s.agent];
+    final catalog = catalogs[s.agent] ?? const AgentCatalog();
+    final efforts = catalog.effortsFor(s.model);
+    final selectedModel = catalog.find(s.model);
     return AbsorbPointer(
       absorbing: locked,
       child: AnimatedOpacity(
@@ -125,15 +131,36 @@ class SettingsPanel extends StatelessWidget {
             ),
             _Field(
               label: 'Modello',
-              child: TextFormField(
-                initialValue: s.model,
-                decoration: const InputDecoration(hintText: 'Predefinito della CLI'),
+              hint: selectedModel?.description.isNotEmpty == true
+                  ? selectedModel!.description
+                  : catalog.isEmpty
+                      ? 'Elenco non disponibile: premi la lente per rilevarlo.'
+                      : '${catalog.models.length} modelli dal ${catalog.source}.',
+              child: _ModelPicker(
+                key: ValueKey('model-${s.agent}-${s.model}-${catalog.models.length}'),
+                catalog: catalog,
+                value: s.model,
                 onChanged: (v) {
                   s.model = v;
+                  // Keep the effort only if the new model supports it.
+                  if (s.effort.isNotEmpty && !catalog.effortsFor(v).contains(s.effort)) s.effort = '';
                   onChanged();
                 },
               ),
             ),
+            if (efforts.isNotEmpty)
+              _Field(
+                label: 'Ragionamento',
+                child: _EffortPicker(
+                  efforts: efforts,
+                  value: s.effort,
+                  defaultLabel: selectedModel?.defaultEffort,
+                  onChanged: (v) {
+                    s.effort = v;
+                    onChanged();
+                  },
+                ),
+              ),
             _Field(
               label: 'Permessi',
               hint: s.autonomy == Autonomy.full
@@ -450,6 +477,140 @@ class _Toggle extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ModelPicker extends StatelessWidget {
+  const _ModelPicker({super.key, required this.catalog, required this.value, required this.onChanged});
+  final AgentCatalog catalog;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  static const _custom = '\u0000custom';
+
+  Future<void> _askCustom(BuildContext context) async {
+    final controller = TextEditingController(text: value);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Modello personalizzato'),
+        content: SizedBox(
+          width: 360,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'Nome completo del modello'),
+            onSubmitted: (v) => Navigator.pop(context, v),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annulla')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Usa')),
+        ],
+      ),
+    );
+    if (result != null) onChanged(result.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final known = catalog.find(value) != null;
+    final items = <String, (String, String)>{
+      '': ('Predefinito della CLI', ''),
+      for (final m in catalog.models) m.id: (m.label, m.label.toLowerCase() == m.id ? '' : m.id),
+      if (value.isNotEmpty && !known) value: (value, 'personalizzato'),
+      _custom: ('Altro modello…', ''),
+    };
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      borderRadius: BorderRadius.circular(12),
+      icon: const Icon(Icons.expand_more_rounded, size: 20),
+      menuMaxHeight: 420,
+      style: TextStyle(fontSize: 13.5, color: c.text, fontFamily: uiFont, fontFamilyFallback: uiFallback),
+      selectedItemBuilder: (context) => [
+        for (final e in items.entries)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(e.value.$1, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      items: [
+        for (final e in items.entries)
+          DropdownMenuItem(
+            value: e.key,
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(e.value.$1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: e.key == _custom ? c.primary : c.text,
+                        fontWeight: e.key == _custom ? FontWeight.w600 : null,
+                      )),
+                ),
+                if (e.value.$2.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Text(e.value.$2,
+                      style: TextStyle(
+                          fontSize: 11.5, color: c.muted, fontFamily: mono, fontFamilyFallback: monoFallback)),
+                ],
+              ],
+            ),
+          ),
+      ],
+      onChanged: (v) {
+        if (v == null) return;
+        if (v == _custom) {
+          _askCustom(context);
+        } else {
+          onChanged(v);
+        }
+      },
+    );
+  }
+}
+
+class _EffortPicker extends StatelessWidget {
+  const _EffortPicker({required this.efforts, required this.value, required this.onChanged, this.defaultLabel});
+  final List<String> efforts;
+  final String value;
+  final String? defaultLabel;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    Widget pill(String id, String label) {
+      final selected = value == id;
+      return Material(
+        color: selected ? c.primary : c.field,
+        borderRadius: BorderRadius.circular(99),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(99),
+          onTap: () => onChanged(id),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+            child: Text(label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : c.muted,
+                )),
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        pill('', defaultLabel == null ? 'Predefinito' : 'Predefinito ($defaultLabel)'),
+        for (final e in efforts) pill(e, e),
+      ],
     );
   }
 }

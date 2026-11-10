@@ -24,6 +24,10 @@ void main() {
         agent: kind,
         codexPath: kind == AgentKind.codex ? exe! : '',
         claudePath: kind == AgentKind.claude ? exe! : '',
+        // Exercises the model/effort flags too.
+        claudeModel: 'sonnet',
+        codexEffort: 'low',
+        claudeEffort: 'low',
         relaunchDelaySeconds: 0,
         maxAttemptsPerBlock: 3,
         quotaBehavior: QuotaBehavior.stop,

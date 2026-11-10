@@ -33,6 +33,7 @@ class _HomePageState extends State<HomePage> {
   String? _planPath;
   String? _loadError;
   final _versions = <AgentKind, String?>{};
+  final _catalogs = <AgentKind, AgentCatalog>{};
   Timer? _ticker;
 
   @override
@@ -73,6 +74,8 @@ class _HomePageState extends State<HomePage> {
         }
       }
       _versions[kind] = await cliVersion(path);
+      _catalogs[kind] = await discoverCatalog(kind, path);
+      if (mounted) setState(() {});
     }
     _saveSettings();
   }
@@ -145,6 +148,7 @@ class _HomePageState extends State<HomePage> {
                         workDir: _workDir,
                         planPath: _planPath,
                         versions: _versions,
+                        catalogs: _catalogs,
                         onPickPlan: _pickPlan,
                         onPickWorkDir: _pickWorkDir,
                         onReloadPlan: _planPath == null || active ? null : _reload,

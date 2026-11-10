@@ -122,6 +122,7 @@ class CodexBackend extends AgentBackend {
       '--cd', workDir,
       '--output-last-message', lastMessageFile,
       if (settings.model.trim().isNotEmpty) ...['--model', settings.model.trim()],
+      if (settings.effort.trim().isNotEmpty) ...['-c', 'model_reasoning_effort="${settings.effort.trim()}"'],
       '-',
     ];
   }
@@ -251,6 +252,7 @@ class ClaudeBackend extends AgentBackend {
       // blocks risky ones, the closest match to Codex's workspace sandbox.
       settings.autonomy == Autonomy.full ? 'bypassPermissions' : 'auto',
       if (settings.model.trim().isNotEmpty) ...['--model', settings.model.trim()],
+      if (settings.effort.trim().isNotEmpty) ...['--effort', settings.effort.trim()],
     ];
   }
 

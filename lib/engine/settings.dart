@@ -32,7 +32,10 @@ class LoopSettings {
     this.agent = AgentKind.codex,
     this.codexPath = '',
     this.claudePath = '',
-    this.model = '',
+    this.codexModel = '',
+    this.claudeModel = '',
+    this.codexEffort = '',
+    this.claudeEffort = '',
     this.autonomy = Autonomy.sandboxed,
     this.relaunchDelaySeconds = 30,
     this.idleTimeoutMinutes = 10,
@@ -51,8 +54,16 @@ class LoopSettings {
   AgentKind agent;
   String codexPath;
   String claudePath;
-  String model;
+  /// Model and reasoning effort are kept per agent: a Codex model name means
+  /// nothing to Claude and vice versa. Empty = the CLI's own default.
+  String codexModel, claudeModel, codexEffort, claudeEffort;
   Autonomy autonomy;
+
+  String get model => agent == AgentKind.codex ? codexModel : claudeModel;
+  set model(String v) => agent == AgentKind.codex ? codexModel = v : claudeModel = v;
+
+  String get effort => agent == AgentKind.codex ? codexEffort : claudeEffort;
+  set effort(String v) => agent == AgentKind.codex ? codexEffort = v : claudeEffort = v;
 
   /// The "richiamo": pause between one invocation and the next.
   int relaunchDelaySeconds;
@@ -89,7 +100,10 @@ class LoopSettings {
         'agent': agent.name,
         'codexPath': codexPath,
         'claudePath': claudePath,
-        'model': model,
+        'codexModel': codexModel,
+        'claudeModel': claudeModel,
+        'codexEffort': codexEffort,
+        'claudeEffort': claudeEffort,
         'autonomy': autonomy.name,
         'relaunchDelaySeconds': relaunchDelaySeconds,
         'idleTimeoutMinutes': idleTimeoutMinutes,
@@ -111,11 +125,17 @@ class LoopSettings {
     int number(Object? v, int fallback, {int min = 0}) =>
         v is int && v >= min ? v : fallback;
     final d = LoopSettings();
+    final agent = pick(AgentKind.values, j['agent'], d.agent);
+    // Older versions had a single `model` shared by both agents.
+    final legacyModel = j['model'] as String? ?? '';
     return LoopSettings(
-      agent: pick(AgentKind.values, j['agent'], d.agent),
+      agent: agent,
       codexPath: j['codexPath'] as String? ?? '',
       claudePath: j['claudePath'] as String? ?? '',
-      model: j['model'] as String? ?? '',
+      codexModel: j['codexModel'] as String? ?? (agent == AgentKind.codex ? legacyModel : ''),
+      claudeModel: j['claudeModel'] as String? ?? (agent == AgentKind.claude ? legacyModel : ''),
+      codexEffort: j['codexEffort'] as String? ?? '',
+      claudeEffort: j['claudeEffort'] as String? ?? '',
       autonomy: pick(Autonomy.values, j['autonomy'], d.autonomy),
       relaunchDelaySeconds: number(j['relaunchDelaySeconds'], d.relaunchDelaySeconds),
       idleTimeoutMinutes: number(j['idleTimeoutMinutes'], d.idleTimeoutMinutes, min: 1),
