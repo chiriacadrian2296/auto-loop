@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-128 -128 256 256" width="256" height="256">
+  <title>AutoLoop</title>
+  <g fill="currentColor">
+  <path d="M-75 -100A125 125 0 0 1 100 75L73.46 48.46A88 88 0 0 0 -48.46 -73.46Z"/>
+  <path d="M75 100A125 125 0 0 1 -100 -75L-73.46 -48.46A88 88 0 0 0 48.46 73.46Z"/>
+  <path d="M-72 -47H-22L72 47H22Z"/>
+  </g>
+</svg>

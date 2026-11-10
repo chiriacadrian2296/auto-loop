@@ -12,6 +12,7 @@ import '../engine/loop_state.dart';
 import '../engine/settings.dart';
 import 'blocks_panel.dart';
 import 'log_panel.dart';
+import 'logo.dart';
 import 'settings_panel.dart';
 
 class HomePage extends StatefulWidget {
@@ -228,7 +229,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: [
-          Icon(Icons.all_inclusive, color: scheme.primary, size: 28),
+          const LogoMark(size: 28),
           const SizedBox(width: 10),
           Text('AutoLoop', style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(width: 24),
