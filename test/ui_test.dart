@@ -30,7 +30,7 @@ void main() {
 
     await tester.tap(find.textContaining('Setup del progetto'));
     await tester.pump();
-    expect(find.text('Segna completato'), findsOneWidget);
+    expect(find.text('Completato'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     // Let the background CLI detection time out inside the fake clock.
