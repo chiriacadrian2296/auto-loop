@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../engine/agents.dart';
 import '../engine/loop_engine.dart';
+import 'app_theme.dart';
 
 class LogPanel extends StatefulWidget {
   const LogPanel({super.key, required this.engine, this.onOpenLogs, this.onOpenProgress});
@@ -26,11 +27,14 @@ class _LogPanelState extends State<LogPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final c = context.colors;
     final entries = widget.engine.logs.where((e) => _showTools || e.kind != LogKind.tool).toList();
     if (_follow && entries.length != _lastCount) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        if (_scroll.hasClients) {
+          _scroll.animateTo(_scroll.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+        }
       });
     }
     _lastCount = entries.length;
@@ -39,63 +43,83 @@ class _LogPanelState extends State<LogPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+          padding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
           child: Row(
             children: [
-              Expanded(
-                child: Text('Attività',
-                    style: Theme.of(context).textTheme.titleSmall, overflow: TextOverflow.ellipsis),
-              ),
-              FilterChip(
-                label: const Text('Comandi'),
-                selected: _showTools,
-                onSelected: (v) => setState(() => _showTools = v),
-              ),
+              const Expanded(child: SectionLabel('Attività')),
+              _Toggle(label: 'Comandi', value: _showTools, onChanged: (v) => setState(() => _showTools = v)),
               const SizedBox(width: 6),
-              FilterChip(
-                label: const Text('Segui'),
-                selected: _follow,
-                onSelected: (v) => setState(() => _follow = v),
-              ),
+              _Toggle(label: 'Segui', value: _follow, onChanged: (v) => setState(() => _follow = v)),
+              const SizedBox(width: 6),
               IconButton(
                 tooltip: 'Apri PROGRESS.md',
                 onPressed: widget.onOpenProgress,
-                icon: const Icon(Icons.edit_note),
+                iconSize: 19,
+                icon: const Icon(Icons.sticky_note_2_outlined),
               ),
               IconButton(
                 tooltip: 'Apri cartella dei log',
                 onPressed: widget.onOpenLogs,
-                icon: const Icon(Icons.folder_open),
+                iconSize: 19,
+                icon: const Icon(Icons.folder_open_outlined),
               ),
               IconButton(
                 tooltip: 'Pulisci',
-                onPressed: widget.engine.clearLogs,
-                icon: const Icon(Icons.clear_all),
+                onPressed: widget.engine.logs.isEmpty ? null : widget.engine.clearLogs,
+                iconSize: 19,
+                icon: const Icon(Icons.delete_sweep_outlined),
               ),
             ],
           ),
         ),
+        Divider(height: 1, color: c.border),
         Expanded(
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLowest,
-              border: Border.all(color: scheme.outlineVariant),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: entries.isEmpty
-                ? Center(child: Text('Nessuna attività', style: TextStyle(color: scheme.outline)))
-                : SelectionArea(
-                    child: ListView.builder(
-                      controller: _scroll,
-                      padding: const EdgeInsets.all(10),
-                      itemCount: entries.length,
-                      itemBuilder: (context, i) => _LogLine(entries[i]),
-                    ),
+          child: entries.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.terminal_rounded, size: 28, color: c.muted.withValues(alpha: 0.5)),
+                      const SizedBox(height: 8),
+                      Text('L\'attività dell\'agente apparirà qui', style: TextStyle(color: c.muted)),
+                    ],
                   ),
-          ),
+                )
+              : SelectionArea(
+                  child: ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    itemCount: entries.length,
+                    itemBuilder: (context, i) => _LogLine(entries[i]),
+                  ),
+                ),
         ),
       ],
+    );
+  }
+}
+
+class _Toggle extends StatelessWidget {
+  const _Toggle({required this.label, required this.value, required this.onChanged});
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Material(
+      color: value ? c.primarySoft : Colors.transparent,
+      shape: StadiumBorder(side: BorderSide(color: value ? Colors.transparent : c.border)),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: () => onChanged(!value),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Text(label,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: value ? c.primary : c.muted)),
+        ),
+      ),
     );
   }
 }
@@ -106,39 +130,85 @@ class _LogLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final color = switch (entry.kind) {
-      LogKind.agent => scheme.onSurface,
-      LogKind.tool => scheme.outline,
-      LogKind.system => scheme.outline,
-      LogKind.info => scheme.primary,
-      LogKind.success => dark ? Colors.greenAccent : Colors.green.shade800,
-      LogKind.warning => dark ? Colors.orangeAccent : Colors.orange.shade900,
-      LogKind.error => scheme.error,
-    };
+    final c = context.colors;
     final time = '${entry.at.hour.toString().padLeft(2, '0')}:'
         '${entry.at.minute.toString().padLeft(2, '0')}:'
         '${entry.at.second.toString().padLeft(2, '0')}';
-    final bold = entry.kind == LogKind.info || entry.kind == LogKind.success;
+    final timeText = Text(time,
+        style: TextStyle(
+          fontSize: 11,
+          color: c.muted.withValues(alpha: 0.75),
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ));
+
+    // Start of an invocation: a section header that separates the stream.
+    if (entry.kind == LogKind.info && entry.text.startsWith('▶')) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 18, bottom: 8),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(99)),
+              child: Text(entry.text.substring(1).trim(),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.primary)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Divider(color: c.border)),
+            const SizedBox(width: 10),
+            timeText,
+          ],
+        ),
+      );
+    }
+
+    final (IconData? icon, Color color, bool monoText) = switch (entry.kind) {
+      LogKind.agent => (null, c.text, false),
+      LogKind.tool => (Icons.chevron_right_rounded, c.muted, true),
+      LogKind.system => (null, c.muted, false),
+      LogKind.info => (Icons.info_outline_rounded, c.primary, false),
+      LogKind.success => (Icons.check_circle_rounded, c.success, false),
+      LogKind.warning => (Icons.warning_amber_rounded, c.warning, false),
+      LogKind.error => (Icons.error_outline_rounded, c.danger, false),
+    };
+
+    final style = TextStyle(
+      fontSize: monoText ? 12 : (entry.kind == LogKind.system ? 12 : 13.5),
+      height: 1.5,
+      color: color,
+      fontFamily: monoText ? mono : null,
+      fontFamilyFallback: monoText ? monoFallback : null,
+      fontWeight: entry.kind == LogKind.success || entry.kind == LogKind.error ? FontWeight.w600 : null,
+    );
+
+    final agent = entry.kind == LogKind.agent;
     return Padding(
-      padding: EdgeInsets.only(top: entry.kind == LogKind.info ? 8 : 1, bottom: 1),
+      padding: EdgeInsets.symmetric(vertical: agent ? 5 : 1.5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$time  ', style: TextStyle(fontFamily: 'Consolas', fontSize: 12, color: scheme.outline)),
-          Expanded(
-            child: Text(
-              entry.text,
-              style: TextStyle(
-                fontFamily: 'Consolas',
-                fontSize: 12.5,
-                height: 1.35,
-                color: color,
-                fontWeight: bold ? FontWeight.w600 : null,
-              ),
-            ),
+          SizedBox(
+            width: 22,
+            child: icon == null
+                ? (agent
+                    ? Align(
+                        alignment: Alignment.topLeft,
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 4, left: 5),
+                          width: 3,
+                          height: 15,
+                          decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(2)),
+                        ),
+                      )
+                    : null)
+                : Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(icon, size: 15, color: color),
+                  ),
           ),
+          Expanded(child: Text(entry.text, style: style)),
+          const SizedBox(width: 12),
+          Padding(padding: const EdgeInsets.only(top: 3), child: timeText),
         ],
       ),
     );

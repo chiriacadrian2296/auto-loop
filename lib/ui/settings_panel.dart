@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 
 import '../engine/plan_parser.dart';
 import '../engine/settings.dart';
+import 'app_theme.dart';
 
 class SettingsPanel extends StatelessWidget {
   const SettingsPanel({
@@ -31,183 +32,199 @@ class SettingsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = settings;
+    final c = context.colors;
     final exe = s.executable;
     final version = versions[s.agent];
     return AbsorbPointer(
       absorbing: locked,
-      child: Opacity(
-        opacity: locked ? 0.6 : 1,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 200),
+        opacity: locked ? 0.55 : 1,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
           children: [
-            const _Section('Piano'),
-            _PathTile(
+            SectionLabel('Piano',
+                trailing: _TinyIcon(icon: Icons.refresh_rounded, tooltip: 'Ricarica dal disco', onPressed: onReloadPlan)),
+            const SizedBox(height: 10),
+            _PathCard(
               icon: Icons.description_outlined,
-              label: 'File del piano',
-              value: planPath,
+              title: planPath == null ? 'Scegli il file del piano' : p.basename(planPath!),
+              subtitle: planPath == null ? '.md o .txt' : p.dirname(planPath!),
+              highlighted: planPath == null,
               onTap: onPickPlan,
-              trailing: IconButton(
-                tooltip: 'Ricarica il piano dal disco',
-                onPressed: onReloadPlan,
-                icon: const Icon(Icons.refresh),
-              ),
-            ),
-            _PathTile(
-              icon: Icons.folder_outlined,
-              label: 'Cartella di lavoro',
-              value: workDir,
-              onTap: onPickWorkDir,
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<SplitStrategy>(
-              initialValue: s.strategy,
-              decoration: const InputDecoration(labelText: 'Suddivisione in blocchi'),
-              items: [
-                for (final v in SplitStrategy.values) DropdownMenuItem(value: v, child: Text(v.label)),
-              ],
-              onChanged: (v) {
-                s.strategy = v!;
-                onStrategyChanged();
-              },
+            _PathCard(
+              icon: Icons.folder_outlined,
+              title: workDir == null ? 'Cartella di lavoro' : p.basename(workDir!),
+              subtitle: workDir ?? 'Dove l\'agente crea e modifica i file',
+              onTap: onPickWorkDir,
             ),
-            const _Section('Agente'),
-            SegmentedButton<AgentKind>(
-              segments: [
-                for (final k in AgentKind.values) ButtonSegment(value: k, label: Text(k.label)),
-              ],
-              selected: {s.agent},
-              onSelectionChanged: (v) {
-                s.agent = v.first;
-                onChanged();
-              },
+            const SizedBox(height: 12),
+            _Field(
+              label: 'Suddivisione in blocchi',
+              child: _Dropdown<SplitStrategy>(
+                value: s.strategy,
+                values: SplitStrategy.values,
+                label: (v) => v.label,
+                onChanged: (v) {
+                  s.strategy = v;
+                  onStrategyChanged();
+                },
+              ),
+            ),
+            const _Gap(),
+            const SectionLabel('Agente'),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<AgentKind>(
+                showSelectedIcon: false,
+                segments: [
+                  for (final k in AgentKind.values) ButtonSegment(value: k, label: Text(k.label)),
+                ],
+                selected: {s.agent},
+                onSelectionChanged: (v) {
+                  s.agent = v.first;
+                  onChanged();
+                },
+              ),
             ),
             const SizedBox(height: 10),
-            TextFormField(
-              key: ValueKey('${s.agent}-$exe'),
-              initialValue: exe,
-              decoration: InputDecoration(
-                labelText: 'Eseguibile ${s.agent.label}',
-                helperText: version ?? (exe.isEmpty ? 'Non trovato' : 'Versione non rilevata'),
-                helperStyle: TextStyle(color: version == null ? Theme.of(context).colorScheme.error : null),
-                suffixIcon: IconButton(
-                  tooltip: 'Rileva automaticamente',
-                  onPressed: onDetect,
-                  icon: const Icon(Icons.search),
+            Row(
+              children: [
+                Icon(version != null ? Icons.check_circle_rounded : Icons.error_rounded,
+                    size: 15, color: version != null ? c.success : c.danger),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    version ?? (exe.isEmpty ? 'CLI non trovata' : 'Versione non rilevata'),
+                    style: TextStyle(fontSize: 12.5, color: version != null ? c.muted : c.danger),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              style: const TextStyle(fontSize: 12),
-              onChanged: (v) {
-                if (s.agent == AgentKind.codex) {
-                  s.codexPath = v.trim();
-                } else {
-                  s.claudePath = v.trim();
-                }
-                onChanged();
-              },
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              initialValue: s.model,
-              decoration: const InputDecoration(
-                labelText: 'Modello (opzionale)',
-                hintText: 'predefinito della CLI',
-              ),
-              onChanged: (v) {
-                s.model = v;
-                onChanged();
-              },
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<Autonomy>(
-              initialValue: s.autonomy,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Permessi dell\'agente'),
-              items: [
-                for (final v in Autonomy.values) DropdownMenuItem(value: v, child: Text(v.label)),
+                _TinyIcon(icon: Icons.manage_search_rounded, tooltip: 'Rileva automaticamente', onPressed: onDetect),
               ],
-              onChanged: (v) {
-                s.autonomy = v!;
-                onChanged();
-              },
             ),
-            if (s.autonomy == Autonomy.full)
-              const _Hint(
-                'L\'agente può eseguire qualsiasi comando senza chiedere. Usalo solo su progetti '
-                'con backup o sotto git.',
-                warning: true,
-              )
-            else
-              _Hint(s.agent == AgentKind.codex
-                  ? 'Codex lavora in una sandbox limitata alla cartella del progetto: può modificare '
-                      'file ed eseguire comandi (test, build) al suo interno.'
-                  : 'Claude modifica file ed esegue comandi (test, build); un classificatore approva '
-                      'in automatico le azioni sicure e blocca quelle rischiose.'),
-            const _Section('Richiamo'),
-            _NumberRow(children: [
-              _NumberField('Richiamo dopo (s)', s.relaunchDelaySeconds, (v) => s.relaunchDelaySeconds = v, onChanged),
-              _NumberField('Tentativi per blocco', s.maxAttemptsPerBlock, (v) => s.maxAttemptsPerBlock = v, onChanged, min: 1),
-            ]),
-            _NumberRow(children: [
-              _NumberField('Silenzio max (min)', s.idleTimeoutMinutes, (v) => s.idleTimeoutMinutes = v, onChanged, min: 1),
-              _NumberField('Durata max (min)', s.runTimeoutMinutes, (v) => s.runTimeoutMinutes = v, onChanged, min: 1),
-            ]),
-            const _Hint('Se l\'agente resta muto oltre il limite o supera la durata massima viene '
-                'terminato e richiamato sullo stesso blocco.'),
-            const _Section('Quota e budget'),
-            DropdownButtonFormField<QuotaBehavior>(
-              initialValue: s.quotaBehavior,
-              decoration: const InputDecoration(labelText: 'Quando la quota finisce'),
-              items: [
-                for (final v in QuotaBehavior.values) DropdownMenuItem(value: v, child: Text(v.label)),
-              ],
-              onChanged: (v) {
-                s.quotaBehavior = v!;
-                onChanged();
-              },
+            const SizedBox(height: 6),
+            _Field(
+              label: 'Eseguibile',
+              child: TextFormField(
+                key: ValueKey('${s.agent}-$exe'),
+                initialValue: exe,
+                style: const TextStyle(fontSize: 12, fontFamily: mono, fontFamilyFallback: monoFallback),
+                onChanged: (v) {
+                  if (s.agent == AgentKind.codex) {
+                    s.codexPath = v.trim();
+                  } else {
+                    s.claudePath = v.trim();
+                  }
+                  onChanged();
+                },
+              ),
             ),
-            _NumberRow(children: [
-              _NumberField('Riprova ogni (min)', s.quotaWaitMinutes, (v) => s.quotaWaitMinutes = v, onChanged,
+            _Field(
+              label: 'Modello',
+              child: TextFormField(
+                initialValue: s.model,
+                decoration: const InputDecoration(hintText: 'Predefinito della CLI'),
+                onChanged: (v) {
+                  s.model = v;
+                  onChanged();
+                },
+              ),
+            ),
+            _Field(
+              label: 'Permessi',
+              hint: s.autonomy == Autonomy.full
+                  ? 'Nessuna sandbox né conferma. Solo su progetti sotto git o con backup.'
+                  : s.agent == AgentKind.codex
+                      ? 'Sandbox sulla cartella del progetto: modifica file ed esegue comandi al suo interno.'
+                      : 'Le azioni sicure (modifiche, build, test) sono approvate in automatico, quelle rischiose bloccate.',
+              hintIsWarning: s.autonomy == Autonomy.full,
+              child: _Dropdown<Autonomy>(
+                value: s.autonomy,
+                values: Autonomy.values,
+                label: (v) => v == Autonomy.full ? 'Accesso completo' : 'Protetta',
+                onChanged: (v) {
+                  s.autonomy = v;
+                  onChanged();
+                },
+              ),
+            ),
+            const _Gap(),
+            const SectionLabel('Richiamo'),
+            const SizedBox(height: 10),
+            _Pair(
+              _NumberField('Richiamo dopo', 's', s.relaunchDelaySeconds, (v) => s.relaunchDelaySeconds = v, onChanged),
+              _NumberField('Tentativi', 'per blocco', s.maxAttemptsPerBlock, (v) => s.maxAttemptsPerBlock = v, onChanged, min: 1),
+            ),
+            _Pair(
+              _NumberField('Silenzio max', 'min', s.idleTimeoutMinutes, (v) => s.idleTimeoutMinutes = v, onChanged, min: 1),
+              _NumberField('Durata max', 'min', s.runTimeoutMinutes, (v) => s.runTimeoutMinutes = v, onChanged, min: 1),
+            ),
+            const _Gap(),
+            const SectionLabel('Quota e budget'),
+            const SizedBox(height: 10),
+            _Field(
+              label: 'Quando la quota finisce',
+              child: _Dropdown<QuotaBehavior>(
+                value: s.quotaBehavior,
+                values: QuotaBehavior.values,
+                label: (v) => v.label,
+                onChanged: (v) {
+                  s.quotaBehavior = v;
+                  onChanged();
+                },
+              ),
+            ),
+            _Pair(
+              _NumberField('Riprova ogni', 'min', s.quotaWaitMinutes, (v) => s.quotaWaitMinutes = v, onChanged,
                   min: 1, enabled: s.quotaBehavior == QuotaBehavior.wait),
-              _NumberField('Budget token (0 = ∞)', s.maxTotalTokens, (v) => s.maxTotalTokens = v, onChanged),
-            ]),
-            const _Section('Fine blocco'),
-            TextFormField(
-              initialValue: s.verifyCommand,
-              decoration: const InputDecoration(
-                labelText: 'Comando di verifica (opzionale)',
-                hintText: 'es. flutter test',
-                helperText: 'Deve terminare con exit 0 perché il blocco sia completato.',
-              ),
-              onChanged: (v) {
-                s.verifyCommand = v;
-                onChanged();
-              },
+              _NumberField('Budget token', '0 = ∞', s.maxTotalTokens, (v) => s.maxTotalTokens = v, onChanged),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Commit git a ogni blocco'),
-              subtitle: const Text('Solo se la cartella è un repository'),
+            const _Gap(),
+            const SectionLabel('Fine blocco'),
+            const SizedBox(height: 10),
+            _Field(
+              label: 'Comando di verifica',
+              hint: 'Deve terminare con exit 0 perché il blocco sia completato.',
+              child: TextFormField(
+                initialValue: s.verifyCommand,
+                style: const TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
+                decoration: const InputDecoration(hintText: 'es. flutter test'),
+                onChanged: (v) {
+                  s.verifyCommand = v;
+                  onChanged();
+                },
+              ),
+            ),
+            _Toggle(
+              title: 'Commit git a ogni blocco',
+              subtitle: 'Se la cartella è un repository',
               value: s.gitCommit,
               onChanged: (v) {
                 s.gitCommit = v;
                 onChanged();
               },
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Salta i blocchi bloccati'),
-              subtitle: const Text('Altrimenti il loop si mette in pausa'),
+            _Toggle(
+              title: 'Salta i blocchi bloccati',
+              subtitle: 'Altrimenti il loop va in pausa',
               value: s.skipBlocked,
               onChanged: (v) {
                 s.skipBlocked = v;
                 onChanged();
               },
             ),
-            const _Section('Istruzioni aggiuntive'),
+            const _Gap(),
+            const SectionLabel('Istruzioni aggiuntive'),
+            const SizedBox(height: 10),
             TextFormField(
               initialValue: s.extraInstructions,
               minLines: 3,
               maxLines: 8,
+              style: const TextStyle(fontSize: 13, height: 1.4),
               decoration: const InputDecoration(
                 hintText: 'Regole valide per ogni blocco: stack, stile, cosa non toccare…',
               ),
@@ -223,77 +240,157 @@ class SettingsPanel extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section(this.title);
-  final String title;
-
+class _Gap extends StatelessWidget {
+  const _Gap();
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 18, bottom: 8),
-        child: Text(title.toUpperCase(),
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  letterSpacing: 1.1,
-                  fontWeight: FontWeight.w700,
-                )),
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 18),
+        child: Divider(),
       );
 }
 
-class _Hint extends StatelessWidget {
-  const _Hint(this.text, {this.warning = false});
-  final String text;
-  final bool warning;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Text(text,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: warning ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.outline,
-                )),
-      );
-}
-
-class _PathTile extends StatelessWidget {
-  const _PathTile({required this.icon, required this.label, required this.value, required this.onTap, this.trailing});
+class _TinyIcon extends StatelessWidget {
+  const _TinyIcon({required this.icon, required this.tooltip, this.onPressed});
   final IconData icon;
-  final String label;
-  final String? value;
-  final VoidCallback onTap;
-  final Widget? trailing;
+  final String tooltip;
+  final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(icon),
-        title: Text(value == null ? label : p.basename(value!), maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(value ?? 'Clicca per scegliere', maxLines: 1, overflow: TextOverflow.ellipsis),
-        trailing: trailing,
-        onTap: onTap,
+  Widget build(BuildContext context) => IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        visualDensity: VisualDensity.compact,
+        iconSize: 18,
+        constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+        padding: EdgeInsets.zero,
+        icon: Icon(icon),
       );
 }
 
-class _NumberRow extends StatelessWidget {
-  const _NumberRow({required this.children});
-  final List<Widget> children;
+class _PathCard extends StatelessWidget {
+  const _PathCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.highlighted = false,
+  });
+  final IconData icon;
+  final String title, subtitle;
+  final VoidCallback onTap;
+  final bool highlighted;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: Row(
-          children: [
-            for (var i = 0; i < children.length; i++) ...[
-              if (i > 0) const SizedBox(width: 10),
-              Expanded(child: children[i]),
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Material(
+      color: highlighted ? c.primarySoft : c.field,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: highlighted ? c.primary : c.surface,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 18, color: highlighted ? Colors.white : c.primary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, color: highlighted ? c.primary : c.text)),
+                    const SizedBox(height: 1),
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11.5, color: c.muted)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 18, color: c.muted),
             ],
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _Field extends StatelessWidget {
+  const _Field({required this.label, required this.child, this.hint, this.hintIsWarning = false});
+  final String label;
+  final Widget child;
+  final String? hint;
+  final bool hintIsWarning;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text)),
+          const SizedBox(height: 6),
+          child,
+          if (hint != null) ...[
+            const SizedBox(height: 6),
+            Text(hint!, style: TextStyle(fontSize: 11.5, height: 1.35, color: hintIsWarning ? c.danger : c.muted)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Dropdown<T> extends StatelessWidget {
+  const _Dropdown({required this.value, required this.values, required this.label, required this.onChanged});
+  final T value;
+  final List<T> values;
+  final String Function(T) label;
+  final void Function(T) onChanged;
+
+  @override
+  Widget build(BuildContext context) => DropdownButtonFormField<T>(
+        initialValue: value,
+        isExpanded: true,
+        borderRadius: BorderRadius.circular(12),
+        icon: const Icon(Icons.expand_more_rounded, size: 20),
+        style: TextStyle(fontSize: 13.5, color: context.colors.text, fontFamily: uiFont, fontFamilyFallback: uiFallback),
+        items: [for (final v in values) DropdownMenuItem(value: v, child: Text(label(v)))],
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
+      );
+}
+
+class _Pair extends StatelessWidget {
+  const _Pair(this.a, this.b);
+  final Widget a, b;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [Expanded(child: a), const SizedBox(width: 10), Expanded(child: b)],
       );
 }
 
 class _NumberField extends StatelessWidget {
-  const _NumberField(this.label, this.value, this.set, this.onChanged, {this.min = 0, this.enabled = true});
-  final String label;
+  const _NumberField(this.label, this.unit, this.value, this.set, this.onChanged, {this.min = 0, this.enabled = true});
+  final String label, unit;
   final int value;
   final void Function(int) set;
   final VoidCallback onChanged;
@@ -301,18 +398,58 @@ class _NumberField extends StatelessWidget {
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) => TextFormField(
-        initialValue: '$value',
-        enabled: enabled,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: InputDecoration(labelText: label),
-        onChanged: (v) {
-          final n = int.tryParse(v);
-          if (n != null && n >= min) {
-            set(n);
-            onChanged();
-          }
-        },
+  Widget build(BuildContext context) => _Field(
+        label: label,
+        child: TextFormField(
+          initialValue: '$value',
+          enabled: enabled,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: const TextStyle(fontSize: 13.5, fontFeatures: [FontFeature.tabularFigures()]),
+          decoration: InputDecoration(
+            suffixText: unit,
+            suffixStyle: TextStyle(color: context.colors.muted, fontSize: 12),
+          ),
+          onChanged: (v) {
+            final n = int.tryParse(v);
+            if (n != null && n >= min) {
+              set(n);
+              onChanged();
+            }
+          },
+        ),
       );
+}
+
+class _Toggle extends StatelessWidget {
+  const _Toggle({required this.title, required this.subtitle, required this.value, required this.onChanged});
+  final String title, subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text)),
+                  Text(subtitle, style: TextStyle(fontSize: 11.5, color: c.muted)),
+                ],
+              ),
+            ),
+            Transform.scale(scale: 0.8, child: Switch(value: value, onChanged: onChanged)),
+          ],
+        ),
+      ),
+    );
+  }
 }

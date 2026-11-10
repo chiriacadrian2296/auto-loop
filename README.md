@@ -7,6 +7,8 @@ non è esaurita.
 
 È l'evoluzione del supervisore Python *Codex Autonomous Loop*, che eseguiva un unico piano JSON rigido.
 
+![AutoLoop durante un'esecuzione](docs/screenshot.png)
+
 ## Come funziona
 
 1. **Divisione in blocchi.** Il piano (`.md` o `.txt`) viene diviso automaticamente, in quest'ordine di preferenza:

@@ -425,17 +425,17 @@ class LoopEngine extends ChangeNotifier {
         bs.note = summary;
         bs.feedback = '';
         state.save(dir);
-        _log(LogKind.success, '✔ Blocco ${block.index + 1} completato.');
+        _log(LogKind.success, 'Blocco ${block.index + 1} completato.');
         return _RunResult.blockDone;
       case AgentVerdict.blocked:
         bs.status = BlockStatus.blocked;
         bs.note = reason.isEmpty ? summary : reason;
         state.save(dir);
-        _log(LogKind.error, '✖ Blocco ${block.index + 1} bloccato: ${bs.note}');
+        _log(LogKind.error, 'Blocco ${block.index + 1} bloccato: ${bs.note}');
         return _RunResult.blocked;
       case AgentVerdict.continueWork:
         bs.feedback = 'Nell\'invocazione precedente hai risposto CONTINUE. Tuo riepilogo:\n$summary';
-        _log(LogKind.info, '↻ L\'agente chiede di continuare il blocco.');
+        _log(LogKind.info, 'L\'agente chiede di continuare il blocco.');
       case AgentVerdict.missing:
         final err = stream.errorMessage;
         bs.feedback = err != null
