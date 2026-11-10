@@ -57,7 +57,7 @@ ha bisogno delle DLL e della cartella `data` accanto).
 
 | Impostazione | Effetto |
 |---|---|
-| Permessi dell'agente | *Sandbox*: Codex con `--sandbox workspace-write`, Claude con `acceptEdits` (modifica file ma non esegue comandi). *Accesso completo*: nessuna sandbox e nessuna conferma. Da usare solo su progetti sotto git o con backup. |
+| Permessi dell'agente | *Protetta*: Codex con `--sandbox workspace-write`, Claude con `--permission-mode auto` (un classificatore approva le azioni sicure, come modifiche, build e test, e blocca quelle rischiose). In entrambi i casi l'agente può eseguire comandi. *Accesso completo*: nessuna sandbox e nessuna conferma. Da usare solo su progetti sotto git o con backup. |
 | Richiamo dopo | Pausa tra un'invocazione e la successiva. |
 | Silenzio max / Durata max | Limiti del watchdog per singola invocazione. |
 | Tentativi per blocco | Oltre questo numero il blocco viene segnato come bloccato. |

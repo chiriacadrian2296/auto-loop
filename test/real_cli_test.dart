@@ -18,7 +18,8 @@ void main() {
       final dir = await Directory.systemTemp.createTemp('autoloop_real_');
       final plan = File(p.join(dir.path, 'plan.md'))
         ..writeAsStringSync('## Saluto\nCrea il file `hello.txt` contenente esattamente la parola `ciao`.\n'
-            '## Firma\nAggiungi a `hello.txt` una seconda riga con la parola `fine`.\n');
+            '## Firma\nAggiungi a `hello.txt` una seconda riga con la parola `fine`.\n'
+            '## Comando\nEsegui `git --version` e salva il suo output nel file `version.txt`.\n');
       final engine = LoopEngine(LoopSettings(
         agent: kind,
         codexPath: kind == AgentKind.codex ? exe! : '',
@@ -40,6 +41,8 @@ void main() {
       final content = File(p.join(dir.path, 'hello.txt')).readAsStringSync();
       expect(content, contains('ciao'));
       expect(content, contains('fine'));
+      // Proves the agent can run commands in the protected mode.
+      expect(File(p.join(dir.path, 'version.txt')).readAsStringSync(), contains('git version'));
       expect(engine.state!.totalTokens, greaterThan(0));
     }, skip: enabled ? false : 'set AUTOLOOP_REAL=1', timeout: const Timeout(Duration(minutes: 10)));
   }

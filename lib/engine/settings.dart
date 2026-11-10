@@ -20,7 +20,7 @@ enum QuotaBehavior {
 
 /// How much freedom the agent gets. Mapped to each CLI's own flags.
 enum Autonomy {
-  sandboxed('Sandbox (solo cartella progetto)'),
+  sandboxed('Protetta (azioni sicure approvate in automatico)'),
   full('Accesso completo (nessuna conferma)');
 
   const Autonomy(this.label);

@@ -136,9 +136,12 @@ class SettingsPanel extends StatelessWidget {
                 'con backup o sotto git.',
                 warning: true,
               )
-            else if (s.agent == AgentKind.claude)
-              const _Hint('In modalità sandbox Claude può modificare file ma non eseguire comandi '
-                  '(niente test o build).'),
+            else
+              _Hint(s.agent == AgentKind.codex
+                  ? 'Codex lavora in una sandbox limitata alla cartella del progetto: può modificare '
+                      'file ed eseguire comandi (test, build) al suo interno.'
+                  : 'Claude modifica file ed esegue comandi (test, build); un classificatore approva '
+                      'in automatico le azioni sicure e blocca quelle rischiose.'),
             const _Section('Richiamo'),
             _NumberRow(children: [
               _NumberField('Richiamo dopo (s)', s.relaunchDelaySeconds, (v) => s.relaunchDelaySeconds = v, onChanged),

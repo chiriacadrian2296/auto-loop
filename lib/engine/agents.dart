@@ -247,7 +247,9 @@ class ClaudeBackend extends AgentBackend {
       '--output-format', 'stream-json',
       '--verbose',
       '--permission-mode',
-      settings.autonomy == Autonomy.full ? 'bypassPermissions' : 'acceptEdits',
+      // `auto`: a classifier approves safe actions (edits, builds, tests) and
+      // blocks risky ones, the closest match to Codex's workspace sandbox.
+      settings.autonomy == Autonomy.full ? 'bypassPermissions' : 'auto',
       if (settings.model.trim().isNotEmpty) ...['--model', settings.model.trim()],
     ];
   }
