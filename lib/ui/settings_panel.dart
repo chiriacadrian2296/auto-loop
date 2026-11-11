@@ -49,6 +49,20 @@ class SettingsPanel extends StatelessWidget {
     final catalog = catalogs[s.agent] ?? const AgentCatalog();
     final efforts = catalog.effortsFor(s.model);
     final selectedModel = catalog.find(s.model);
+    final summaryRecall =
+        'Dopo ${s.relaunchDelaySeconds} s · ${s.maxAttemptsPerBlock} tentativi · '
+        'silenzio ${s.idleTimeoutMinutes} min · max ${s.runTimeoutMinutes} min';
+    final summaryQuota = [
+      s.quotaBehavior == QuotaBehavior.wait ? 'Riprova ogni ${s.quotaWaitMinutes} min' : 'Si ferma',
+      s.maxTotalTokens == 0 ? 'budget illimitato' : 'budget ${_compactTokens(s.maxTotalTokens)} token',
+    ].join(' · ');
+    final summaryEnd = [
+      s.verifyCommand.trim().isEmpty ? 'Nessuna verifica' : 'Verifica: ${s.verifyCommand.trim()}',
+      s.gitCommit ? 'commit git' : 'senza commit',
+      if (s.skipBlocked) 'salta i bloccati',
+    ].join(' · ');
+    final rules = s.extraInstructions.trim().replaceAll(RegExp(r'\s+'), ' ');
+    final summaryRules = rules.isEmpty ? 'Nessuna regola aggiuntiva' : rules;
     return AbsorbPointer(
       absorbing: locked,
       child: AnimatedOpacity(
@@ -214,122 +228,170 @@ class SettingsPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const _Section('Richiamo'),
-            _Pair(
-              _NumberField('Richiamo dopo', 's', s.relaunchDelaySeconds, (v) => s.relaunchDelaySeconds = v, onChanged),
-              _NumberField(
-                'Tentativi',
-                'per blocco',
-                s.maxAttemptsPerBlock,
-                (v) => s.maxAttemptsPerBlock = v,
-                onChanged,
-                min: 1,
-              ),
-            ),
-            _Pair(
-              _NumberField(
-                'Silenzio max',
-                'min',
-                s.idleTimeoutMinutes,
-                (v) => s.idleTimeoutMinutes = v,
-                onChanged,
-                min: 1,
-              ),
-              _NumberField('Durata max', 'min', s.runTimeoutMinutes, (v) => s.runTimeoutMinutes = v, onChanged, min: 1),
-            ),
-            const _Section('Quota e budget'),
-            _Field(
-              label: 'Quando la quota finisce',
-              child: _ChoiceCard<QuotaBehavior>(
-                icon: s.quotaBehavior == QuotaBehavior.wait ? Icons.update_rounded : Icons.pause_circle_outline_rounded,
-                dialogTitle: 'Quando la quota finisce',
-                dialogSubtitle: 'Cosa fare quando la CLI segnala il limite di utilizzo.',
-                value: s.quotaBehavior,
-                choices: [
-                  Choice(
-                    value: QuotaBehavior.wait,
-                    label: QuotaBehavior.wait.label,
-                    short: 'Riprova ogni ${s.quotaWaitMinutes} min',
-                    description: 'Aspetta e riprova ogni ${s.quotaWaitMinutes} minuti, finché la quota non torna.',
+            _Collapsible(
+              title: 'Richiamo',
+              summary: summaryRecall,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Pair(
+                    _NumberField(
+                      'Richiamo dopo',
+                      's',
+                      s.relaunchDelaySeconds,
+                      (v) => s.relaunchDelaySeconds = v,
+                      onChanged,
+                    ),
+                    _NumberField(
+                      'Tentativi',
+                      'per blocco',
+                      s.maxAttemptsPerBlock,
+                      (v) => s.maxAttemptsPerBlock = v,
+                      onChanged,
+                      min: 1,
+                    ),
                   ),
-                  Choice(
-                    value: QuotaBehavior.stop,
-                    label: QuotaBehavior.stop.label,
-                    short: 'Il loop va in pausa',
-                    description: 'Mette il loop in pausa: lo riprendi tu quando vuoi.',
+                  _Pair(
+                    _NumberField(
+                      'Silenzio max',
+                      'min',
+                      s.idleTimeoutMinutes,
+                      (v) => s.idleTimeoutMinutes = v,
+                      onChanged,
+                      min: 1,
+                    ),
+                    _NumberField(
+                      'Durata max',
+                      'min',
+                      s.runTimeoutMinutes,
+                      (v) => s.runTimeoutMinutes = v,
+                      onChanged,
+                      min: 1,
+                    ),
                   ),
                 ],
-                onChanged: (v) {
-                  s.quotaBehavior = v;
-                  onChanged();
-                },
               ),
             ),
-            _Pair(
-              _NumberField(
-                'Riprova ogni',
-                'min',
-                s.quotaWaitMinutes,
-                (v) => s.quotaWaitMinutes = v,
-                onChanged,
-                min: 1,
-                enabled: s.quotaBehavior == QuotaBehavior.wait,
+            _Collapsible(
+              title: 'Quota e budget',
+              summary: summaryQuota,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Field(
+                    label: 'Quando la quota finisce',
+                    child: _ChoiceCard<QuotaBehavior>(
+                      icon: s.quotaBehavior == QuotaBehavior.wait
+                          ? Icons.update_rounded
+                          : Icons.pause_circle_outline_rounded,
+                      dialogTitle: 'Quando la quota finisce',
+                      dialogSubtitle: 'Cosa fare quando la CLI segnala il limite di utilizzo.',
+                      value: s.quotaBehavior,
+                      choices: [
+                        Choice(
+                          value: QuotaBehavior.wait,
+                          label: QuotaBehavior.wait.label,
+                          short: 'Riprova ogni ${s.quotaWaitMinutes} min',
+                          description:
+                              'Aspetta e riprova ogni ${s.quotaWaitMinutes} minuti, finché la quota non torna.',
+                        ),
+                        Choice(
+                          value: QuotaBehavior.stop,
+                          label: QuotaBehavior.stop.label,
+                          short: 'Il loop va in pausa',
+                          description: 'Mette il loop in pausa: lo riprendi tu quando vuoi.',
+                        ),
+                      ],
+                      onChanged: (v) {
+                        s.quotaBehavior = v;
+                        onChanged();
+                      },
+                    ),
+                  ),
+                  _Pair(
+                    _NumberField(
+                      'Riprova ogni',
+                      'min',
+                      s.quotaWaitMinutes,
+                      (v) => s.quotaWaitMinutes = v,
+                      onChanged,
+                      min: 1,
+                      enabled: s.quotaBehavior == QuotaBehavior.wait,
+                    ),
+                    _NumberField('Budget token', '0 = ∞', s.maxTotalTokens, (v) => s.maxTotalTokens = v, onChanged),
+                  ),
+                ],
               ),
-              _NumberField('Budget token', '0 = ∞', s.maxTotalTokens, (v) => s.maxTotalTokens = v, onChanged),
             ),
-            const _Section('Fine blocco'),
-            _Field(
-              label: 'Comando di verifica',
-              hint: 'Deve terminare con exit 0 perché il blocco sia completato.',
-              child: TextFormField(
-                key: const ValueKey('field-verify'),
-                initialValue: s.verifyCommand,
-                style: const TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
-                decoration: const InputDecoration(hintText: 'es. flutter test'),
-                onChanged: (v) {
-                  s.verifyCommand = v;
-                  onChanged();
-                },
+            _Collapsible(
+              title: 'Fine blocco',
+              summary: summaryEnd,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Field(
+                    label: 'Comando di verifica',
+                    hint: 'Deve terminare con exit 0 perché il blocco sia completato.',
+                    child: TextFormField(
+                      key: const ValueKey('field-verify'),
+                      initialValue: s.verifyCommand,
+                      style: const TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
+                      decoration: const InputDecoration(hintText: 'es. flutter test'),
+                      onChanged: (v) {
+                        s.verifyCommand = v;
+                        onChanged();
+                      },
+                    ),
+                  ),
+                  _Group(
+                    indent: 14,
+                    children: [
+                      _Toggle(
+                        title: 'Commit git a ogni blocco',
+                        subtitle: 'Se la cartella è un repository',
+                        value: s.gitCommit,
+                        onChanged: (v) {
+                          s.gitCommit = v;
+                          onChanged();
+                        },
+                      ),
+                      _Toggle(
+                        title: 'Salta i blocchi bloccati',
+                        subtitle: 'Altrimenti il loop va in pausa',
+                        value: s.skipBlocked,
+                        onChanged: (v) {
+                          s.skipBlocked = v;
+                          onChanged();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            _Group(
-              indent: 14,
-              children: [
-                _Toggle(
-                  title: 'Commit git a ogni blocco',
-                  subtitle: 'Se la cartella è un repository',
-                  value: s.gitCommit,
-                  onChanged: (v) {
-                    s.gitCommit = v;
-                    onChanged();
-                  },
-                ),
-                _Toggle(
-                  title: 'Salta i blocchi bloccati',
-                  subtitle: 'Altrimenti il loop va in pausa',
-                  value: s.skipBlocked,
-                  onChanged: (v) {
-                    s.skipBlocked = v;
-                    onChanged();
-                  },
-                ),
-              ],
-            ),
-            const _Section('Istruzioni'),
-            _Field(
-              label: 'Regole per ogni blocco',
-              hint: 'Aggiunte a ogni prompt, oltre al piano.',
-              child: TextFormField(
-                key: const ValueKey('field-instructions'),
-                initialValue: s.extraInstructions,
-                minLines: 3,
-                maxLines: 8,
-                style: const TextStyle(fontSize: 13, height: 1.4),
-                decoration: const InputDecoration(hintText: 'Stack, stile, cosa non toccare…'),
-                onChanged: (v) {
-                  s.extraInstructions = v;
-                  onChanged();
-                },
+            _Collapsible(
+              title: 'Istruzioni',
+              summary: summaryRules,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Field(
+                    label: 'Regole per ogni blocco',
+                    hint: 'Aggiunte a ogni prompt, oltre al piano.',
+                    child: TextFormField(
+                      key: const ValueKey('field-instructions'),
+                      initialValue: s.extraInstructions,
+                      minLines: 3,
+                      maxLines: 8,
+                      style: const TextStyle(fontSize: 13, height: 1.4),
+                      decoration: const InputDecoration(hintText: 'Stack, stile, cosa non toccare…'),
+                      onChanged: (v) {
+                        s.extraInstructions = v;
+                        onChanged();
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -382,6 +444,110 @@ class _Note extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
       child: Text(text, style: TextStyle(fontSize: 11.5, height: 1.35, color: warning ? c.danger : c.muted)),
+    );
+  }
+}
+
+String _compactTokens(int n) => n >= 1000000
+    ? '${(n / 1000000).toStringAsFixed(n % 1000000 == 0 ? 0 : 1)}M'
+    : n >= 1000
+    ? '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k'
+    : '$n';
+
+/// A section that starts closed and shows a one-line summary of its
+/// settings; clicking the title opens it.
+class _Collapsible extends StatefulWidget {
+  const _Collapsible({required this.title, required this.summary, required this.child});
+  final String title, summary;
+  final Widget child;
+
+  // Survives the list recycling sections that scroll out of view.
+  static final _open = <String>{};
+
+  @override
+  State<_Collapsible> createState() => _CollapsibleState();
+}
+
+class _CollapsibleState extends State<_Collapsible> {
+  bool get _isOpen => _Collapsible._open.contains(widget.title);
+
+  void _toggle() => setState(() {
+    if (!_Collapsible._open.remove(widget.title)) _Collapsible._open.add(widget.title);
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final open = _isOpen;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 14),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: _toggle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Divider(color: c.border)),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, right: 6),
+                          child: Text(
+                            widget.title.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.6,
+                              color: c.text,
+                            ),
+                          ),
+                        ),
+                        AnimatedRotation(
+                          turns: open ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: Icon(Icons.expand_more_rounded, size: 18, color: c.muted),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(child: Divider(color: c.border)),
+                      ],
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      child: open
+                          ? const SizedBox(width: double.infinity)
+                          : Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                              child: Text(
+                                widget.summary,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 11.5, height: 1.4, color: c.muted),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: open
+              ? Padding(padding: const EdgeInsets.only(top: 8), child: widget.child)
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
     );
   }
 }

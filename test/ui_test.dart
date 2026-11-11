@@ -32,6 +32,14 @@ void main() {
     await tester.pump();
     expect(find.text('Completato'), findsOneWidget);
 
+    // Advanced sections start closed with a summary, and open on click.
+    expect(find.text('Richiamo dopo'), findsNothing);
+    expect(find.textContaining('10 tentativi'), findsOneWidget);
+    await tester.ensureVisible(find.text('RICHIAMO'));
+    await tester.tap(find.text('RICHIAMO'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Richiamo dopo'), findsOneWidget);
+
     await tester.pumpWidget(const SizedBox());
     // Let the background CLI detection time out inside the fake clock.
     await tester.pump(const Duration(minutes: 5));
