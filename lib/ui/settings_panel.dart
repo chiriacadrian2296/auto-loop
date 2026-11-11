@@ -8,6 +8,7 @@ import '../engine/plan_parser.dart';
 import '../engine/settings.dart';
 import 'app_theme.dart';
 import 'accounts_dialog.dart';
+import 'agent_badge.dart';
 import 'choice_dialog.dart';
 
 class SettingsPanel extends StatelessWidget {
@@ -56,24 +57,29 @@ class SettingsPanel extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
           children: [
-            SectionLabel('Piano',
-                trailing: _TinyIcon(icon: Icons.refresh_rounded, tooltip: 'Ricarica dal disco', onPressed: onReloadPlan)),
-            const SizedBox(height: 10),
-            _PathCard(
-              icon: Icons.description_outlined,
-              title: planPath == null ? 'Scegli il file del piano' : p.basename(planPath!),
-              subtitle: planPath == null ? '.md o .txt' : p.dirname(planPath!),
-              highlighted: planPath == null,
-              onTap: onPickPlan,
+            const _Section('Piano', first: true),
+            _Field(
+              label: 'File del piano',
+              child: _PathCard(
+                icon: Icons.description_outlined,
+                title: planPath == null ? 'Scegli il file del piano' : p.basename(planPath!),
+                subtitle: planPath == null ? '.md o .txt' : p.dirname(planPath!),
+                highlighted: planPath == null,
+                onTap: onPickPlan,
+                action: planPath == null
+                    ? null
+                    : _TinyIcon(icon: Icons.refresh_rounded, tooltip: 'Ricarica dal disco', onPressed: onReloadPlan),
+              ),
             ),
-            const SizedBox(height: 8),
-            _PathCard(
-              icon: Icons.folder_outlined,
-              title: workDir == null ? 'Cartella di lavoro' : p.basename(workDir!),
-              subtitle: workDir ?? 'Dove l\'agente crea e modifica i file',
-              onTap: onPickWorkDir,
+            _Field(
+              label: 'Cartella di lavoro',
+              child: _PathCard(
+                icon: Icons.folder_outlined,
+                title: workDir == null ? 'Scegli la cartella' : p.basename(workDir!),
+                subtitle: workDir ?? 'Dove l\'agente crea e modifica i file',
+                onTap: onPickWorkDir,
+              ),
             ),
-            const SizedBox(height: 12),
             _Field(
               label: 'Suddivisione in blocchi',
               child: _ChoiceCard<SplitStrategy>(
@@ -91,42 +97,28 @@ class SettingsPanel extends StatelessWidget {
                 },
               ),
             ),
-            const _Gap(),
-            const SectionLabel('Agente'),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<AgentKind>(
-                showSelectedIcon: false,
-                segments: [
-                  for (final k in AgentKind.values) ButtonSegment(value: k, label: Text(k.label)),
+            const _Section('Agente'),
+            _Field(
+              label: 'Agente',
+              child: Row(
+                children: [
+                  for (final k in AgentKind.values) ...[
+                    if (k != AgentKind.values.first) const SizedBox(width: 10),
+                    Expanded(
+                      child: _AgentOption(
+                        kind: k,
+                        selected: s.agent == k,
+                        version: versions[k],
+                        onTap: () {
+                          s.agent = k;
+                          onChanged();
+                        },
+                      ),
+                    ),
+                  ],
                 ],
-                selected: {s.agent},
-                onSelectionChanged: (v) {
-                  s.agent = v.first;
-                  onChanged();
-                },
               ),
             ),
-            const SizedBox(height: 10),
-            _PathCard(
-              icon: account?.loggedIn == true ? Icons.account_circle_outlined : Icons.no_accounts_outlined,
-              highlighted: version == null || account?.loggedIn == false,
-              title: version == null
-                  ? (exe.isEmpty ? 'CLI non trovata' : 'CLI non avviabile')
-                  : account == null
-                      ? 'Controllo dell\'account…'
-                      : account.loggedIn
-                          ? (account.email ?? 'Connesso')
-                          : 'Non connesso',
-              subtitle: [
-                'Profilo «${s.profile.name}»',
-                if (account?.loggedIn == true && planLabel(account!.plan).isNotEmpty) 'Piano ${planLabel(account.plan)}',
-                if (version == null || account?.loggedIn == false) 'Configura',
-              ].join(' · '),
-              onTap: onOpenAccounts,
-            ),
-            const SizedBox(height: 12),
             _Field(
               label: 'Modello',
               child: _ModelPicker(
@@ -182,9 +174,45 @@ class SettingsPanel extends StatelessWidget {
                 },
               ),
             ),
-            const _Gap(),
-            const SectionLabel('Richiamo'),
-            const SizedBox(height: 10),
+            const _Section('Account'),
+            _Field(
+              label: 'Profilo',
+              child: _PathCard(
+                icon: s.profile.isDefault ? Icons.computer_rounded : Icons.badge_outlined,
+                title: s.profile.name,
+                subtitle: s.profile.isDefault
+                    ? 'Gli accessi già presenti su questo computer'
+                    : 'Accessi separati, solo per AutoLoop',
+                trailing: Icons.unfold_more_rounded,
+                onTap: onOpenAccounts,
+              ),
+            ),
+            _Field(
+              label: 'Account ${s.agent.label}',
+              child: _PathCard(
+                icon: account?.loggedIn == true ? Icons.account_circle_outlined : Icons.no_accounts_outlined,
+                highlighted: version == null || account?.loggedIn == false,
+                title: version == null
+                    ? (exe.isEmpty ? 'CLI non trovata' : 'CLI non avviabile')
+                    : account == null
+                        ? 'Controllo dell\'account…'
+                        : account.loggedIn
+                            ? (account.email ?? 'Connesso')
+                            : 'Non connesso',
+                subtitle: version == null
+                    ? 'Indica dove si trova la CLI'
+                    : account == null
+                        ? ''
+                        : account.loggedIn
+                            ? [
+                                if (planLabel(account.plan).isNotEmpty) 'Piano ${planLabel(account.plan)}',
+                                if (account.method != null) 'via ${account.method}',
+                              ].join(' · ')
+                            : 'Clicca per accedere',
+                onTap: onOpenAccounts,
+              ),
+            ),
+            const _Section('Richiamo'),
             _Pair(
               _NumberField('Richiamo dopo', 's', s.relaunchDelaySeconds, (v) => s.relaunchDelaySeconds = v, onChanged),
               _NumberField('Tentativi', 'per blocco', s.maxAttemptsPerBlock, (v) => s.maxAttemptsPerBlock = v, onChanged, min: 1),
@@ -193,9 +221,7 @@ class SettingsPanel extends StatelessWidget {
               _NumberField('Silenzio max', 'min', s.idleTimeoutMinutes, (v) => s.idleTimeoutMinutes = v, onChanged, min: 1),
               _NumberField('Durata max', 'min', s.runTimeoutMinutes, (v) => s.runTimeoutMinutes = v, onChanged, min: 1),
             ),
-            const _Gap(),
-            const SectionLabel('Quota e budget'),
-            const SizedBox(height: 10),
+            const _Section('Quota e budget'),
             _Field(
               label: 'Quando la quota finisce',
               child: _ChoiceCard<QuotaBehavior>(
@@ -226,13 +252,12 @@ class SettingsPanel extends StatelessWidget {
                   min: 1, enabled: s.quotaBehavior == QuotaBehavior.wait),
               _NumberField('Budget token', '0 = ∞', s.maxTotalTokens, (v) => s.maxTotalTokens = v, onChanged),
             ),
-            const _Gap(),
-            const SectionLabel('Fine blocco'),
-            const SizedBox(height: 10),
+            const _Section('Fine blocco'),
             _Field(
               label: 'Comando di verifica',
               hint: 'Deve terminare con exit 0 perché il blocco sia completato.',
               child: TextFormField(
+                key: const ValueKey('field-verify'),
                 initialValue: s.verifyCommand,
                 style: const TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
                 decoration: const InputDecoration(hintText: 'es. flutter test'),
@@ -242,39 +267,49 @@ class SettingsPanel extends StatelessWidget {
                 },
               ),
             ),
-            _Toggle(
-              title: 'Commit git a ogni blocco',
-              subtitle: 'Se la cartella è un repository',
-              value: s.gitCommit,
-              onChanged: (v) {
-                s.gitCommit = v;
-                onChanged();
-              },
-            ),
-            _Toggle(
-              title: 'Salta i blocchi bloccati',
-              subtitle: 'Altrimenti il loop va in pausa',
-              value: s.skipBlocked,
-              onChanged: (v) {
-                s.skipBlocked = v;
-                onChanged();
-              },
-            ),
-            const _Gap(),
-            const SectionLabel('Istruzioni aggiuntive'),
-            const SizedBox(height: 10),
-            TextFormField(
-              initialValue: s.extraInstructions,
-              minLines: 3,
-              maxLines: 8,
-              style: const TextStyle(fontSize: 13, height: 1.4),
-              decoration: const InputDecoration(
-                hintText: 'Regole valide per ogni blocco: stack, stile, cosa non toccare…',
+            _Field(
+              label: 'Opzioni',
+              child: Column(
+                children: [
+                  _Toggle(
+                    title: 'Commit git a ogni blocco',
+                    subtitle: 'Se la cartella è un repository',
+                    value: s.gitCommit,
+                    onChanged: (v) {
+                      s.gitCommit = v;
+                      onChanged();
+                    },
+                  ),
+                  _Toggle(
+                    title: 'Salta i blocchi bloccati',
+                    subtitle: 'Altrimenti il loop va in pausa',
+                    value: s.skipBlocked,
+                    onChanged: (v) {
+                      s.skipBlocked = v;
+                      onChanged();
+                    },
+                  ),
+                ],
               ),
-              onChanged: (v) {
-                s.extraInstructions = v;
-                onChanged();
-              },
+            ),
+            const _Section('Istruzioni'),
+            _Field(
+              label: 'Regole per ogni blocco',
+              hint: 'Aggiunte a ogni prompt, oltre al piano.',
+              child: TextFormField(
+                key: const ValueKey('field-instructions'),
+                initialValue: s.extraInstructions,
+                minLines: 3,
+                maxLines: 8,
+                style: const TextStyle(fontSize: 13, height: 1.4),
+                decoration: const InputDecoration(
+                  hintText: 'Stack, stile, cosa non toccare…',
+                ),
+                onChanged: (v) {
+                  s.extraInstructions = v;
+                  onChanged();
+                },
+              ),
             ),
           ],
         ),
@@ -283,13 +318,77 @@ class SettingsPanel extends StatelessWidget {
   }
 }
 
-class _Gap extends StatelessWidget {
-  const _Gap();
+/// Centered section title between two hairlines.
+class _Section extends StatelessWidget {
+  const _Section(this.title, {this.first = false});
+  final String title;
+  final bool first;
+
   @override
-  Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 18),
-        child: Divider(),
-      );
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Padding(
+      padding: EdgeInsets.only(top: first ? 2 : 22, bottom: 14),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: c.border)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              title.toUpperCase(),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1.6, color: c.text),
+            ),
+          ),
+          Expanded(child: Divider(color: c.border)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentOption extends StatelessWidget {
+  const _AgentOption({required this.kind, required this.selected, required this.version, required this.onTap});
+  final AgentKind kind;
+  final bool selected;
+  final String? version;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final short = version == null ? null : RegExp(r'\d+\.\d+\.\d+').firstMatch(version!)?.group(0) ?? version;
+    return Material(
+      color: selected ? c.primarySoft : c.field,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: selected ? c.primary : Colors.transparent, width: 1.4),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Column(
+            children: [
+              AgentBadge(kind: kind, size: 34),
+              const SizedBox(height: 8),
+              Text(kind.label,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? c.primary : c.text,
+                  )),
+              const SizedBox(height: 1),
+              Text(
+                short == null ? 'Non trovata' : 'v$short',
+                style: TextStyle(fontSize: 11, color: short == null ? c.danger : c.muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _TinyIcon extends StatelessWidget {
@@ -318,12 +417,14 @@ class _PathCard extends StatelessWidget {
     required this.onTap,
     this.highlighted = false,
     this.trailing = Icons.chevron_right_rounded,
+    this.action,
   });
   final IconData icon;
   final String title, subtitle;
   final VoidCallback onTap;
   final bool highlighted;
   final IconData trailing;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -364,6 +465,7 @@ class _PathCard extends StatelessWidget {
                   ],
                 ),
               ),
+              ?action,
               Icon(trailing, size: 18, color: c.muted),
             ],
           ),
@@ -473,6 +575,9 @@ class _NumberField extends StatelessWidget {
   Widget build(BuildContext context) => _Field(
         label: label,
         child: TextFormField(
+          // Stable identity: fields appearing above (e.g. reasoning level)
+          // must not hand this field another field's text.
+          key: ValueKey('number-$label'),
           initialValue: '$value',
           enabled: enabled,
           keyboardType: TextInputType.number,

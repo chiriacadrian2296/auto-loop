@@ -238,4 +238,36 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(minutes: 5));
   }, skip: out == null);
+
+  for (final dark in [false, true]) {
+    testWidgets('screenshot sidebar ${dark ? 'dark' : 'light'}', (tester) async {
+      final dir = Directory.systemTemp.createTempSync('autoloop_side_');
+      final plan = File(p.join(dir.path, 'piano-todo-app.md'))..writeAsStringSync('## Uno\nx\n## Due\ny\n');
+      SharedPreferences.setMockInitialValues({
+        'workDir': dir.path,
+        'planPath': plan.path,
+        'theme': dark ? 'dark' : 'light',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final engine = LoopEngine(LoopSettings(agent: AgentKind.claude, verifyCommand: 'flutter test'));
+      tester.view.physicalSize = const Size(1440, 1900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final key = GlobalKey();
+      await tester.pumpWidget(RepaintBoundary(key: key, child: AutoLoopApp(engine: engine, prefs: prefs)));
+      // Let version, account and catalog detection run against the real CLIs.
+      for (var i = 0; i < 15; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 1)));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.runAsync(() async {
+        final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+        final image = await boundary.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File(p.join(out!, 'sidebar_${dark ? 'dark' : 'light'}.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(minutes: 5));
+    }, skip: out == null);
+  }
 }

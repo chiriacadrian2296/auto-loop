@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../engine/accounts.dart';
 import '../engine/cli_locator.dart';
 import '../engine/settings.dart';
+import 'agent_badge.dart';
 import 'app_theme.dart';
 
 /// Profiles, CLI executables and the account each CLI is signed in with.
@@ -439,6 +440,8 @@ class _CliCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              AgentBadge(kind: kind, size: 26),
+              const SizedBox(width: 10),
               Text(kind.label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text)),
               const SizedBox(width: 8),
               if (version != null)
