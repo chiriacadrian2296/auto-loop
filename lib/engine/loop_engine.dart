@@ -518,7 +518,9 @@ class LoopEngine extends ChangeNotifier {
         bs.status = BlockStatus.blocked;
         bs.note = reason.isEmpty ? summary : reason;
         state.save(dir);
-        _log(LogKind.error, 'Blocco ${block.index + 1} bloccato: ${bs.note}');
+        // The reason continues the sentence: no capital letter mid-line.
+        final why = bs.note.isEmpty ? bs.note : bs.note[0].toLowerCase() + bs.note.substring(1);
+        _log(LogKind.error, 'Blocco ${block.index + 1} bloccato: $why');
         return _RunResult.blocked;
       case AgentVerdict.continueWork:
         bs.feedback = 'Nell\'invocazione precedente hai risposto CONTINUE. Tuo riepilogo:\n$summary';

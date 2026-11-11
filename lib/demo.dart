@@ -51,15 +51,33 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
       ..inputTokens = 1184000
       ..outputTokens = 23600
       ..activeSeconds = 2 * 3600 + 14 * 60;
-    void set(int i, BlockStatus status, int attempts, [String note = '']) => state.of(plan.blocks[i].id)
-      ..status = status
-      ..attempts = attempts
-      ..note = note;
-    set(0, BlockStatus.done, 1, 'Creati index.html, style.css e img/. La pagina si apre correttamente nel browser.');
-    set(1, BlockStatus.done, 2, 'Sezione presentazione completa, con foto segnaposto e testo responsive.');
-    set(2, BlockStatus.done, 3, 'Griglia di 6 card che passa a una colonna sotto i 640 px.');
-    set(3, BlockStatus.blocked, 2, 'Serve la chiave del servizio di invio email: non posso crearla da solo.');
-    set(4, BlockStatus.pending, 1);
+    void set(int i, BlockStatus status, int attempts, int minutes, int tokens, [String note = '']) =>
+        state.of(plan.blocks[i].id)
+          ..status = status
+          ..attempts = attempts
+          ..note = note
+          ..activeSeconds = minutes * 60
+          ..inputTokens = tokens * 98 ~/ 100
+          ..outputTokens = tokens * 2 ~/ 100;
+    set(
+      0,
+      BlockStatus.done,
+      1,
+      6,
+      104000,
+      'Creati index.html, style.css e img/. La pagina si apre correttamente nel browser.',
+    );
+    set(1, BlockStatus.done, 2, 19, 236000, 'Sezione presentazione completa, con foto segnaposto e testo responsive.');
+    set(2, BlockStatus.done, 3, 41, 362000, 'Griglia di 6 card che passa a una colonna sotto i 640 px.');
+    set(
+      3,
+      BlockStatus.blocked,
+      2,
+      52,
+      298000,
+      'Serve la chiave del servizio di invio email: non posso crearla da solo.',
+    );
+    set(4, BlockStatus.pending, 1, 16, 207600);
     state.save(dir.path);
 
     final t = DateTime.now().subtract(const Duration(minutes: 12));
@@ -90,7 +108,7 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
       ),
       LogEntry(
         LogKind.error,
-        'Blocco 4 bloccato: Serve la chiave del servizio di invio email: non posso crearla da solo.',
+        'Blocco 4 bloccato: serve la chiave del servizio di invio email: non posso crearla da solo.',
         at: at(831),
       ),
     ];
