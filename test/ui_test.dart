@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:auto_loop/engine/loop_engine.dart';
 import 'package:auto_loop/engine/settings.dart';
 import 'package:auto_loop/main.dart';
+import 'package:auto_loop/ui/settings_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -34,8 +35,9 @@ void main() {
 
     // Advanced sections start closed with a summary, and open on click.
     expect(find.text('Richiamo dopo'), findsNothing);
+    final sidebar = find.descendant(of: find.byType(SettingsPanel), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.textContaining('10 tentativi'), 200, scrollable: sidebar);
     expect(find.textContaining('10 tentativi'), findsOneWidget);
-    await tester.ensureVisible(find.text('RICHIAMO'));
     await tester.tap(find.text('RICHIAMO'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Richiamo dopo'), findsOneWidget);
