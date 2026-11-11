@@ -137,9 +137,30 @@ class _HomePageState extends State<HomePage> {
     _reload();
   }
 
+  /// The first thing that prevents a start, with the section it belongs to
+  /// and what clicking the warning should do. Null when ready.
+  (String, String, VoidCallback)? _blocker() {
+    final s = engine.settings;
+    if (_loadError != null) return ('Piano', _loadError!, _pickPlan);
+    if (_planPath == null || engine.plan == null) return ('Piano', 'Scegli un file di piano', _pickPlan);
+    if (_workDir == null || !Directory(_workDir!).existsSync()) {
+      return ('Piano', 'Scegli la cartella di lavoro', _pickWorkDir);
+    }
+    final exe = s.executable;
+    if (exe.isEmpty || !File(exe).existsSync()) {
+      return ('Agente', '${s.agent.label}: CLI non trovata', _openAccounts);
+    }
+    final account = _accounts[s.agent];
+    if (account != null && !account.loggedIn) {
+      return ('Account', 'Accedi a ${s.agent.label}', _openAccounts);
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final active = engine.isActive;
+    final blocker = active ? null : _blocker();
     final dark = widget.themeMode.value == ThemeMode.dark;
     return Scaffold(
       body: Column(
@@ -151,7 +172,8 @@ class _HomePageState extends State<HomePage> {
                 ? ThemeMode.light
                 : ThemeMode.dark,
             onAccounts: _openAccounts,
-            onStart: engine.plan == null || active ? null : engine.start,
+            onStart: blocker != null || active ? null : engine.start,
+            blocker: blocker == null ? null : (blocker.$2, blocker.$3),
             onPause: active && !engine.pauseRequested
                 ? engine.requestPause
                 : null,
@@ -175,6 +197,7 @@ class _HomePageState extends State<HomePage> {
                         catalogs: _catalogs,
                         accounts: _accounts,
                         onOpenAccounts: _openAccounts,
+                        issues: {?blocker?.$1},
                         onPickPlan: _pickPlan,
                         onPickWorkDir: _pickWorkDir,
                         onReloadPlan: _planPath == null || active
@@ -264,6 +287,7 @@ class _TopBar extends StatelessWidget {
     required this.dark,
     required this.onToggleTheme,
     required this.onAccounts,
+    this.blocker,
     this.onStart,
     this.onPause,
     this.onStop,
@@ -272,6 +296,9 @@ class _TopBar extends StatelessWidget {
   final LoopEngine engine;
   final bool dark;
   final VoidCallback onToggleTheme, onAccounts;
+
+  /// Why the start button is disabled, and how to fix it.
+  final (String, VoidCallback)? blocker;
   final VoidCallback? onStart, onPause, onStop;
 
   static String _fmt(Duration d) {
@@ -327,12 +354,12 @@ class _TopBar extends StatelessWidget {
                     ),
                   ),
                   // On narrower windows the stats give way instead of overflowing.
-                  if (plan != null && state != null && width >= 1180) ...[
+                  if (plan != null && state != null && width >= (blocker == null ? 1180 : 1400)) ...[
                     _Stat(
                       value: '${engine.doneCount}/${plan.blocks.length}',
                       label: 'blocchi',
                     ),
-                    if (width >= 1380) _Stat(value: '${state.runs}', label: 'invocazioni'),
+                    if (width >= (blocker == null ? 1380 : 1600)) _Stat(value: '${state.runs}', label: 'invocazioni'),
                     _Stat(value: _compact(state.totalTokens), label: 'token'),
                     const SizedBox(width: 10),
                   ],
@@ -365,6 +392,10 @@ class _TopBar extends StatelessWidget {
                     danger: true,
                   ),
                   const SizedBox(width: 10),
+                  if (blocker case (final reason, final fix)) ...[
+                    Flexible(child: _BlockerChip(reason: reason, onTap: fix)),
+                    const SizedBox(width: 8),
+                  ],
                   FilledButton.icon(
                     onPressed: onStart,
                     icon: const Icon(Icons.play_arrow_rounded, size: 20),
@@ -379,6 +410,49 @@ class _TopBar extends StatelessWidget {
         ),
         const WindowButtons(),
       ],
+    );
+  }
+}
+
+class _BlockerChip extends StatelessWidget {
+  const _BlockerChip({required this.reason, required this.onTap});
+  final String reason;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Tooltip(
+      message: 'Avvia è disabilitato: clicca per risolvere',
+      child: Material(
+        color: c.danger.withValues(alpha: 0.1),
+        shape: const StadiumBorder(),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline_rounded, size: 16, color: c.danger),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Text(
+                      reason,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.danger),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

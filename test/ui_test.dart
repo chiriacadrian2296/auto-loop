@@ -27,7 +27,9 @@ void main() {
 
     expect(find.text('AutoLoop'), findsOneWidget);
     expect(find.textContaining('Setup del progetto'), findsOneWidget);
-    expect(find.text('0/2'), findsOneWidget);
+    expect(find.text('0%'), findsOneWidget);
+    // No CLI configured in this test: Avvia explains why it is disabled.
+    expect(find.text('Codex CLI: CLI non trovata'), findsOneWidget);
 
     await tester.tap(find.textContaining('Setup del progetto'));
     await tester.pump();

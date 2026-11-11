@@ -24,6 +24,7 @@ class SettingsPanel extends StatelessWidget {
     required this.catalogs,
     required this.accounts,
     required this.onOpenAccounts,
+    this.issues = const {},
     required this.onPickPlan,
     required this.onPickWorkDir,
     required this.onReloadPlan,
@@ -39,6 +40,9 @@ class SettingsPanel extends StatelessWidget {
   final Map<AgentKind, AgentCatalog> catalogs;
   final Map<AgentKind, AccountStatus?> accounts;
   final VoidCallback onOpenAccounts;
+
+  /// Sections with a problem that blocks the start ('Piano', 'Agente', 'Account').
+  final Set<String> issues;
   final VoidCallback onPickPlan, onPickWorkDir, onDetect, onChanged, onStrategyChanged;
   final VoidCallback? onReloadPlan;
 
@@ -73,7 +77,7 @@ class SettingsPanel extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
           children: [
-            const _Section('Piano', first: true),
+            _Section('Piano', first: true, warning: issues.contains('Piano')),
             _Group(
               children: [
                 _PathCard(
@@ -122,7 +126,7 @@ class SettingsPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const _Section('Agente'),
+            _Section('Agente', warning: issues.contains('Agente')),
             Row(
               children: [
                 for (final k in AgentKind.values) ...[
@@ -199,7 +203,7 @@ class SettingsPanel extends StatelessWidget {
             ),
             if (s.autonomy == Autonomy.full)
               const _Note('Accesso completo: usalo solo su progetti sotto git o con un backup.', warning: true),
-            const _Section('Account'),
+            _Section('Account', warning: issues.contains('Account')),
             _Group(
               children: [
                 _PathCard(
@@ -586,9 +590,12 @@ class _CollapsibleState extends State<_Collapsible> {
 
 /// Centered section title between two hairlines.
 class _Section extends StatelessWidget {
-  const _Section(this.title, {this.first = false});
+  const _Section(this.title, {this.first = false, this.warning = false});
   final String title;
   final bool first;
+
+  /// Something here prevents the loop from starting.
+  final bool warning;
 
   @override
   Widget build(BuildContext context) {
@@ -602,9 +609,19 @@ class _Section extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
               title.toUpperCase(),
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1.6, color: c.text),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.6,
+                color: warning ? c.danger : c.text,
+              ),
             ),
           ),
+          if (warning)
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Icon(Icons.error_rounded, size: 15, color: c.danger),
+            ),
           Expanded(child: Divider(color: c.border)),
         ],
       ),
