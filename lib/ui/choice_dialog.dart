@@ -3,13 +3,24 @@ import 'package:flutter/material.dart';
 import 'app_theme.dart';
 
 class Choice<T> {
-  const Choice({required this.value, required this.label, this.tag = '', this.description = '', this.accent = false});
+  const Choice({
+    required this.value,
+    required this.label,
+    this.tag = '',
+    this.description = '',
+    this.accent = false,
+    this.short,
+  });
   final T value;
   final String label;
 
   /// Short technical name shown next to the label (model id, CLI value).
   final String tag;
   final String description;
+  /// One-line summary shown on the card; the full description stays in the popup.
+  final String? short;
+
+  String get cardText => short ?? description;
 
   /// Rendered as an action rather than an option (e.g. "Altro modello…").
   final bool accent;
