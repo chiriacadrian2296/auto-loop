@@ -44,6 +44,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Richiamo dopo'), findsOneWidget);
 
+    // Invalid numbers are reported instead of silently ignored; arrows step.
+    final attempts = find.descendant(of: find.byKey(const ValueKey('number-Tentativi per blocco')), matching: find.byType(TextField));
+    await tester.enterText(attempts, '0');
+    await tester.pumpAndSettle(); // the section resizes for the error text
+    expect(find.text('Minimo 1'), findsOneWidget);
+    expect(engine.settings.maxAttemptsPerBlock, 10);
+    final up = find.descendant(
+        of: find.byKey(const ValueKey('number-Tentativi per blocco')), matching: find.byIcon(Icons.keyboard_arrow_up_rounded));
+    await tester.ensureVisible(up);
+    await tester.pump();
+    await tester.tap(up);
+    await tester.pump();
+    expect(find.text('Minimo 1'), findsNothing);
+    expect(engine.settings.maxAttemptsPerBlock, 1);
+
     await tester.pumpWidget(const SizedBox());
     // Let the background CLI detection time out inside the fake clock.
     await tester.pump(const Duration(minutes: 5));
