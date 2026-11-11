@@ -37,13 +37,17 @@ class _BlocksPanelState extends State<BlocksPanel> {
             children: [
               const SectionLabel('Avanzamento'),
               const SizedBox(height: 8),
-              Text(widget.planName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: c.text, letterSpacing: -0.2)),
+              Text(
+                widget.planName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: c.text, letterSpacing: -0.2),
+              ),
               const SizedBox(height: 2),
-              Text('$total blocchi · ${plan.strategy.label.toLowerCase()}',
-                  style: TextStyle(fontSize: 12.5, color: c.muted)),
+              Text(
+                '$total blocchi · ${plan.strategy.label.toLowerCase()}',
+                style: TextStyle(fontSize: 12.5, color: c.muted),
+              ),
               const SizedBox(height: 14),
               Row(
                 children: [
@@ -64,8 +68,10 @@ class _BlocksPanelState extends State<BlocksPanel> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text('${(ratio * 100).round()}%',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: c.primary)),
+                  Text(
+                    '${(ratio * 100).round()}%',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: c.primary),
+                  ),
                 ],
               ),
             ],
@@ -101,11 +107,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
               ? const SizedBox(width: double.infinity)
               : SizedBox(
                   height: 260,
-                  child: _BlockDetail(
-                    engine: engine,
-                    block: selected,
-                    onClose: () => setState(() => _selected = null),
-                  ),
+                  child: _BlockDetail(engine: engine, block: selected, onClose: () => setState(() => _selected = null)),
                 ),
         ),
       ],
@@ -185,15 +187,17 @@ class _TimelineItem extends StatelessWidget {
                       ),
                       if (subtitle != null) ...[
                         const SizedBox(height: 2),
-                        Text(subtitle,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: running
-                                  ? c.primary
-                                  : state.status == BlockStatus.blocked
-                                      ? c.danger
-                                      : c.muted,
-                            )),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: running
+                                ? c.primary
+                                : state.status == BlockStatus.blocked
+                                ? c.danger
+                                : c.muted,
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -224,21 +228,37 @@ class _Node extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             CircularProgressIndicator(strokeWidth: 2.4, color: c.primary, backgroundColor: c.primarySoft),
-            Text('${index + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: c.primary)),
+            Text(
+              '${index + 1}',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: c.primary),
+            ),
           ],
         ),
       );
     }
     final (Color bg, Color fg, Color border, Widget child) = switch (status) {
-      BlockStatus.done => (c.primary, Colors.white, c.primary, const Icon(Icons.check_rounded, size: 16, color: Colors.white)),
-      BlockStatus.blocked => (c.danger, Colors.white, c.danger, const Icon(Icons.priority_high_rounded, size: 15, color: Colors.white)),
+      BlockStatus.done => (
+        c.primary,
+        Colors.white,
+        c.primary,
+        const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+      ),
+      BlockStatus.blocked => (
+        c.danger,
+        Colors.white,
+        c.danger,
+        const Icon(Icons.priority_high_rounded, size: 15, color: Colors.white),
+      ),
       BlockStatus.skipped => (c.field, c.muted, c.border, Icon(Icons.redo_rounded, size: 14, color: c.muted)),
       BlockStatus.pending => (
-          c.surface,
-          c.muted,
-          c.border,
-          Text('${index + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: c.muted)),
+        c.surface,
+        c.muted,
+        c.border,
+        Text(
+          '${index + 1}',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: c.muted),
         ),
+      ),
     };
     return Container(
       width: size,
@@ -249,7 +269,10 @@ class _Node extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: border, width: 1.6),
       ),
-      child: DefaultTextStyle.merge(style: TextStyle(color: fg), child: child),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: fg),
+        child: child,
+      ),
     );
   }
 }
@@ -278,18 +301,29 @@ class _BlockDetail extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text('Blocco ${block.index + 1}',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: c.text)),
+                  child: Text(
+                    'Blocco ${block.index + 1}',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: c.text),
+                  ),
                 ),
                 if (s.status != BlockStatus.done)
-                  _Action('Completato', Icons.check_rounded,
-                      locked ? null : () => engine.setBlockStatus(block, BlockStatus.done)),
+                  _Action(
+                    'Completato',
+                    Icons.check_rounded,
+                    locked ? null : () => engine.setBlockStatus(block, BlockStatus.done),
+                  ),
                 if (s.status != BlockStatus.pending)
-                  _Action('In coda', Icons.replay_rounded,
-                      locked ? null : () => engine.setBlockStatus(block, BlockStatus.pending)),
+                  _Action(
+                    'In coda',
+                    Icons.replay_rounded,
+                    locked ? null : () => engine.setBlockStatus(block, BlockStatus.pending),
+                  ),
                 if (s.status == BlockStatus.pending)
-                  _Action('Salta', Icons.redo_rounded,
-                      locked ? null : () => engine.setBlockStatus(block, BlockStatus.skipped)),
+                  _Action(
+                    'Salta',
+                    Icons.redo_rounded,
+                    locked ? null : () => engine.setBlockStatus(block, BlockStatus.skipped),
+                  ),
                 IconButton(
                   onPressed: onClose,
                   iconSize: 18,
@@ -342,12 +376,17 @@ class _Action extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => TextButton.icon(
-        onPressed: onPressed,
-        style: TextButton.styleFrom(
-          visualDensity: VisualDensity.compact,
-          textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, fontFamily: uiFont, fontFamilyFallback: uiFallback),
-        ),
-        icon: Icon(icon, size: 16),
-        label: Text(label),
-      );
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      textStyle: const TextStyle(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w600,
+        fontFamily: uiFont,
+        fontFamilyFallback: uiFallback,
+      ),
+    ),
+    icon: Icon(icon, size: 16),
+    label: Text(label),
+  );
 }

@@ -26,20 +26,19 @@ class AutoLoopApp extends StatefulWidget {
 }
 
 class _AutoLoopAppState extends State<AutoLoopApp> {
-  late final ValueNotifier<ThemeMode> _mode = ValueNotifier(
-    widget.prefs.getString('theme') == 'dark' ? ThemeMode.dark : ThemeMode.light,
-  )..addListener(() {
-      widget.prefs.setString('theme', _mode.value == ThemeMode.dark ? 'dark' : 'light');
-      setState(() {});
-    });
+  late final ValueNotifier<ThemeMode> _mode =
+      ValueNotifier(widget.prefs.getString('theme') == 'dark' ? ThemeMode.dark : ThemeMode.light)..addListener(() {
+        widget.prefs.setString('theme', _mode.value == ThemeMode.dark ? 'dark' : 'light');
+        setState(() {});
+      });
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'AutoLoop',
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
-        themeMode: _mode.value,
-        home: HomePage(engine: widget.engine, prefs: widget.prefs, themeMode: _mode),
-      );
+    title: 'AutoLoop',
+    debugShowCheckedModeBanner: false,
+    theme: buildTheme(Brightness.light),
+    darkTheme: buildTheme(Brightness.dark),
+    themeMode: _mode.value,
+    home: HomePage(engine: widget.engine, prefs: widget.prefs, themeMode: _mode),
+  );
 }

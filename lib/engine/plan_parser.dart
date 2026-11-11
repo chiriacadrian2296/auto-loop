@@ -19,12 +19,7 @@ enum SplitStrategy {
 }
 
 class PlanBlock {
-  PlanBlock({
-    required this.index,
-    required this.title,
-    required this.body,
-    this.preChecked = false,
-  });
+  PlanBlock({required this.index, required this.title, required this.body, this.preChecked = false});
 
   final int index;
   final String title;
@@ -41,12 +36,7 @@ class PlanBlock {
 }
 
 class ParsedPlan {
-  ParsedPlan({
-    required this.raw,
-    required this.preamble,
-    required this.blocks,
-    required this.strategy,
-  });
+  ParsedPlan({required this.raw, required this.preamble, required this.blocks, required this.strategy});
 
   final String raw;
 
@@ -134,21 +124,12 @@ ParsedPlan parsePlan(String raw, {SplitStrategy strategy = SplitStrategy.auto}) 
 }
 
 ParsedPlan _whole(String text) {
-  final firstLine = text
-      .split('\n')
-      .map((l) => l.trim())
-      .firstWhere((l) => l.isNotEmpty, orElse: () => 'Piano');
+  final firstLine = text.split('\n').map((l) => l.trim()).firstWhere((l) => l.isNotEmpty, orElse: () => 'Piano');
   return ParsedPlan(
     raw: text,
     preamble: '',
     strategy: SplitStrategy.whole,
-    blocks: [
-      PlanBlock(
-        index: 0,
-        title: _clean(firstLine.replaceFirst(RegExp(r'^#+\s*'), '')),
-        body: text.trim(),
-      ),
-    ],
+    blocks: [PlanBlock(index: 0, title: _clean(firstLine.replaceFirst(RegExp(r'^#+\s*'), '')), body: text.trim())],
   );
 }
 
@@ -196,12 +177,14 @@ ParsedPlan? _splitByPattern(
   final blocks = <PlanBlock>[];
   for (var b = 0; b < starts.length; b++) {
     final end = b + 1 < starts.length ? starts[b + 1] : lines.length;
-    blocks.add(PlanBlock(
-      index: b,
-      title: _clean(titles[b]),
-      body: lines.sublist(starts[b], end).join('\n').trim(),
-      preChecked: checked[b],
-    ));
+    blocks.add(
+      PlanBlock(
+        index: b,
+        title: _clean(titles[b]),
+        body: lines.sublist(starts[b], end).join('\n').trim(),
+        preChecked: checked[b],
+      ),
+    );
   }
   return ParsedPlan(raw: text, preamble: preamble, blocks: blocks, strategy: strategy);
 }

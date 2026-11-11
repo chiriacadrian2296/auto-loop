@@ -7,8 +7,8 @@ import 'accounts.dart';
 import 'plan_parser.dart';
 
 enum AgentKind {
-  codex('Codex CLI'),
-  claude('Claude Code');
+  codex('Codex'),
+  claude('Claude');
 
   const AgentKind(this.label);
   final String label;
@@ -60,6 +60,7 @@ class LoopSettings {
   AgentKind agent;
   String codexPath;
   String claudePath;
+
   /// Model and reasoning effort are kept per agent: a Codex model name means
   /// nothing to Claude and vice versa. Empty = the CLI's own default.
   String codexModel, claudeModel, codexEffort, claudeEffort;
@@ -108,41 +109,39 @@ class LoopSettings {
 
   List<AccountProfile> get allProfiles => [AccountProfile.builtIn, ...profiles];
 
-  AccountProfile get profile =>
-      allProfiles.firstWhere((x) => x.id == profileId, orElse: () => AccountProfile.builtIn);
+  AccountProfile get profile => allProfiles.firstWhere((x) => x.id == profileId, orElse: () => AccountProfile.builtIn);
 
   String get executable => agent == AgentKind.codex ? codexPath : claudePath;
 
   Map<String, Object?> toJson() => {
-        'agent': agent.name,
-        'codexPath': codexPath,
-        'claudePath': claudePath,
-        'codexModel': codexModel,
-        'claudeModel': claudeModel,
-        'codexEffort': codexEffort,
-        'claudeEffort': claudeEffort,
-        'autonomy': autonomy.name,
-        'relaunchDelaySeconds': relaunchDelaySeconds,
-        'idleTimeoutMinutes': idleTimeoutMinutes,
-        'runTimeoutMinutes': runTimeoutMinutes,
-        'maxAttemptsPerBlock': maxAttemptsPerBlock,
-        'quotaBehavior': quotaBehavior.name,
-        'quotaWaitMinutes': quotaWaitMinutes,
-        'maxTotalTokens': maxTotalTokens,
-        'verifyCommand': verifyCommand,
-        'gitCommit': gitCommit,
-        'strategy': strategy.name,
-        'extraInstructions': extraInstructions,
-        'skipBlocked': skipBlocked,
-        'profileId': profileId,
-        'profiles': [for (final x in profiles) x.toJson()],
-      };
+    'agent': agent.name,
+    'codexPath': codexPath,
+    'claudePath': claudePath,
+    'codexModel': codexModel,
+    'claudeModel': claudeModel,
+    'codexEffort': codexEffort,
+    'claudeEffort': claudeEffort,
+    'autonomy': autonomy.name,
+    'relaunchDelaySeconds': relaunchDelaySeconds,
+    'idleTimeoutMinutes': idleTimeoutMinutes,
+    'runTimeoutMinutes': runTimeoutMinutes,
+    'maxAttemptsPerBlock': maxAttemptsPerBlock,
+    'quotaBehavior': quotaBehavior.name,
+    'quotaWaitMinutes': quotaWaitMinutes,
+    'maxTotalTokens': maxTotalTokens,
+    'verifyCommand': verifyCommand,
+    'gitCommit': gitCommit,
+    'strategy': strategy.name,
+    'extraInstructions': extraInstructions,
+    'skipBlocked': skipBlocked,
+    'profileId': profileId,
+    'profiles': [for (final x in profiles) x.toJson()],
+  };
 
   static LoopSettings fromJson(Map<String, Object?> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
-    int number(Object? v, int fallback, {int min = 0}) =>
-        v is int && v >= min ? v : fallback;
+    int number(Object? v, int fallback, {int min = 0}) => v is int && v >= min ? v : fallback;
     final d = LoopSettings();
     final agent = pick(AgentKind.values, j['agent'], d.agent);
     // Older versions had a single `model` shared by both agents.
@@ -169,9 +168,7 @@ class LoopSettings {
       extraInstructions: j['extraInstructions'] as String? ?? '',
       skipBlocked: j['skipBlocked'] as bool? ?? false,
       profileId: j['profileId'] as String? ?? AccountProfile.defaultId,
-      profiles: [
-        for (final x in (j['profiles'] as List? ?? const [])) ?AccountProfile.fromJson(x),
-      ],
+      profiles: [for (final x in (j['profiles'] as List? ?? const [])) ?AccountProfile.fromJson(x)],
     );
   }
 
@@ -183,10 +180,25 @@ class LoopSettings {
   /// in each project's `.autoloop/settings.json`. CLI paths and the list of
   /// profiles stay global.
   static const projectKeys = {
-    'agent', 'codexModel', 'claudeModel', 'codexEffort', 'claudeEffort', 'autonomy',
-    'relaunchDelaySeconds', 'idleTimeoutMinutes', 'runTimeoutMinutes', 'maxAttemptsPerBlock',
-    'quotaBehavior', 'quotaWaitMinutes', 'maxTotalTokens', 'verifyCommand', 'gitCommit',
-    'strategy', 'extraInstructions', 'skipBlocked', 'profileId',
+    'agent',
+    'codexModel',
+    'claudeModel',
+    'codexEffort',
+    'claudeEffort',
+    'autonomy',
+    'relaunchDelaySeconds',
+    'idleTimeoutMinutes',
+    'runTimeoutMinutes',
+    'maxAttemptsPerBlock',
+    'quotaBehavior',
+    'quotaWaitMinutes',
+    'maxTotalTokens',
+    'verifyCommand',
+    'gitCommit',
+    'strategy',
+    'extraInstructions',
+    'skipBlocked',
+    'profileId',
   };
 
   static String projectFile(String workDir) => p.join(workDir, '.autoloop', 'settings.json');
@@ -198,7 +210,11 @@ class LoopSettings {
 
   /// Overwrites the project-scoped fields with [j], keeping global ones.
   void applyProject(Map<String, Object?> j) {
-    final o = fromJson({...toJson(), for (final e in j.entries) if (projectKeys.contains(e.key)) e.key: e.value});
+    final o = fromJson({
+      ...toJson(),
+      for (final e in j.entries)
+        if (projectKeys.contains(e.key)) e.key: e.value,
+    });
     agent = o.agent;
     codexModel = o.codexModel;
     claudeModel = o.claudeModel;

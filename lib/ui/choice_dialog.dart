@@ -11,7 +11,11 @@ class Choice<T> {
     this.accent = false,
     this.short,
     this.dividerAfter = false,
+    this.leading,
   });
+
+  /// Shown before the label (e.g. the agent's logo).
+  final Widget? leading;
 
   /// Draws a separator below this choice (e.g. after the default option).
   final bool dividerAfter;
@@ -21,6 +25,7 @@ class Choice<T> {
   /// Short technical name shown next to the label (model id, CLI value).
   final String tag;
   final String description;
+
   /// One-line summary shown on the card; the full description stays in the popup.
   final String? short;
 
@@ -67,7 +72,10 @@ Future<T?> showChoiceDialog<T>({
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: c.text)),
+                          Text(
+                            title,
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: c.text),
+                          ),
                           if (subtitle != null) ...[
                             const SizedBox(height: 2),
                             Text(subtitle, style: TextStyle(fontSize: 12.5, color: c.muted)),
@@ -133,6 +141,7 @@ class _ChoiceRow<T> extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: Row(
               children: [
+                if (choice.leading != null) ...[choice.leading!, const SizedBox(width: 12)],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,20 +161,21 @@ class _ChoiceRow<T> extends StatelessWidget {
                           ),
                           if (choice.tag.isNotEmpty) ...[
                             const SizedBox(width: 8),
-                            Text(choice.tag,
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  color: c.muted,
-                                  fontFamily: mono,
-                                  fontFamilyFallback: monoFallback,
-                                )),
+                            Text(
+                              choice.tag,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: c.muted,
+                                fontFamily: mono,
+                                fontFamilyFallback: monoFallback,
+                              ),
+                            ),
                           ],
                         ],
                       ),
                       if (choice.description.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(choice.description,
-                            style: TextStyle(fontSize: 12, height: 1.35, color: c.muted)),
+                        Text(choice.description, style: TextStyle(fontSize: 12, height: 1.35, color: c.muted)),
                       ],
                     ],
                   ),

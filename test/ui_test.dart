@@ -29,7 +29,7 @@ void main() {
     expect(find.textContaining('Setup del progetto'), findsOneWidget);
     expect(find.text('0%'), findsOneWidget);
     // No CLI configured in this test: Avvia explains why it is disabled.
-    expect(find.text('Codex CLI: CLI non trovata'), findsOneWidget);
+    expect(find.text('Codex: CLI non trovata'), findsOneWidget);
 
     await tester.tap(find.textContaining('Setup del progetto'));
     await tester.pump();
@@ -57,7 +57,7 @@ void main() {
     await tester.tap(up);
     await tester.pump();
     expect(find.text('Minimo 1'), findsNothing);
-    expect(engine.settings.maxAttemptsPerBlock, 1);
+    expect(engine.settings.maxAttemptsPerBlock, 5); // arrows move by the field's step
 
     // The plan card offers recent plans plus the file browser.
     final planCard = find.text('FILE DEL PIANO');

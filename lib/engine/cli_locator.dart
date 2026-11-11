@@ -62,8 +62,9 @@ Future<String?> locateCli(AgentKind kind) async {
 Future<String?> cliVersion(String exe) async {
   if (exe.isEmpty || !File(exe).existsSync()) return null;
   try {
-    final r = await Process.run(exe, ['--version'], runInShell: exe.toLowerCase().endsWith('.cmd'))
-        .timeout(const Duration(seconds: 20));
+    final r = await Process.run(exe, [
+      '--version',
+    ], runInShell: exe.toLowerCase().endsWith('.cmd')).timeout(const Duration(seconds: 20));
     final out = r.stdout.toString().trim();
     return r.exitCode == 0 && out.isNotEmpty ? out.split('\n').first : null;
   } catch (_) {
@@ -118,8 +119,7 @@ class AgentCatalog {
 }
 
 /// Asks the CLI itself which models and effort levels it supports.
-Future<AgentCatalog> discoverCatalog(AgentKind kind, String exe,
-    {String profileId = AccountProfile.defaultId}) async {
+Future<AgentCatalog> discoverCatalog(AgentKind kind, String exe, {String profileId = AccountProfile.defaultId}) async {
   if (exe.isEmpty || !File(exe).existsSync()) return const AgentCatalog();
   try {
     return kind == AgentKind.codex
@@ -137,8 +137,12 @@ Future<AgentCatalog> _codexCatalog(String exe, Map<String, String> env) async {
     ['debug', 'models', '--bundled'],
   ]) {
     try {
-      final r = await Process.run(exe, args, environment: env, stdoutEncoding: utf8)
-          .timeout(const Duration(seconds: 30));
+      final r = await Process.run(
+        exe,
+        args,
+        environment: env,
+        stdoutEncoding: utf8,
+      ).timeout(const Duration(seconds: 30));
       if (r.exitCode != 0) continue;
       final catalog = parseCodexCatalog(r.stdout.toString());
       if (!catalog.isEmpty) return catalog;
@@ -190,9 +194,7 @@ AgentCatalog parseClaudeHelp(String help) {
   }
 
   final modelHelp = section('--model <model>');
-  final aliases = <String>{
-    for (final m in RegExp(r"'([a-z][a-z0-9.\-]*)'").allMatches(modelHelp)) m.group(1)!,
-  };
+  final aliases = <String>{for (final m in RegExp(r"'([a-z][a-z0-9.\-]*)'").allMatches(modelHelp)) m.group(1)!};
   final effortMatch = RegExp(r'\(([a-z, ]+)\)').firstMatch(section('--effort <level>'));
   final efforts = effortMatch == null
       ? const <String>[]
@@ -200,11 +202,7 @@ AgentCatalog parseClaudeHelp(String help) {
   return AgentCatalog(
     models: [
       for (final a in aliases)
-        ModelOption(
-          id: a,
-          label: a[0].toUpperCase() + a.substring(1),
-          description: 'Ultima versione di $a',
-        ),
+        ModelOption(id: a, label: a[0].toUpperCase() + a.substring(1), description: 'Ultima versione di $a'),
     ],
     efforts: efforts,
     source: 'alias di Claude Code',

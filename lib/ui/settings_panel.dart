@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -98,6 +96,7 @@ class SettingsPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
             children: [
               if (locked) const _RunningBanner(),
+              const _ExpandAll(),
               // Piano, Agente and Account cannot change while the loop runs.
               _Collapsible(
                 title: 'Piano',
@@ -118,13 +117,6 @@ class SettingsPanel extends StatelessWidget {
                           tooltip: planPath,
                           highlighted: planPath == null,
                           onTap: onPickPlan,
-                          action: planPath == null
-                              ? null
-                              : _TinyIcon(
-                                  icon: Icons.refresh_rounded,
-                                  tooltip: 'Ricarica dal disco',
-                                  onPressed: onReloadPlan,
-                                ),
                         ),
                         _PathCard(
                           caption: 'Cartella di lavoro',
@@ -134,13 +126,6 @@ class SettingsPanel extends StatelessWidget {
                           subtitle: workDir == null ? 'Dove l\'agente crea e modifica i file' : _shortPath(workDir!),
                           tooltip: workDir,
                           onTap: onPickWorkDir,
-                          action: workDir == null
-                              ? null
-                              : _TinyIcon(
-                                  icon: Icons.open_in_new_rounded,
-                                  tooltip: 'Apri in Esplora file',
-                                  onPressed: () => Process.run('explorer.exe', [workDir!]),
-                                ),
                         ),
                         _ChoiceCard<SplitStrategy>(
                           caption: 'Suddivisione in blocchi',
@@ -176,27 +161,16 @@ class SettingsPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        for (final k in AgentKind.values) ...[
-                          if (k != AgentKind.values.first) const SizedBox(width: 10),
-                          Expanded(
-                            child: _AgentOption(
-                              kind: k,
-                              selected: s.agent == k,
-                              version: versions[k],
-                              onTap: () {
-                                s.agent = k;
-                                onChanged();
-                              },
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 10),
                     _Group(
                       children: [
+                        _AgentPicker(
+                          value: s.agent,
+                          versions: versions,
+                          onChanged: (v) {
+                            s.agent = v;
+                            onChanged();
+                          },
+                        ),
                         _ModelPicker(
                           caption: 'Modello',
                           catalog: catalog,
@@ -240,7 +214,9 @@ class SettingsPanel extends StatelessWidget {
                               value: Autonomy.full,
                               label: 'Accesso completo',
                               short: 'Nessuna sandbox né conferma',
-                              description: 'Nessuna sandbox e nessuna conferma: può eseguire qualsiasi comando.',
+                              description:
+                                  'Nessuna sandbox e nessuna conferma: può eseguire qualsiasi comando. '
+                                  'Adatto a progetti sotto git o con un backup.',
                             ),
                           ],
                           onChanged: (v) {
@@ -250,8 +226,6 @@ class SettingsPanel extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (s.autonomy == Autonomy.full)
-                      const _Note('Accesso completo: usalo solo su progetti sotto git o con un backup.', warning: true),
                   ],
                 ),
               ),
@@ -264,7 +238,7 @@ class SettingsPanel extends StatelessWidget {
                   children: [
                     // One row: profile and account open the same panel.
                     _PathCard(
-                      caption: 'Account ${s.agent.label}',
+                      caption: 'Account e CLI',
                       inGroup: true,
                       icon: account?.loggedIn == true ? Icons.account_circle_outlined : Icons.no_accounts_outlined,
                       highlighted: version == null || account?.loggedIn == false,
@@ -276,7 +250,8 @@ class SettingsPanel extends StatelessWidget {
                           ? (account.email ?? 'Connesso')
                           : 'Non connesso',
                       subtitle: [
-                        'Profilo «${s.profile.name}»',
+                        s.agent.label,
+                        if (!s.profile.isDefault) s.profile.name,
                         if (account?.loggedIn == true && planLabel(account!.plan).isNotEmpty)
                           'Piano ${planLabel(account.plan)}',
                         if (version == null || account?.loggedIn == false) 'clicca per configurare',
@@ -469,6 +444,17 @@ String _shortPath(String path) {
   return '…${p.separator}${p.joinAll(parts.sublist(parts.length - 2))}';
 }
 
+/// How far one click on a number field's arrows moves, chosen from the values
+/// people typically use for that field.
+const _fieldStep = <String, int>{
+  'Richiamo dopo': 10,
+  'Tentativi per blocco': 5,
+  'Silenzio max': 5,
+  'Durata max': 15,
+  'Riprova ogni': 15,
+  'Budget token': 500000,
+};
+
 /// What the less obvious fields do, shown from the "i" next to their name.
 const _fieldInfo = <String, String>{
   'Richiamo dopo': 'Pausa tra la fine di un\'invocazione dell\'agente e la successiva.',
@@ -516,21 +502,6 @@ class _Group extends StatelessWidget {
   }
 }
 
-class _Note extends StatelessWidget {
-  const _Note(this.text, {this.warning = false});
-  final String text;
-  final bool warning;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-      child: Text(text, style: TextStyle(fontSize: 11.5, height: 1.35, color: warning ? c.danger : c.muted)),
-    );
-  }
-}
-
 /// Says, at the foot of the panel, that these settings travel with the
 /// project folder.
 class _ProjectFooter extends StatelessWidget {
@@ -543,7 +514,7 @@ class _ProjectFooter extends StatelessWidget {
     return Tooltip(
       message:
           'Salvate in ${p.join(p.basename(projectDir), '.autoloop', 'settings.json')}.\n'
-          'Restano uguali per tutti i progetti: percorsi delle CLI e profili account.',
+          'Restano uguali per tutti i progetti: percorsi delle CLI e set di account.',
       waitDuration: const Duration(milliseconds: 300),
       child: Container(
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
@@ -577,6 +548,39 @@ class _ProjectFooter extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ExpandAll extends StatelessWidget {
+  const _ExpandAll();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: _Collapsible.open,
+      builder: (context, open, _) {
+        final allOpen = _Collapsible.all.every(open.contains);
+        return Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => _Collapsible.open.value = allOpen ? <String>{} : {..._Collapsible.all},
+            style: TextButton.styleFrom(
+              foregroundColor: c.muted,
+              visualDensity: VisualDensity.compact,
+              textStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                fontFamily: uiFont,
+                fontFamilyFallback: uiFallback,
+              ),
+            ),
+            icon: Icon(allOpen ? Icons.unfold_less_rounded : Icons.unfold_more_rounded, size: 17),
+            label: Text(allOpen ? 'Comprimi tutto' : 'Espandi tutto'),
+          ),
+        );
+      },
     );
   }
 }
@@ -634,20 +638,39 @@ class _Collapsible extends StatefulWidget {
   /// The running loop cannot pick up changes here: shown dimmed, not editable.
   final bool locked;
 
-  // Survives the list recycling sections that scroll out of view. The main
-  // sections start open, the advanced ones closed.
-  static final _open = <String>{'Piano', 'Agente'};
+  static const all = ['Piano', 'Agente', 'Account', 'Richiamo', 'Quota e budget', 'Fine blocco', 'Istruzioni'];
+
+  // Shared by every section (and the expand/collapse-all button); survives
+  // the list recycling sections that scroll out of view. The main sections
+  // start open, the advanced ones closed.
+  static final open = ValueNotifier<Set<String>>({'Piano', 'Agente'});
 
   @override
   State<_Collapsible> createState() => _CollapsibleState();
 }
 
 class _CollapsibleState extends State<_Collapsible> {
-  bool get _isOpen => _Collapsible._open.contains(widget.title);
+  bool get _isOpen => _Collapsible.open.value.contains(widget.title);
 
-  void _toggle() => setState(() {
-    if (!_Collapsible._open.remove(widget.title)) _Collapsible._open.add(widget.title);
-  });
+  void _toggle() {
+    final next = {..._Collapsible.open.value};
+    if (!next.remove(widget.title)) next.add(widget.title);
+    _Collapsible.open.value = next;
+  }
+
+  void _changed() => setState(() {});
+
+  @override
+  void initState() {
+    super.initState();
+    _Collapsible.open.addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    _Collapsible.open.removeListener(_changed);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -741,65 +764,52 @@ class _CollapsibleState extends State<_Collapsible> {
   }
 }
 
-class _AgentOption extends StatelessWidget {
-  const _AgentOption({required this.kind, required this.selected, required this.version, required this.onTap});
-  final AgentKind kind;
-  final bool selected;
-  final String? version;
-  final VoidCallback onTap;
+class _AgentPicker extends StatelessWidget {
+  const _AgentPicker({required this.value, required this.versions, required this.onChanged});
+  final AgentKind value;
+  final Map<AgentKind, String?> versions;
+  final ValueChanged<AgentKind> onChanged;
+
+  static String? _short(String? version) =>
+      version == null ? null : RegExp(r'\d+\.\d+\.\d+').firstMatch(version)?.group(0) ?? version;
+
+  static const _about = {
+    AgentKind.codex: 'L\'agente di OpenAI, con il tuo account ChatGPT.',
+    AgentKind.claude: 'L\'agente di Anthropic, con il tuo account Claude.',
+  };
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    final short = version == null ? null : RegExp(r'\d+\.\d+\.\d+').firstMatch(version!)?.group(0) ?? version;
-    return Material(
-      color: selected ? c.primarySoft : c.field,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: selected ? c.primary : Colors.transparent, width: 1.4),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          child: Column(
-            children: [
-              AgentBadge(kind: kind, size: 34, selected: selected),
-              const SizedBox(height: 8),
-              Text(
-                kind.label,
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: selected ? c.primary : c.text),
+    final version = _short(versions[value]);
+    return _PathCard(
+      caption: 'Agente',
+      inGroup: true,
+      icon: Icons.smart_toy_outlined,
+      leading: AgentBadge(kind: value, size: 34),
+      title: value.label,
+      subtitle: version == null ? 'Non trovato su questo computer' : 'Versione $version',
+      trailing: Icons.unfold_more_rounded,
+      onTap: () async {
+        final picked = await showChoiceDialog<AgentKind>(
+          context: context,
+          title: 'Agente',
+          subtitle: 'Chi svolge il piano, un blocco alla volta.',
+          selected: value,
+          choices: [
+            for (final k in AgentKind.values)
+              Choice(
+                value: k,
+                label: k.label,
+                tag: _short(versions[k]) == null ? 'non trovato' : 'v${_short(versions[k])}',
+                description: _about[k]!,
+                leading: AgentBadge(kind: k, size: 32, selected: k == value, background: context.colors.field),
               ),
-              const SizedBox(height: 1),
-              Text(
-                short == null ? 'Non trovata' : 'v$short',
-                style: TextStyle(fontSize: 11, color: short == null ? c.danger : c.muted),
-              ),
-            ],
-          ),
-        ),
-      ),
+          ],
+        );
+        if (picked != null && picked != value) onChanged(picked);
+      },
     );
   }
-}
-
-class _TinyIcon extends StatelessWidget {
-  const _TinyIcon({required this.icon, required this.tooltip, this.onPressed});
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: tooltip,
-    onPressed: onPressed,
-    visualDensity: VisualDensity.compact,
-    iconSize: 18,
-    constraints: const BoxConstraints.tightFor(width: 30, height: 30),
-    padding: EdgeInsets.zero,
-    icon: Icon(icon),
-  );
 }
 
 class _PathCard extends StatelessWidget {
@@ -810,11 +820,14 @@ class _PathCard extends StatelessWidget {
     required this.onTap,
     this.highlighted = false,
     this.trailing = Icons.chevron_right_rounded,
-    this.action,
     this.caption,
     this.inGroup = false,
     this.tooltip,
+    this.leading,
   });
+
+  /// Replaces the icon tile (e.g. with the agent's logo).
+  final Widget? leading;
 
   /// Full text shown on hover (e.g. the complete path).
   final String? tooltip;
@@ -823,7 +836,6 @@ class _PathCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool highlighted;
   final IconData trailing;
-  final Widget? action;
 
   /// Small uppercase name of the field, shown above the value inside groups.
   final String? caption;
@@ -845,15 +857,16 @@ class _PathCard extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: 10, vertical: inGroup ? 9 : 10),
           child: Row(
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: highlighted ? c.primary : c.surface,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(icon, size: 18, color: highlighted ? Colors.white : c.primary),
-              ),
+              leading ??
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: highlighted ? c.primary : c.surface,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(icon, size: 18, color: highlighted ? Colors.white : c.primary),
+                  ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -890,7 +903,6 @@ class _PathCard extends StatelessWidget {
                   ],
                 ),
               ),
-              ?action,
               Icon(trailing, size: 18, color: c.muted),
             ],
           ),
@@ -1070,20 +1082,40 @@ class _NumberFieldState extends State<_NumberField> {
     });
   }
 
-  void _step(int delta) {
+  int get _increment => _fieldStep[widget.label] ?? 1;
+
+  /// Moves to the next multiple of the field's step (7 → 10 or 5 for a step
+  /// of 5), never below the minimum.
+  void _step(int direction) {
+    final step = _increment;
     final current = int.tryParse(_controller.text) ?? widget.value;
-    final next = (current + delta) < widget.min ? widget.min : current + delta;
+    var next = direction > 0 ? (current ~/ step + 1) * step : ((current - 1) ~/ step) * step;
+    if (next < widget.min) next = widget.min;
     _controller.text = '$next';
     _apply('$next');
+  }
+
+  String get _stepLabel {
+    final step = _increment;
+    final amount = step >= 1000000
+        ? '${step ~/ 1000000}M'
+        : step >= 1000
+        ? '${step ~/ 1000}k'
+        : '$step';
+    return widget.unit.isEmpty ? amount : '$amount ${widget.unit}';
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    Widget arrow(IconData icon, int delta) => InkWell(
-      onTap: widget.enabled ? () => _step(delta) : null,
-      borderRadius: BorderRadius.circular(4),
-      child: Icon(icon, size: 16, color: widget.enabled ? c.muted : c.muted.withValues(alpha: 0.4)),
+    Widget arrow(IconData icon, int direction) => Tooltip(
+      message: '${direction > 0 ? '+' : '−'}$_stepLabel',
+      waitDuration: const Duration(milliseconds: 400),
+      child: InkWell(
+        onTap: widget.enabled ? () => _step(direction) : null,
+        borderRadius: BorderRadius.circular(4),
+        child: Icon(icon, size: 16, color: widget.enabled ? c.muted : c.muted.withValues(alpha: 0.4)),
+      ),
     );
     return _Field(
       label: widget.label,

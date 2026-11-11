@@ -32,8 +32,7 @@ class WindowDragArea extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) =>
-      Platform.isWindows ? DragToMoveArea(child: child) : child;
+  Widget build(BuildContext context) => Platform.isWindows ? DragToMoveArea(child: child) : child;
 }
 
 /// Minimize / maximize / close, styled like Windows 11 caption buttons.

@@ -8,19 +8,21 @@ import 'app_theme.dart';
 /// blue glyph on white (the panel colour), inverted to white on blue when
 /// [selected].
 class AgentBadge extends StatelessWidget {
-  const AgentBadge({super.key, required this.kind, this.size = 32, this.selected = false});
+  const AgentBadge({super.key, required this.kind, this.size = 32, this.selected = false, this.background});
 
   final AgentKind kind;
   final double size;
   final bool selected;
 
-  static String asset(AgentKind kind) =>
-      'assets/images/agents/${kind == AgentKind.codex ? 'codex' : 'claude'}.svg';
+  /// Tile colour when not selected; defaults to the panel colour.
+  final Color? background;
+
+  static String asset(AgentKind kind) => 'assets/images/agents/${kind == AgentKind.codex ? 'codex' : 'claude'}.svg';
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final bg = selected ? c.primary : c.surface;
+    final bg = selected ? c.primary : (background ?? c.surface);
     final fg = selected ? Colors.white : c.primary;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),

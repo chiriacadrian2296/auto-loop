@@ -13,7 +13,7 @@ class AccountProfile {
   const AccountProfile({required this.id, required this.name});
 
   static const defaultId = 'default';
-  static const builtIn = AccountProfile(id: defaultId, name: 'Account di sistema');
+  static const builtIn = AccountProfile(id: defaultId, name: 'Questo computer');
 
   final String id;
   final String name;
@@ -47,8 +47,7 @@ Map<String, String> profileEnvironment(String profileId, AgentKind kind) {
   return {kind == AgentKind.codex ? 'CODEX_HOME' : 'CLAUDE_CONFIG_DIR': dir};
 }
 
-String newProfileId() =>
-    'p${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}';
+String newProfileId() => 'p${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}';
 
 /// Deletes a profile's folders, including its saved logins.
 void deleteProfileData(String profileId) {
@@ -58,13 +57,7 @@ void deleteProfileData(String profileId) {
 }
 
 class AccountStatus {
-  const AccountStatus({
-    required this.loggedIn,
-    this.email,
-    this.plan,
-    this.method,
-    this.error,
-  });
+  const AccountStatus({required this.loggedIn, this.email, this.plan, this.method, this.error});
 
   static const unknown = AccountStatus(loggedIn: false, error: 'CLI non disponibile');
 
@@ -82,14 +75,26 @@ Future<AccountStatus> accountStatus(AgentKind kind, String exe, String profileId
   final env = profileEnvironment(profileId, kind);
   try {
     if (kind == AgentKind.claude) {
-      final r = await Process.run(exe, ['auth', 'status'], environment: env, stdoutEncoding: utf8)
-          .timeout(const Duration(seconds: 20));
+      final r = await Process.run(
+        exe,
+        ['auth', 'status'],
+        environment: env,
+        stdoutEncoding: utf8,
+      ).timeout(const Duration(seconds: 20));
       return parseClaudeStatus(r.stdout.toString());
     }
-    final r = await Process.run(exe, ['login', 'status'], environment: env, stdoutEncoding: utf8, stderrEncoding: utf8)
-        .timeout(const Duration(seconds: 20));
+    final r = await Process.run(
+      exe,
+      ['login', 'status'],
+      environment: env,
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    ).timeout(const Duration(seconds: 20));
     final text = '${r.stdout}\n${r.stderr}';
-    final line = text.split(RegExp(r'\r?\n')).map((l) => l.trim()).firstWhere(
+    final line = text
+        .split(RegExp(r'\r?\n'))
+        .map((l) => l.trim())
+        .firstWhere(
           (l) => l.toLowerCase().startsWith('logged in') || l.toLowerCase().startsWith('not logged'),
           orElse: () => '',
         );
@@ -147,18 +152,20 @@ Future<void> startLogin(AgentKind kind, String exe, String profileId) async {
   final command = kind == AgentKind.codex ? 'login' : 'auth login';
   final script = File(p.join(Directory.systemTemp.path, 'autoloop-login-${kind.name}.cmd'));
   final sets = env.entries.map((e) => 'set "${e.key}=${e.value}"').join('\r\n');
-  script.writeAsStringSync([
-    '@echo off',
-    'chcp 65001 >nul',
-    'title Accesso a $name - AutoLoop',
-    sets,
-    'echo Accesso a $name: completa la procedura nel browser che si apre.',
-    'echo.',
-    '"$exe" $command',
-    'echo.',
-    'echo Fatto. Premi un tasto per chiudere questa finestra e tornare ad AutoLoop.',
-    'pause >nul',
-  ].where((l) => l.isNotEmpty).join('\r\n'));
+  script.writeAsStringSync(
+    [
+      '@echo off',
+      'chcp 65001 >nul',
+      'title Accesso a $name - AutoLoop',
+      sets,
+      'echo Accesso a $name: completa la procedura nel browser che si apre.',
+      'echo.',
+      '"$exe" $command',
+      'echo.',
+      'echo Fatto. Premi un tasto per chiudere questa finestra e tornare ad AutoLoop.',
+      'pause >nul',
+    ].where((l) => l.isNotEmpty).join('\r\n'),
+  );
   // Start-Process gives the script a visible console of its own (the app's
   // other child processes run hidden) and -Wait returns when it is closed.
   final quoted = script.path.replaceAll("'", "''");

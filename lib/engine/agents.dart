@@ -19,14 +19,33 @@ enum Blocker { usageLimit, authorization }
 Blocker? classifyError(String text) {
   final v = text.toLowerCase();
   const usage = [
-    'usage limit', 'usage_limit', 'rate limit', 'rate_limit', 'quota',
-    'insufficient_quota', 'too many requests', 'limit reached',
-    'credits exhausted', 'hit your limit', 'out of credits', 'credit balance',
+    'usage limit',
+    'usage_limit',
+    'rate limit',
+    'rate_limit',
+    'quota',
+    'insufficient_quota',
+    'too many requests',
+    'limit reached',
+    'credits exhausted',
+    'hit your limit',
+    'out of credits',
+    'credit balance',
   ];
   const auth = [
-    'not logged in', 'please log in', 'login required', 'unauthorized',
-    'authentication', 'failed to authenticate', 'auth login', 'invalid api key',
-    'oauth token', '/login', 'codex login', 'token expired', 'session expired',
+    'not logged in',
+    'please log in',
+    'login required',
+    'unauthorized',
+    'authentication',
+    'failed to authenticate',
+    'auth login',
+    'invalid api key',
+    'oauth token',
+    '/login',
+    'codex login',
+    'token expired',
+    'session expired',
   ];
   if (usage.any(v.contains) || RegExp(r'\b429\b').hasMatch(v)) {
     return Blocker.usageLimit;
@@ -56,11 +75,7 @@ abstract class AgentStream {
 abstract class AgentBackend {
   AgentKind get kind;
 
-  List<String> buildArgs({
-    required String workDir,
-    required LoopSettings settings,
-    required String lastMessageFile,
-  });
+  List<String> buildArgs({required String workDir, required LoopSettings settings, required String lastMessageFile});
 
   AgentStream newStream();
 
@@ -72,8 +87,7 @@ abstract class AgentBackend {
     return text.isEmpty ? null : text;
   }
 
-  static AgentBackend of(AgentKind kind) =>
-      kind == AgentKind.codex ? CodexBackend() : ClaudeBackend();
+  static AgentBackend of(AgentKind kind) => kind == AgentKind.codex ? CodexBackend() : ClaudeBackend();
 }
 
 String _short(String s, [int max = 300]) {
@@ -101,26 +115,22 @@ class CodexBackend extends AgentBackend {
   AgentKind get kind => AgentKind.codex;
 
   @override
-  List<String> buildArgs({
-    required String workDir,
-    required LoopSettings settings,
-    required String lastMessageFile,
-  }) {
+  List<String> buildArgs({required String workDir, required LoopSettings settings, required String lastMessageFile}) {
     final full = settings.autonomy == Autonomy.full;
     return [
-      '-a', 'never',
+      '-a',
+      'never',
       'exec',
       '--json',
-      '--color', 'never',
+      '--color',
+      'never',
       '--skip-git-repo-check',
       '--ephemeral',
-      if (full)
-        '--dangerously-bypass-approvals-and-sandbox'
-      else ...[
-        '--sandbox', 'workspace-write',
-      ],
-      '--cd', workDir,
-      '--output-last-message', lastMessageFile,
+      if (full) '--dangerously-bypass-approvals-and-sandbox' else ...['--sandbox', 'workspace-write'],
+      '--cd',
+      workDir,
+      '--output-last-message',
+      lastMessageFile,
       if (settings.model.trim().isNotEmpty) ...['--model', settings.model.trim()],
       if (settings.effort.trim().isNotEmpty) ...['-c', 'model_reasoning_effort="${settings.effort.trim()}"'],
       '-',
@@ -182,9 +192,7 @@ class _CodexStream implements AgentStream {
       case 'turn.failed':
       case 'error':
         final err = e['error'];
-        final msg = err is Map
-            ? (err['message']?.toString() ?? jsonEncode(err))
-            : (e['message']?.toString() ?? line);
+        final msg = err is Map ? (err['message']?.toString() ?? jsonEncode(err)) : (e['message']?.toString() ?? line);
         _fail(msg);
         return [LogEntry(LogKind.error, _short(msg, 600))];
       case 'item.started':
@@ -216,10 +224,7 @@ class _CodexStream implements AgentStream {
       case 'file_change':
         if (!completed) return const [];
         final changes = (item['changes'] as List?) ?? const [];
-        final paths = changes
-            .whereType<Map>()
-            .map((c) => '${c['kind'] ?? ''} ${c['path'] ?? ''}'.trim())
-            .join(', ');
+        final paths = changes.whereType<Map>().map((c) => '${c['kind'] ?? ''} ${c['path'] ?? ''}'.trim()).join(', ');
         return [LogEntry(LogKind.tool, '✎ ${_short(paths, 300)}')];
       case 'error':
         final msg = item['message']?.toString() ?? '';
@@ -238,11 +243,7 @@ class ClaudeBackend extends AgentBackend {
   AgentKind get kind => AgentKind.claude;
 
   @override
-  List<String> buildArgs({
-    required String workDir,
-    required LoopSettings settings,
-    required String lastMessageFile,
-  }) {
+  List<String> buildArgs({required String workDir, required LoopSettings settings, required String lastMessageFile}) {
     return [
       '-p',
       '--output-format', 'stream-json',
@@ -326,9 +327,7 @@ class _ClaudeStream implements AgentStream {
         return out;
       case 'result':
         final u = (e['usage'] as Map?)?.cast<String, Object?>() ?? const {};
-        _in += _int(u['input_tokens']) +
-            _int(u['cache_creation_input_tokens']) +
-            _int(u['cache_read_input_tokens']);
+        _in += _int(u['input_tokens']) + _int(u['cache_creation_input_tokens']) + _int(u['cache_read_input_tokens']);
         _out += _int(u['output_tokens']);
         final result = e['result']?.toString() ?? '';
         final isError = e['is_error'] == true || e['subtype'] != 'success';
@@ -341,9 +340,7 @@ class _ClaudeStream implements AgentStream {
         _completed = true;
         if (result.trim().isNotEmpty) _final = result;
         final cost = e['total_cost_usd'];
-        return [
-          if (cost is num) LogEntry(LogKind.system, 'Costo stimato: \$${cost.toStringAsFixed(3)}'),
-        ];
+        return [if (cost is num) LogEntry(LogKind.system, 'Costo stimato: \$${cost.toStringAsFixed(3)}')];
     }
     return const [];
   }

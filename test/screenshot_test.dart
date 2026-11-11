@@ -12,6 +12,7 @@ import 'package:auto_loop/engine/accounts.dart';
 import 'package:auto_loop/engine/cli_locator.dart';
 import 'package:auto_loop/main.dart';
 import 'package:auto_loop/ui/accounts_dialog.dart';
+import 'package:auto_loop/ui/agent_badge.dart';
 import 'package:auto_loop/ui/app_theme.dart';
 import 'package:auto_loop/ui/choice_dialog.dart';
 import 'package:flutter/material.dart';
@@ -207,7 +208,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final settings = LoopSettings(codexPath: codex ?? '', claudePath: claude ?? '',
-        profiles: [const AccountProfile(id: 'pshot', name: 'Lavoro')]);
+        profiles: []);
     final key = GlobalKey();
     late BuildContext ctx;
     await tester.pumpWidget(RepaintBoundary(
@@ -277,4 +278,51 @@ void main() {
       await tester.pump(const Duration(minutes: 5));
     }, skip: out == null);
   }
+
+  testWidgets('screenshot agent dialog', (tester) async {
+    tester.view.physicalSize = const Size(900, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final key = GlobalKey();
+    late BuildContext ctx;
+    await tester.pumpWidget(RepaintBoundary(
+      key: key,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(Brightness.light),
+        home: Builder(builder: (c) {
+          ctx = c;
+          return const Scaffold();
+        }),
+      ),
+    ));
+    showChoiceDialog<AgentKind>(
+      context: ctx,
+      title: 'Agente',
+      subtitle: 'Chi svolge il piano, un blocco alla volta.',
+      selected: AgentKind.claude,
+      choices: [
+        for (final k in AgentKind.values)
+          Choice(
+            value: k,
+            label: k.label,
+            tag: k == AgentKind.codex ? 'v0.167.0' : 'v2.1.319',
+            description: k == AgentKind.codex
+                ? 'L\'agente di OpenAI, con il tuo account ChatGPT.'
+                : 'L\'agente di Anthropic, con il tuo account Claude.',
+            leading: AgentBadge(kind: k, size: 32, selected: k == AgentKind.claude),
+          ),
+      ],
+    );
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500))); // svg assets
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    await tester.runAsync(() async {
+      final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = await boundary.toImage();
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(p.join(out!, 'agent_dialog.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
+  }, skip: out == null);
 }

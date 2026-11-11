@@ -14,23 +14,22 @@ Future<void> showAccountsDialog(
   required LoopSettings settings,
   required bool locked,
   required VoidCallback onChanged,
-}) =>
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.35),
-      builder: (_) => _AccountsDialog(settings: settings, locked: locked, onChanged: onChanged),
-    );
+}) => showDialog<void>(
+  context: context,
+  barrierColor: Colors.black.withValues(alpha: 0.35),
+  builder: (_) => _AccountsDialog(settings: settings, locked: locked, onChanged: onChanged),
+);
 
 String planLabel(String? plan) => switch (plan?.toLowerCase()) {
-      null || '' => '',
-      'pro' => 'Pro',
-      'plus' => 'Plus',
-      'max' => 'Max',
-      'team' => 'Team',
-      'enterprise' => 'Enterprise',
-      'free' => 'Free',
-      final other => other[0].toUpperCase() + other.substring(1),
-    };
+  null || '' => '',
+  'pro' => 'Pro',
+  'plus' => 'Plus',
+  'max' => 'Max',
+  'team' => 'Team',
+  'enterprise' => 'Enterprise',
+  'free' => 'Free',
+  final other => other[0].toUpperCase() + other.substring(1),
+};
 
 class _AccountsDialog extends StatefulWidget {
   const _AccountsDialog({required this.settings, required this.locked, required this.onChanged});
@@ -85,14 +84,14 @@ class _AccountsDialogState extends State<_AccountsDialog> {
 
   Future<bool> _confirmSystemLogout(AgentKind k) async {
     if (!s.profile.isDefault) return true;
-    final app = k == AgentKind.codex ? 'l\'app Codex e la CLI' : 'Claude Code (terminale, VS Code e app)';
+    final app = k == AgentKind.codex ? 'l\'app Codex e la sua CLI' : 'Claude (terminale, VS Code e app)';
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Account di sistema'),
+        title: const Text('Account di questo computer'),
         content: Text(
-          'Questo profilo usa lo stesso accesso di $app. Uscendo verrai scollegato anche lì.\n\n'
-          'Per usare un altro account senza toccare il tuo, crea un nuovo profilo.',
+          'Questo è lo stesso accesso usato da $app. Uscendo verrai scollegato anche lì.\n\n'
+          'Per usare un altro account senza toccare il tuo, crea un set di account separato.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
@@ -151,7 +150,7 @@ class _AccountsDialogState extends State<_AccountsDialog> {
   }
 
   Future<void> _newProfile() async {
-    final name = (await _askName('Nuovo profilo'))?.trim();
+    final name = (await _askName('Nuovo set di account'))?.trim();
     if (name == null || name.isEmpty) return;
     final profile = AccountProfile(id: newProfileId(), name: name);
     setState(() {
@@ -163,7 +162,7 @@ class _AccountsDialogState extends State<_AccountsDialog> {
   }
 
   Future<void> _rename(AccountProfile profile) async {
-    final name = (await _askName('Rinomina profilo', profile.name))?.trim();
+    final name = (await _askName('Rinomina set di account', profile.name))?.trim();
     if (name == null || name.isEmpty) return;
     setState(() {
       final i = s.profiles.indexWhere((x) => x.id == profile.id);
@@ -177,8 +176,10 @@ class _AccountsDialogState extends State<_AccountsDialog> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Eliminare «${profile.name}»?'),
-        content: const Text('Gli accessi a Codex e Claude salvati in questo profilo verranno cancellati '
-            'da questo computer. Non si può annullare.'),
+        content: const Text(
+          'Gli accessi a Codex e Claude salvati in questo set verranno cancellati '
+          'da questo computer. Non si può annullare.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
           FilledButton(
@@ -215,7 +216,10 @@ class _AccountsDialogState extends State<_AccountsDialog> {
       backgroundColor: c.surface,
       surfaceTintColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(32),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: c.border)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: c.border),
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 780, maxHeight: 720),
         child: Column(
@@ -230,11 +234,15 @@ class _AccountsDialogState extends State<_AccountsDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Account e CLI',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text)),
+                        Text(
+                          'Account e CLI',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text),
+                        ),
                         const SizedBox(height: 2),
-                        Text('Con quali account AutoLoop fa lavorare gli agenti.',
-                            style: TextStyle(fontSize: 12.5, color: c.muted)),
+                        Text(
+                          'Con quali account lavorano gli agenti, e dove si trovano le loro CLI.',
+                          style: TextStyle(fontSize: 12.5, color: c.muted),
+                        ),
                       ],
                     ),
                   ),
@@ -254,8 +262,10 @@ class _AccountsDialogState extends State<_AccountsDialog> {
                   color: c.warning.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Text('Il loop è in esecuzione: fermalo per cambiare profilo o account.',
-                    style: TextStyle(color: c.warning, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Il loop è in esecuzione: fermalo per cambiare account.',
+                  style: TextStyle(color: c.warning, fontSize: 12.5, fontWeight: FontWeight.w600),
+                ),
               ),
             Flexible(
               child: AbsorbPointer(
@@ -264,23 +274,7 @@ class _AccountsDialogState extends State<_AccountsDialog> {
                   shrinkWrap: true,
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                   children: [
-                    SectionLabel('Profilo',
-                        trailing: TextButton.icon(
-                          onPressed: _newProfile,
-                          icon: const Icon(Icons.add_rounded, size: 18),
-                          label: const Text('Nuovo profilo'),
-                        )),
-                    const SizedBox(height: 6),
-                    for (final profile in s.allProfiles)
-                      _ProfileRow(
-                        profile: profile,
-                        selected: profile.id == s.profileId,
-                        onTap: () => _select(profile),
-                        onRename: profile.isDefault ? null : () => _rename(profile),
-                        onDelete: profile.isDefault ? null : () => _delete(profile),
-                      ),
-                    const SizedBox(height: 20),
-                    SectionLabel('Accessi del profilo «${s.profile.name}»'),
+                    SectionLabel(s.profile.isDefault ? 'Account in uso' : 'Account in uso · set «${s.profile.name}»'),
                     const SizedBox(height: 10),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,12 +302,87 @@ class _AccountsDialogState extends State<_AccountsDialog> {
                         ],
                       ],
                     ),
+                    const SizedBox(height: 24),
+                    SectionLabel(
+                      'Altri account',
+                      trailing: s.profiles.isEmpty
+                          ? null
+                          : TextButton.icon(
+                              onPressed: _newProfile,
+                              icon: const Icon(Icons.add_rounded, size: 18),
+                              label: const Text('Nuovo set'),
+                            ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (s.profiles.isEmpty)
+                      _ProfilesIntro(onCreate: _newProfile)
+                    else ...[
+                      Text(
+                        'Ogni set ha accessi propri a Codex e Claude. Scegli quale usare:',
+                        style: TextStyle(fontSize: 12.5, color: c.muted),
+                      ),
+                      const SizedBox(height: 6),
+                      for (final profile in s.allProfiles)
+                        _ProfileRow(
+                          profile: profile,
+                          selected: profile.id == s.profileId,
+                          onTap: () => _select(profile),
+                          onRename: profile.isDefault ? null : () => _rename(profile),
+                          onDelete: profile.isDefault ? null : () => _delete(profile),
+                        ),
+                    ],
                   ],
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Shown while only the computer's own accounts exist: explains what a
+/// separate set is for, instead of a list with a single choice.
+class _ProfilesIntro extends StatelessWidget {
+  const _ProfilesIntro({required this.onCreate});
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.group_add_outlined, size: 22, color: c.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'AutoLoop usa gli account con cui hai già fatto l\'accesso su questo computer.',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Per farlo lavorare con altri account, tuoi o di un\'altra persona, crea un set di account '
+                  'separato: avrà accessi propri e non toccherà quelli che usi normalmente.',
+                  style: TextStyle(fontSize: 12.5, height: 1.4, color: c.muted),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Crea un set di account'),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -342,20 +411,28 @@ class _ProfileRow extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 9, 6, 9),
             child: Row(
               children: [
-                Icon(selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
-                    size: 20, color: selected ? c.primary : c.muted),
+                Icon(
+                  selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                  size: 20,
+                  color: selected ? c.primary : c.muted,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(profile.name,
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600, color: selected ? c.primary : c.text)),
+                      Text(
+                        profile.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: selected ? c.primary : c.text,
+                        ),
+                      ),
                       Text(
                         profile.isDefault
-                            ? 'Gli stessi accessi di Codex e Claude Code installati su questo computer.'
-                            : 'Accessi separati, salvati solo per AutoLoop.',
+                            ? 'Gli account con cui hai già fatto l\'accesso su questo computer.'
+                            : 'Accessi propri, usati solo da AutoLoop.',
                         style: TextStyle(fontSize: 12, color: c.muted),
                       ),
                     ],
@@ -417,24 +494,21 @@ class _CliCard extends StatelessWidget {
     final (Color dot, String headline, String detail) = !found
         ? (c.danger, 'CLI non trovata', 'Indica il percorso o premi la lente per cercarla.')
         : st == null
-            ? (c.muted, 'Controllo in corso…', '')
-            : st.loggedIn
-                ? (
-                    c.success,
-                    st.email ?? 'Connesso',
-                    [
-                      if (planLabel(st.plan).isNotEmpty) 'Piano ${planLabel(st.plan)}',
-                      if (st.method != null) 'via ${st.method}',
-                    ].join(' · '),
-                  )
-                : (c.warning, 'Non connesso', 'Accedi per far lavorare ${kind.label} con questo profilo.');
+        ? (c.muted, 'Controllo in corso…', '')
+        : st.loggedIn
+        ? (
+            c.success,
+            st.email ?? 'Connesso',
+            [
+              if (planLabel(st.plan).isNotEmpty) 'Piano ${planLabel(st.plan)}',
+              if (st.method != null) 'via ${st.method}',
+            ].join(' · '),
+          )
+        : (c.warning, 'Non connesso', 'Accedi per far lavorare ${kind.label} con questi account.');
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: c.field,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(14)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -442,12 +516,18 @@ class _CliCard extends StatelessWidget {
             children: [
               AgentBadge(kind: kind, size: 26),
               const SizedBox(width: 10),
-              Text(kind.label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text)),
+              Text(
+                kind.label,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
+              ),
               const SizedBox(width: 8),
               if (version != null)
                 Flexible(
-                  child: Text(version!,
-                      overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: c.muted)),
+                  child: Text(
+                    'v${RegExp(r'\d+\.\d+\.\d+').firstMatch(version!)?.group(0) ?? version!}',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, color: c.muted),
+                  ),
                 )
               else
                 const Spacer(),
@@ -492,21 +572,19 @@ class _CliCard extends StatelessWidget {
                           padding: const EdgeInsets.all(10),
                           child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
                         )
-                      : Icon(
-                          st.loggedIn ? Icons.person_rounded : Icons.person_off_outlined,
-                          size: 19,
-                          color: dot,
-                        ),
+                      : Icon(st.loggedIn ? Icons.person_rounded : Icons.person_off_outlined, size: 19, color: dot),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(busy ?? headline,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text)),
+                      Text(
+                        busy ?? headline,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
+                      ),
                       if (busy == null && detail.isNotEmpty)
                         Text(detail, style: TextStyle(fontSize: 11.5, color: c.muted)),
                     ],

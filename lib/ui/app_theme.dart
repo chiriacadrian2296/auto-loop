@@ -66,10 +66,7 @@ const monoFallback = ['Consolas', 'Courier New'];
 
 ThemeData buildTheme(Brightness brightness) {
   final c = brightness == Brightness.light ? AppColors.light : AppColors.dark;
-  final scheme = ColorScheme.fromSeed(
-    seedColor: c.primary,
-    brightness: brightness,
-  ).copyWith(
+  final scheme = ColorScheme.fromSeed(seedColor: c.primary, brightness: brightness).copyWith(
     primary: c.primary,
     onPrimary: Colors.white,
     surface: c.surface,
@@ -104,8 +101,14 @@ ThemeData buildTheme(Brightness brightness) {
       hintStyle: TextStyle(color: c.muted.withValues(alpha: 0.7), fontSize: 13),
       helperStyle: TextStyle(color: c.muted, fontSize: 11.5),
       border: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: c.field)),
-      focusedBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: c.primary, width: 1.4)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(color: c.field),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(color: c.primary, width: 1.4),
+      ),
       disabledBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide.none),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -115,29 +118,32 @@ ThemeData buildTheme(Brightness brightness) {
         disabledBackgroundColor: c.border,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         shape: const StadiumBorder(),
-        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, fontFamily: uiFont, fontFamilyFallback: uiFallback),
+        textStyle: const TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+          fontFamily: uiFont,
+          fontFamilyFallback: uiFallback,
+        ),
       ),
     ),
-    iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(foregroundColor: c.muted),
-    ),
+    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(foregroundColor: c.muted)),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         visualDensity: VisualDensity.compact,
         side: WidgetStatePropertyAll(BorderSide(color: c.border)),
         backgroundColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? c.primarySoft : c.surface),
-        foregroundColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? c.primary : c.muted),
+          (s) => s.contains(WidgetState.selected) ? c.primarySoft : c.surface,
+        ),
+        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.primary : c.muted),
         textStyle: const WidgetStatePropertyAll(
-            TextStyle(fontWeight: FontWeight.w600, fontSize: 13, fontFamily: uiFont, fontFamilyFallback: uiFallback)),
+          TextStyle(fontWeight: FontWeight.w600, fontSize: 13, fontFamily: uiFont, fontFamilyFallback: uiFallback),
+        ),
       ),
     ),
     switchTheme: SwitchThemeData(
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
       thumbColor: const WidgetStatePropertyAll(Colors.white),
-      trackColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? c.primary : c.border),
+      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.primary : c.border),
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(color: c.text, borderRadius: BorderRadius.circular(6)),
@@ -169,7 +175,13 @@ class Panel extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: c.border),
         boxShadow: Theme.of(context).brightness == Brightness.light
-            ? [BoxShadow(color: const Color(0xFF1E3A8A).withValues(alpha: 0.04), blurRadius: 24, offset: const Offset(0, 8))]
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF1E3A8A).withValues(alpha: 0.04),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ]
             : null,
       ),
       child: child,
@@ -185,19 +197,14 @@ class SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          Expanded(
-            child: Text(
-              text.toUpperCase(),
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-                color: context.colors.muted,
-              ),
-            ),
-          ),
-          ?trailing,
-        ],
-      );
+    children: [
+      Expanded(
+        child: Text(
+          text.toUpperCase(),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: context.colors.muted),
+        ),
+      ),
+      ?trailing,
+    ],
+  );
 }

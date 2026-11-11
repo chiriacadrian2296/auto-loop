@@ -71,17 +71,14 @@ class LoopEngine extends ChangeNotifier {
   bool _stopRequested = false;
   bool _pauseRequested = false;
 
-  bool get isActive =>
-      phase != LoopPhase.idle && phase != LoopPhase.paused && phase != LoopPhase.finished;
+  bool get isActive => phase != LoopPhase.idle && phase != LoopPhase.paused && phase != LoopPhase.finished;
   bool get pauseRequested => _pauseRequested;
 
   BlockState blockState(PlanBlock b) => state!.of(b.id);
 
   int get doneCount => plan == null
       ? 0
-      : plan!.blocks
-          .where((b) => const [BlockStatus.done, BlockStatus.skipped].contains(blockState(b).status))
-          .length;
+      : plan!.blocks.where((b) => const [BlockStatus.done, BlockStatus.skipped].contains(blockState(b).status)).length;
 
   // ------------------------------------------------------------ setup
 
@@ -158,8 +155,10 @@ class LoopEngine extends ChangeNotifier {
     }
     _stopRequested = false;
     _pauseRequested = false;
-    _log(LogKind.info,
-        'Avvio del loop con ${settings.agent.label} (profilo «${settings.profile.name}») su ${p.basename(planPath!)}.');
+    _log(
+      LogKind.info,
+      'Avvio del loop con ${settings.agent.label} (account: ${settings.profile.name}) su ${p.basename(planPath!)}.',
+    );
     try {
       await _loop();
     } catch (e, st) {
@@ -229,11 +228,16 @@ class LoopEngine extends ChangeNotifier {
       final next = plan.blocks.where((b) => state.of(b.id).status == BlockStatus.pending).firstOrNull;
       if (next == null) {
         final blocked = plan.blocks.where((b) => state.of(b.id).status == BlockStatus.blocked).length;
-        _log(LogKind.success, blocked == 0
-            ? 'Tutti i blocchi sono completati.'
-            : 'Nessun blocco da fare; $blocked bloccati richiedono attenzione.');
-        _setPhase(blocked == 0 ? LoopPhase.finished : LoopPhase.paused,
-            blocked == 0 ? 'Piano completato.' : 'Ci sono blocchi bloccati.');
+        _log(
+          LogKind.success,
+          blocked == 0
+              ? 'Tutti i blocchi sono completati.'
+              : 'Nessun blocco da fare; $blocked bloccati richiedono attenzione.',
+        );
+        _setPhase(
+          blocked == 0 ? LoopPhase.finished : LoopPhase.paused,
+          blocked == 0 ? 'Piano completato.' : 'Ci sono blocchi bloccati.',
+        );
         return;
       }
 
@@ -270,8 +274,11 @@ class LoopEngine extends ChangeNotifier {
             _setPhase(LoopPhase.paused, 'Quota esaurita.');
             return;
           }
-          await _wait(Duration(minutes: settings.quotaWaitMinutes), LoopPhase.quotaWait,
-              'Quota esaurita: nuovo tentativo tra ${settings.quotaWaitMinutes} min.');
+          await _wait(
+            Duration(minutes: settings.quotaWaitMinutes),
+            LoopPhase.quotaWait,
+            'Quota esaurita: nuovo tentativo tra ${settings.quotaWaitMinutes} min.',
+          );
         case _RunResult.auth:
           _setPhase(LoopPhase.paused, 'Problema di autenticazione: esegui il login nella CLI.');
           return;
@@ -290,8 +297,11 @@ class LoopEngine extends ChangeNotifier {
 
       if (_halt) break;
       if (plan.blocks.every((b) => state.of(b.id).status != BlockStatus.pending)) continue;
-      await _wait(Duration(seconds: settings.relaunchDelaySeconds), LoopPhase.waiting,
-          'Richiamo tra ${settings.relaunchDelaySeconds}s.');
+      await _wait(
+        Duration(seconds: settings.relaunchDelaySeconds),
+        LoopPhase.waiting,
+        'Richiamo tra ${settings.relaunchDelaySeconds}s.',
+      );
     }
     _setPhase(LoopPhase.paused, _stopRequested ? 'Fermato.' : 'In pausa.');
   }
@@ -307,8 +317,7 @@ class LoopEngine extends ChangeNotifier {
     state.save(dir);
 
     final stamp = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-').substring(0, 19);
-    final logDir = Directory(p.join(LoopState.dirOf(dir), 'logs',
-        '$stamp-b${block.index + 1}-a${bs.attempts}'))
+    final logDir = Directory(p.join(LoopState.dirOf(dir), 'logs', '$stamp-b${block.index + 1}-a${bs.attempts}'))
       ..createSync(recursive: true);
     currentLogDir = logDir.path;
     final progressFile = File(LoopState.progressFileOf(dir));
@@ -333,8 +342,10 @@ class LoopEngine extends ChangeNotifier {
     final lastMessage = p.join(logDir.path, 'last-message.txt');
     final args = backend.buildArgs(workDir: dir, settings: settings, lastMessageFile: lastMessage);
 
-    _log(LogKind.info,
-        '▶ Blocco ${block.index + 1}/${plan.blocks.length} «${block.title}» — invocazione ${bs.attempts}');
+    _log(
+      LogKind.info,
+      '▶ Blocco ${block.index + 1}/${plan.blocks.length} «${block.title}» — invocazione ${bs.attempts}',
+    );
     runStartedAt = DateTime.now();
     _setPhase(LoopPhase.running, 'Blocco ${block.index + 1}: ${block.title}');
 
@@ -407,7 +418,8 @@ class LoopEngine extends ChangeNotifier {
           ? 'nessun output per ${settings.idleTimeoutMinutes} minuti'
           : 'superato il limite di ${settings.runTimeoutMinutes} minuti';
       _log(LogKind.warning, 'Agente terminato dal supervisore: $why.');
-      bs.feedback = 'L\'invocazione precedente è stata terminata dal supervisore ($why). '
+      bs.feedback =
+          'L\'invocazione precedente è stata terminata dal supervisore ($why). '
           'Il lavoro parziale è su disco: controllalo e procedi a passi più brevi, '
           'aggiornando .autoloop/PROGRESS.md più spesso.';
       state.save(dir);
@@ -418,7 +430,8 @@ class LoopEngine extends ChangeNotifier {
       case AgentVerdict.done:
         final verifyError = await _verify(block);
         if (verifyError != null) {
-          bs.feedback = 'Hai dichiarato DONE ma la verifica `${settings.verifyCommand}` è fallita. '
+          bs.feedback =
+              'Hai dichiarato DONE ma la verifica `${settings.verifyCommand}` è fallita. '
               'Correggi il problema. Output (ultima parte):\n$verifyError';
           state.save(dir);
           return _RunResult.again;
@@ -444,7 +457,7 @@ class LoopEngine extends ChangeNotifier {
         bs.feedback = err != null
             ? 'L\'invocazione precedente è terminata con un errore: $err'
             : 'L\'invocazione precedente è terminata senza la riga AUTOLOOP_STATUS '
-                '(exit ${outcome.exitCode}). Ultimo messaggio:\n$summary';
+                  '(exit ${outcome.exitCode}). Ultimo messaggio:\n$summary';
         _log(LogKind.warning, 'L\'agente si è fermato senza esito (exit ${outcome.exitCode}): verrà richiamato.');
     }
     state.save(dir);
@@ -484,8 +497,13 @@ class LoopEngine extends ChangeNotifier {
         return;
       }
       final title = block.title.length > 60 ? '${block.title.substring(0, 60)}…' : block.title;
-      final r = await git(['commit', '-m', 'autoloop: $title', '-m',
-          'Blocco ${block.index + 1} del piano ${p.basename(planPath!)}.'], dir);
+      final r = await git([
+        'commit',
+        '-m',
+        'autoloop: $title',
+        '-m',
+        'Blocco ${block.index + 1} del piano ${p.basename(planPath!)}.',
+      ], dir);
       if (r.exitCode == 0) {
         _log(LogKind.success, 'Commit creato: autoloop: $title');
       } else {

@@ -32,8 +32,11 @@ class _LogPanelState extends State<LogPanel> {
     if (_follow && entries.length != _lastCount) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scroll.hasClients) {
-          _scroll.animateTo(_scroll.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+          _scroll.animateTo(
+            _scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+          );
         }
       });
     }
@@ -116,8 +119,10 @@ class _Toggle extends StatelessWidget {
         onTap: () => onChanged(!value),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Text(label,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: value ? c.primary : c.muted)),
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: value ? c.primary : c.muted),
+          ),
         ),
       ),
     );
@@ -131,15 +136,18 @@ class _LogLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final time = '${entry.at.hour.toString().padLeft(2, '0')}:'
+    final time =
+        '${entry.at.hour.toString().padLeft(2, '0')}:'
         '${entry.at.minute.toString().padLeft(2, '0')}:'
         '${entry.at.second.toString().padLeft(2, '0')}';
-    final timeText = Text(time,
-        style: TextStyle(
-          fontSize: 11,
-          color: c.muted.withValues(alpha: 0.75),
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ));
+    final timeText = Text(
+      time,
+      style: TextStyle(
+        fontSize: 11,
+        color: c.muted.withValues(alpha: 0.75),
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
 
     // Start of an invocation: a section header that separates the stream.
     if (entry.kind == LogKind.info && entry.text.startsWith('▶')) {
@@ -150,8 +158,10 @@ class _LogLine extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(99)),
-              child: Text(entry.text.substring(1).trim(),
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.primary)),
+              child: Text(
+                entry.text.substring(1).trim(),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.primary),
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(child: Divider(color: c.border)),
@@ -191,16 +201,16 @@ class _LogLine extends StatelessWidget {
             width: 22,
             child: icon == null
                 ? (agent
-                    ? Align(
-                        alignment: Alignment.topLeft,
-                        child: Container(
-                          margin: const EdgeInsets.only(top: 4, left: 5),
-                          width: 3,
-                          height: 15,
-                          decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(2)),
-                        ),
-                      )
-                    : null)
+                      ? Align(
+                          alignment: Alignment.topLeft,
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 4, left: 5),
+                            width: 3,
+                            height: 15,
+                            decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(2)),
+                          ),
+                        )
+                      : null)
                 : Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Icon(icon, size: 15, color: color),

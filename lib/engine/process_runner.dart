@@ -101,8 +101,7 @@ class ManagedProcess {
     final code = await _process.exitCode;
     watchdog.cancel();
     // Let buffered lines drain, but never hang on a pipe kept open by an orphan.
-    await Future.wait([outDone, errDone])
-        .timeout(const Duration(seconds: 5), onTimeout: () => const []);
+    await Future.wait([outDone, errDone]).timeout(const Duration(seconds: 5), onTimeout: () => const []);
     await out.cancel();
     await err.cancel();
     return ProcessOutcome(code, _killReason);

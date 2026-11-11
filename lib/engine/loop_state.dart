@@ -14,12 +14,7 @@ enum BlockStatus {
 }
 
 class BlockState {
-  BlockState({
-    this.status = BlockStatus.pending,
-    this.attempts = 0,
-    this.note = '',
-    this.feedback = '',
-  });
+  BlockState({this.status = BlockStatus.pending, this.attempts = 0, this.note = '', this.feedback = ''});
 
   BlockStatus status;
   int attempts;
@@ -30,20 +25,14 @@ class BlockState {
   /// What the next invocation should know about the previous one.
   String feedback;
 
-  Map<String, Object?> toJson() => {
-        'status': status.name,
-        'attempts': attempts,
-        'note': note,
-        'feedback': feedback,
-      };
+  Map<String, Object?> toJson() => {'status': status.name, 'attempts': attempts, 'note': note, 'feedback': feedback};
 
   static BlockState fromJson(Map<String, Object?> j) => BlockState(
-        status: BlockStatus.values.firstWhere((s) => s.name == j['status'],
-            orElse: () => BlockStatus.pending),
-        attempts: j['attempts'] as int? ?? 0,
-        note: j['note'] as String? ?? '',
-        feedback: j['feedback'] as String? ?? '',
-      );
+    status: BlockStatus.values.firstWhere((s) => s.name == j['status'], orElse: () => BlockStatus.pending),
+    attempts: j['attempts'] as int? ?? 0,
+    note: j['note'] as String? ?? '',
+    feedback: j['feedback'] as String? ?? '',
+  );
 }
 
 /// Persistent progress, stored in `<project>/.autoloop/state.json` so that a
@@ -96,13 +85,15 @@ class LoopState {
     ensureDir(workDir);
     final file = File(fileOf(workDir));
     final tmp = File('${file.path}.tmp');
-    tmp.writeAsStringSync(const JsonEncoder.withIndent('  ').convert({
-      'planPath': planPath,
-      'runs': runs,
-      'inputTokens': inputTokens,
-      'outputTokens': outputTokens,
-      'blocks': {for (final e in blocks.entries) e.key: e.value.toJson()},
-    }));
+    tmp.writeAsStringSync(
+      const JsonEncoder.withIndent('  ').convert({
+        'planPath': planPath,
+        'runs': runs,
+        'inputTokens': inputTokens,
+        'outputTokens': outputTokens,
+        'blocks': {for (final e in blocks.entries) e.key: e.value.toJson()},
+      }),
+    );
     tmp.renameSync(file.path);
   }
 

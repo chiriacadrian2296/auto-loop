@@ -12,11 +12,9 @@ class LogoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
-        dimension: size,
-        child: CustomPaint(
-          painter: _LogoPainter(color ?? Theme.of(context).colorScheme.primary),
-        ),
-      );
+    dimension: size,
+    child: CustomPaint(painter: _LogoPainter(color ?? Theme.of(context).colorScheme.primary)),
+  );
 }
 
 class _LogoPainter extends CustomPainter {
