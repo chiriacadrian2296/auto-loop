@@ -59,6 +59,17 @@ void main() {
     expect(find.text('Minimo 1'), findsNothing);
     expect(engine.settings.maxAttemptsPerBlock, 1);
 
+    // The plan card offers recent plans plus the file browser.
+    final planCard = find.text('FILE DEL PIANO');
+    await tester.ensureVisible(planCard);
+    await tester.pumpAndSettle();
+    await tester.tap(planCard);
+    await tester.pumpAndSettle();
+    expect(find.text('Riapri un piano recente o scegline uno nuovo.'), findsOneWidget);
+    expect(find.text('Sfoglia…'), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5)); // close the popup
+    await tester.pumpAndSettle();
+
     await tester.pumpWidget(const SizedBox());
     // Let the background CLI detection time out inside the fake clock.
     await tester.pump(const Duration(minutes: 5));
