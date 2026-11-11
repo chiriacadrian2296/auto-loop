@@ -162,8 +162,18 @@ class LoopEngine extends ChangeNotifier {
 
   // ------------------------------------------------------------ controls
 
+  /// Sample-data mode (`--demo`): everything works except running an agent.
+  bool demo = false;
+
   Future<void> start() async {
     if (isActive || plan == null || workDir == null) return;
+    if (demo) {
+      _log(
+        LogKind.warning,
+        'Modalità dimostrazione: l\'avvio è disattivato. Apri AutoLoop senza --demo per lavorare davvero.',
+      );
+      return;
+    }
     final exe = settings.executable;
     if (exe.isEmpty || !File(exe).existsSync()) {
       _log(LogKind.error, 'Eseguibile di ${settings.agent.label} non trovato. Impostalo nelle impostazioni.');

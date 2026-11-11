@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'demo.dart';
 import 'engine/loop_engine.dart';
 import 'engine/settings.dart';
 import 'ui/app_theme.dart';
@@ -8,12 +9,34 @@ import 'ui/home_page.dart';
 import 'ui/notifications.dart';
 import 'ui/window_controls.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   setupWindow();
   await Notifier.setup();
-  final prefs = await SharedPreferences.getInstance();
+  var prefs = await SharedPreferences.getInstance();
+
+  // `--demo`: sample plan and history, in-memory preferences, no agent runs.
+  DemoData? demo;
+  if (args.contains('--demo')) {
+    demo = await DemoData.create();
+    // An in-memory store: the demo starts from the user's settings and theme
+    // but never writes their real preferences.
+    // ignore: invalid_use_of_visible_for_testing_member
+    SharedPreferences.setMockInitialValues({
+      'workDir': demo.workDir,
+      'planPath': demo.planPath,
+      'theme': ?prefs.getString('theme'),
+      'settings': ?prefs.getString('settings'),
+    });
+    prefs = await SharedPreferences.getInstance();
+  }
+
   final engine = LoopEngine(LoopSettings.decode(prefs.getString('settings')));
+  if (demo != null) {
+    engine
+      ..demo = true
+      ..logs.addAll(demo.logs);
+  }
   runApp(AutoLoopApp(engine: engine, prefs: prefs));
 }
 
