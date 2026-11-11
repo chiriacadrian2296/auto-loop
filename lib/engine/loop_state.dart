@@ -46,6 +46,9 @@ class LoopState {
   int inputTokens = 0;
   int outputTokens = 0;
 
+  /// Seconds the loop has been running on this plan, across sessions.
+  int activeSeconds = 0;
+
   int get totalTokens => inputTokens + outputTokens;
 
   BlockState of(String blockId) => blocks.putIfAbsent(blockId, BlockState.new);
@@ -66,6 +69,7 @@ class LoopState {
       state.runs = j['runs'] as int? ?? 0;
       state.inputTokens = j['inputTokens'] as int? ?? 0;
       state.outputTokens = j['outputTokens'] as int? ?? 0;
+      state.activeSeconds = j['activeSeconds'] as int? ?? 0;
       if (samePlan) {
         final b = (j['blocks'] as Map?)?.cast<String, Object?>() ?? const {};
         for (final e in b.entries) {
@@ -91,6 +95,7 @@ class LoopState {
         'runs': runs,
         'inputTokens': inputTokens,
         'outputTokens': outputTokens,
+        'activeSeconds': activeSeconds,
         'blocks': {for (final e in blocks.entries) e.key: e.value.toJson()},
       }),
     );

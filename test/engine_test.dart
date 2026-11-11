@@ -159,8 +159,12 @@ testo
     test('continues, completes every block, verifies and commits', () async {
       final plan = File(p.join(dir.path, 'plan.md'))..writeAsStringSync('## Uno\nfai uno\n## Due\nfai due\n');
       final engine = LoopEngine(settings());
+      final alerts = <String>[];
+      engine.onAttention = (title, _) => alerts.add(title);
       expect(engine.load(workDir: dir.path, planPath: plan.path), isNull);
       await engine.start();
+      expect(alerts, ['Piano completato']);
+      expect(engine.sessionStartedAt, isNull);
 
       expect(engine.phase, LoopPhase.finished, reason: engine.logs.map((l) => l.text).join('\n'));
       expect(engine.state!.runs, 4);
@@ -179,9 +183,12 @@ testo
 
     test('quota stop pauses without consuming an attempt, then resumes', () async {
       final plan = File(p.join(dir.path, 'plan.md'))..writeAsStringSync('## Uno QUOTA\nfai uno\n## Due\nx\n');
+      final alerts = <String>[];
       final engine = LoopEngine(settings(quota: QuotaBehavior.stop))
+        ..onAttention = ((title, _) => alerts.add(title))
         ..load(workDir: dir.path, planPath: plan.path);
       await engine.start();
+      expect(alerts, ['Quota esaurita']);
       expect(engine.phase, LoopPhase.paused);
       expect(engine.statusMessage, contains('Quota'));
       expect(engine.blockState(engine.plan!.blocks[0]).attempts, 0);

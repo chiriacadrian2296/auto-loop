@@ -93,3 +93,14 @@ class _WindowButtonsState extends State<WindowButtons> {
     );
   }
 }
+
+/// Restores and focuses the main window (e.g. when a notification is clicked).
+void bringWindowToFront() {
+  try {
+    final w = _current();
+    if (w == null) return;
+    if (w.isMinimized) w.restore();
+    w.show();
+    w.focus();
+  } catch (_) {}
+}

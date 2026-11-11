@@ -138,6 +138,22 @@ class LoopEngine extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Called when something needs the user: the plan is done, the quota ran
+  /// out, or the loop stopped on a problem (not when the user paused it).
+  void Function(String title, String body)? onAttention;
+
+  void _attention(String title, String body) => onAttention?.call(title, body);
+
+  /// When the current session started; null while not running.
+  DateTime? sessionStartedAt;
+
+  /// Time spent running this plan, including the current session.
+  Duration get totalTime {
+    final saved = Duration(seconds: state?.activeSeconds ?? 0);
+    final s = sessionStartedAt;
+    return s == null ? saved : saved + DateTime.now().difference(s);
+  }
+
   void _setPhase(LoopPhase p, [String? message]) {
     phase = p;
     if (message != null) statusMessage = message;
@@ -155,6 +171,7 @@ class LoopEngine extends ChangeNotifier {
     }
     _stopRequested = false;
     _pauseRequested = false;
+    sessionStartedAt = DateTime.now();
     _log(
       LogKind.info,
       'Avvio del loop con ${settings.agent.label} (account: ${settings.profile.name}) su ${p.basename(planPath!)}.',
@@ -165,11 +182,17 @@ class LoopEngine extends ChangeNotifier {
       _log(LogKind.error, 'Errore interno: $e');
       debugPrint('$st');
       _setPhase(LoopPhase.paused, 'Interrotto da un errore interno.');
+      _attention('Loop interrotto', 'Errore interno: $e');
     } finally {
       _process = null;
       currentBlock = null;
       waitUntil = null;
       runStartedAt = null;
+      final began = sessionStartedAt;
+      if (began != null && state != null) {
+        state!.activeSeconds += DateTime.now().difference(began).inSeconds;
+      }
+      sessionStartedAt = null;
       state?.save(workDir!);
       if (phase != LoopPhase.finished && phase != LoopPhase.paused) {
         _setPhase(LoopPhase.paused);
@@ -238,12 +261,19 @@ class LoopEngine extends ChangeNotifier {
           blocked == 0 ? LoopPhase.finished : LoopPhase.paused,
           blocked == 0 ? 'Piano completato.' : 'Ci sono blocchi bloccati.',
         );
+        _attention(
+          blocked == 0 ? 'Piano completato' : 'Serve il tuo intervento',
+          blocked == 0
+              ? '${p.basename(planPath!)}: tutti i blocchi sono completati.'
+              : '${p.basename(planPath!)}: $blocked blocchi sono bloccati.',
+        );
         return;
       }
 
       if (settings.maxTotalTokens > 0 && state.totalTokens >= settings.maxTotalTokens) {
         _log(LogKind.warning, 'Budget di token raggiunto (${state.totalTokens}).');
         _setPhase(LoopPhase.paused, 'Budget di token esaurito.');
+        _attention('Budget di token esaurito', 'Il loop si è fermato dopo ${state.totalTokens} token.');
         return;
       }
 
@@ -255,6 +285,7 @@ class LoopEngine extends ChangeNotifier {
         _log(LogKind.error, 'Blocco ${next.index + 1}: ${bs.note}');
         if (settings.skipBlocked) continue;
         _setPhase(LoopPhase.paused, 'Blocco ${next.index + 1} fermo: troppi tentativi.');
+        _attention('Serve il tuo intervento', 'Blocco ${next.index + 1} «${next.title}»: troppi tentativi.');
         return;
       }
 
@@ -272,8 +303,10 @@ class LoopEngine extends ChangeNotifier {
           state.save(dir);
           if (settings.quotaBehavior == QuotaBehavior.stop) {
             _setPhase(LoopPhase.paused, 'Quota esaurita.');
+            _attention('Quota esaurita', 'Il loop è in pausa: riprendilo quando la quota torna disponibile.');
             return;
           }
+          _attention('Quota esaurita', 'Nuovo tentativo tra ${settings.quotaWaitMinutes} minuti.');
           await _wait(
             Duration(minutes: settings.quotaWaitMinutes),
             LoopPhase.quotaWait,
@@ -281,14 +314,17 @@ class LoopEngine extends ChangeNotifier {
           );
         case _RunResult.auth:
           _setPhase(LoopPhase.paused, 'Problema di autenticazione: esegui il login nella CLI.');
+          _attention('Accesso richiesto', '${settings.agent.label}: rifai l\'accesso da Account e CLI.');
           return;
         case _RunResult.blocked:
           if (!settings.skipBlocked) {
             _setPhase(LoopPhase.paused, 'Blocco ${next.index + 1} bloccato: serve il tuo intervento.');
+            _attention('Serve il tuo intervento', 'Blocco ${next.index + 1} «${next.title}»: l\'agente si è bloccato.');
             return;
           }
         case _RunResult.fatal:
           _setPhase(LoopPhase.paused, 'Impossibile avviare l\'agente.');
+          _attention('Loop interrotto', 'Impossibile avviare ${settings.agent.label}.');
           return;
         case _RunResult.blockDone:
         case _RunResult.again:

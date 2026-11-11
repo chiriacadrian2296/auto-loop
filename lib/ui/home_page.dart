@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,6 +21,7 @@ import 'choice_dialog.dart';
 import 'blocks_panel.dart';
 import 'log_panel.dart';
 import 'logo.dart';
+import 'notifications.dart';
 import 'settings_panel.dart';
 import 'window_controls.dart';
 
@@ -50,6 +52,8 @@ class _HomePageState extends State<HomePage> {
     _workDir = widget.prefs.getString('workDir');
     _planPath = widget.prefs.getString('planPath');
     engine.addListener(_onEngine);
+    engine.onAttention = Notifier.show;
+    HardwareKeyboard.instance.addHandler(_onKey);
     // Re-render once a second for countdowns and elapsed time.
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (engine.isActive && mounted) setState(() {});
@@ -62,6 +66,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _ticker?.cancel();
     engine.removeListener(_onEngine);
+    HardwareKeyboard.instance.removeHandler(_onKey);
     super.dispose();
   }
 
@@ -244,6 +249,62 @@ class _HomePageState extends State<HomePage> {
     _reload();
   }
 
+  void _openLogs() {
+    LoopState.ensureDir(_workDir!);
+    Process.run('explorer.exe', [LoopState.dirOf(_workDir!)]);
+  }
+
+  bool _confirming = false;
+
+  /// "Ferma ora" kills the agent mid-work, so it asks first.
+  Future<void> _confirmStop() async {
+    if (_confirming || !engine.isActive) return;
+    _confirming = true;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Fermare l\'agente adesso?'),
+        content: const Text(
+          'L\'invocazione in corso viene interrotta. Il lavoro fatto finora resta su disco '
+          'e riprende dal punto in cui era al prossimo avvio.\n\n'
+          'Per fermarti senza interrompere, usa Pausa: aspetta la fine del passo.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ferma'),
+          ),
+        ],
+      ),
+    );
+    _confirming = false;
+    if (ok == true) await engine.stopNow();
+  }
+
+  /// Space starts, pauses or resumes; Shift+Space stops. Ignored while typing
+  /// in a field or with a popup open.
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.space) return false;
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return false;
+    final focus = FocusManager.instance.primaryFocus?.context;
+    if (focus != null &&
+        (focus.widget is EditableText || focus.findAncestorWidgetOfExactType<EditableText>() != null)) {
+      return false;
+    }
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      if (engine.isActive) _confirmStop();
+      return true;
+    }
+    if (engine.isActive) {
+      if (!engine.pauseRequested) engine.requestPause();
+    } else if (_blocker() == null && engine.phase != LoopPhase.finished) {
+      engine.start();
+    }
+    return true;
+  }
+
   /// The first thing that prevents a start, with the section it belongs to
   /// and what clicking the warning should do. Null when ready.
   (String, String, VoidCallback)? _blocker() {
@@ -283,10 +344,11 @@ class _HomePageState extends State<HomePage> {
                   dark: dark,
                   onToggleTheme: () => widget.themeMode.value = dark ? ThemeMode.light : ThemeMode.dark,
                   onAccounts: _openAccounts,
-                  onStart: blocker != null || active ? null : engine.start,
+                  onOpenLogs: _workDir == null ? null : _openLogs,
+                  onStart: blocker != null || active || engine.phase == LoopPhase.finished ? null : engine.start,
                   blocker: blocker == null ? null : (blocker.$2, blocker.$3),
                   onPause: active && !engine.pauseRequested ? engine.requestPause : null,
-                  onStop: active ? engine.stopNow : null,
+                  onStop: active && engine.phase != LoopPhase.stopping ? _confirmStop : null,
                 ),
                 Expanded(
                   child: Padding(
@@ -389,6 +451,7 @@ class _TopBar extends StatelessWidget {
     required this.dark,
     required this.onToggleTheme,
     required this.onAccounts,
+    this.onOpenLogs,
     this.blocker,
     this.onStart,
     this.onPause,
@@ -398,6 +461,7 @@ class _TopBar extends StatelessWidget {
   final LoopEngine engine;
   final bool dark;
   final VoidCallback onToggleTheme, onAccounts;
+  final VoidCallback? onOpenLogs;
 
   /// Why the start button is disabled, and how to fix it.
   final (String, VoidCallback)? blocker;
@@ -414,79 +478,215 @@ class _TopBar extends StatelessWidget {
       ? '${(n / 1000).toStringAsFixed(1)}k'
       : '$n';
 
+  /// What the bar says next to the status: the plan when idle, the block
+  /// being worked on while running, the reason when it stopped on its own.
+  (String, String?) _context() {
+    final plan = engine.plan;
+    if (plan == null) return ('Nessun piano', null);
+    final name = p.basename(engine.planPath ?? '');
+    final i = engine.currentBlock;
+    switch (engine.phase) {
+      case LoopPhase.running || LoopPhase.verifying || LoopPhase.stopping when i != null:
+        final b = plan.blocks[i];
+        return (
+          'Blocco ${i + 1} di ${plan.blocks.length}',
+          '${b.title} · invocazione ${engine.blockState(b).attempts}',
+        );
+      case LoopPhase.waiting:
+        return ('Richiamo in attesa', name);
+      case LoopPhase.quotaWait:
+        return ('Quota esaurita', engine.statusMessage);
+      case LoopPhase.paused when !const ['In pausa.', 'Fermato.', ''].contains(engine.statusMessage):
+        return (name, engine.statusMessage);
+      default:
+        return (name, null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final plan = engine.plan;
     final state = engine.state;
     final width = MediaQuery.sizeOf(context).width;
+    final active = engine.isActive;
+    final paused = engine.phase == LoopPhase.paused;
+    final (headline, detail) = _context();
+    final total = plan?.blocks.length ?? 0;
+    final progress = total == 0 ? 0.0 : engine.doneCount / total;
+
     // The native title bar is hidden: this bar is draggable and carries the
     // window buttons at its top-right corner.
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
       children: [
-        Expanded(
-          child: WindowDragArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 18, 18, 16),
-              child: Row(
-                children: [
-                  const LogoMark(size: 30),
-                  const SizedBox(width: 12),
-                  Text(
-                    'AutoLoop',
-                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: WindowDragArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 16, 14, 14),
+                  child: Row(
+                    children: [
+                      const LogoMark(size: 30),
+                      const SizedBox(width: 12),
+                      Text(
+                        'AutoLoop',
+                        style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
+                      ),
+                      const SizedBox(width: 22),
+                      _StatusPill(engine: engine, format: _fmt),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: headline,
+                                style: TextStyle(fontWeight: FontWeight.w600, color: c.text),
+                              ),
+                              if (detail != null) TextSpan(text: '  ·  $detail'),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: c.muted, fontSize: 13),
+                        ),
+                      ),
+                      // On narrower windows the stats give way instead of overflowing.
+                      if (state != null && width >= (blocker == null ? 1150 : 1380)) ...[
+                        _Stat(value: _compact(state.totalTokens), label: 'token'),
+                        if (width >= (blocker == null ? 1260 : 1500))
+                          _Stat(value: _fmt(engine.totalTime), label: 'tempo'),
+                        const SizedBox(width: 6),
+                      ],
+                      _MoreMenu(
+                        dark: dark,
+                        onAccounts: onAccounts,
+                        onToggleTheme: onToggleTheme,
+                        onOpenLogs: onOpenLogs,
+                      ),
+                      const SizedBox(width: 8),
+                      if (blocker case (final reason, final fix)) ...[
+                        Flexible(
+                          child: _BlockerChip(reason: reason, onTap: fix),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      // Only the controls that make sense right now.
+                      if (active) ...[
+                        _RoundAction(
+                          icon: Icons.pause_rounded,
+                          tooltip: engine.pauseRequested
+                              ? 'Pausa richiesta: si ferma alla fine del passo'
+                              : 'Pausa alla fine del passo (Spazio)',
+                          onPressed: onPause,
+                        ),
+                        const SizedBox(width: 8),
+                        _RoundAction(
+                          icon: Icons.stop_rounded,
+                          tooltip: 'Ferma ora (Maiusc+Spazio)',
+                          onPressed: onStop,
+                          danger: true,
+                        ),
+                      ] else
+                        _RoundAction(
+                          icon: Icons.play_arrow_rounded,
+                          tooltip: engine.phase == LoopPhase.finished
+                              ? 'Piano completato'
+                              : paused
+                              ? 'Riprendi (Spazio)'
+                              : 'Avvia (Spazio)',
+                          onPressed: onStart,
+                          primary: true,
+                        ),
+                    ],
                   ),
-                  const SizedBox(width: 22),
-                  _StatusPill(engine: engine, format: _fmt),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      engine.statusMessage,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: c.muted, fontSize: 13),
-                    ),
-                  ),
-                  // On narrower windows the stats give way instead of overflowing.
-                  if (plan != null && state != null && width >= (blocker == null ? 1180 : 1400)) ...[
-                    _Stat(value: '${engine.doneCount}/${plan.blocks.length}', label: 'blocchi'),
-                    if (width >= (blocker == null ? 1380 : 1600)) _Stat(value: '${state.runs}', label: 'invocazioni'),
-                    _Stat(value: _compact(state.totalTokens), label: 'token'),
-                    const SizedBox(width: 10),
-                  ],
-                  IconButton(
-                    tooltip: 'Account e CLI',
-                    onPressed: onAccounts,
-                    icon: const Icon(Icons.manage_accounts_outlined, size: 21),
-                  ),
-                  IconButton(
-                    tooltip: dark ? 'Tema chiaro' : 'Tema scuro',
-                    onPressed: onToggleTheme,
-                    icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, size: 20),
-                  ),
-                  const SizedBox(width: 4),
-                  _RoundAction(icon: Icons.pause_rounded, tooltip: 'Pausa al termine del passo', onPressed: onPause),
-                  const SizedBox(width: 6),
-                  _RoundAction(icon: Icons.stop_rounded, tooltip: 'Ferma ora', onPressed: onStop, danger: true),
-                  const SizedBox(width: 10),
-                  if (blocker case (final reason, final fix)) ...[
-                    Flexible(
-                      child: _BlockerChip(reason: reason, onTap: fix),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  FilledButton.icon(
-                    onPressed: onStart,
-                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                    label: Text(engine.phase == LoopPhase.paused ? 'Riprendi' : 'Avvia'),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+            const WindowButtons(),
+          ],
         ),
-        const WindowButtons(),
+        _ProgressLine(value: progress, working: active && engine.phase != LoopPhase.quotaWait),
+      ],
+    );
+  }
+}
+
+/// Thin full-width plan progress under the bar; while the agent works, the
+/// remaining part shimmers so activity is visible even at a glance.
+class _ProgressLine extends StatelessWidget {
+  const _ProgressLine({required this.value, required this.working});
+  final double value;
+  final bool working;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return SizedBox(
+      height: 3,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (working)
+            LinearProgressIndicator(color: c.primary.withValues(alpha: 0.35), backgroundColor: c.primarySoft)
+          else
+            ColoredBox(color: value > 0 ? c.primarySoft : Colors.transparent),
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: value),
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOutCubic,
+            builder: (context, v, _) =>
+                LinearProgressIndicator(value: v, color: c.primary, backgroundColor: Colors.transparent),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Settings-like actions that are not about the loop itself.
+class _MoreMenu extends StatelessWidget {
+  const _MoreMenu({required this.dark, required this.onAccounts, required this.onToggleTheme, this.onOpenLogs});
+  final bool dark;
+  final VoidCallback onAccounts, onToggleTheme;
+  final VoidCallback? onOpenLogs;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    PopupMenuItem<VoidCallback> item(IconData icon, String label, VoidCallback? action) => PopupMenuItem(
+      value: action,
+      enabled: action != null,
+      height: 40,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: action == null ? c.muted.withValues(alpha: 0.5) : c.muted),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(fontSize: 13.5, color: action == null ? c.muted : c.text)),
+        ],
+      ),
+    );
+    return PopupMenuButton<VoidCallback>(
+      tooltip: 'Altro',
+      position: PopupMenuPosition.under,
+      color: c.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: c.border),
+      ),
+      icon: Icon(Icons.more_horiz_rounded, color: c.muted),
+      onSelected: (action) => action(),
+      itemBuilder: (context) => [
+        item(Icons.manage_accounts_outlined, 'Account e CLI', onAccounts),
+        item(
+          dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+          dark ? 'Tema chiaro' : 'Tema scuro',
+          onToggleTheme,
+        ),
+        item(Icons.folder_open_outlined, 'Apri la cartella dei log', onOpenLogs),
       ],
     );
   }
@@ -714,27 +914,36 @@ class _Stat extends StatelessWidget {
 }
 
 class _RoundAction extends StatelessWidget {
-  const _RoundAction({required this.icon, required this.tooltip, this.onPressed, this.danger = false});
+  const _RoundAction({
+    required this.icon,
+    required this.tooltip,
+    this.onPressed,
+    this.danger = false,
+    this.primary = false,
+  });
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
   final bool danger;
 
+  /// Filled blue: the main action (start / resume).
+  final bool primary;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final fg = danger ? c.danger : c.text;
     return IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
       style: IconButton.styleFrom(
-        backgroundColor: c.surface,
-        foregroundColor: fg,
-        disabledForegroundColor: c.muted.withValues(alpha: 0.4),
-        side: BorderSide(color: c.border),
-        fixedSize: const Size(42, 42),
+        backgroundColor: primary ? c.primary : c.surface,
+        foregroundColor: primary ? Colors.white : (danger ? c.danger : c.text),
+        disabledBackgroundColor: primary ? c.border : c.surface,
+        disabledForegroundColor: c.muted.withValues(alpha: 0.5),
+        side: primary ? null : BorderSide(color: c.border),
+        fixedSize: const Size(44, 44),
       ),
-      icon: Icon(icon, size: 20),
+      icon: Icon(icon, size: primary ? 24 : 20),
     );
   }
 }
