@@ -14,7 +14,15 @@ enum BlockStatus {
 }
 
 class BlockState {
-  BlockState({this.status = BlockStatus.pending, this.attempts = 0, this.note = '', this.feedback = ''});
+  BlockState({
+    this.status = BlockStatus.pending,
+    this.attempts = 0,
+    this.note = '',
+    this.feedback = '',
+    this.activeSeconds = 0,
+    this.inputTokens = 0,
+    this.outputTokens = 0,
+  });
 
   BlockStatus status;
   int attempts;
@@ -25,13 +33,32 @@ class BlockState {
   /// What the next invocation should know about the previous one.
   String feedback;
 
-  Map<String, Object?> toJson() => {'status': status.name, 'attempts': attempts, 'note': note, 'feedback': feedback};
+  /// Time the agent spent on this block and the tokens it used, summed over
+  /// all invocations.
+  int activeSeconds;
+  int inputTokens;
+  int outputTokens;
+
+  int get totalTokens => inputTokens + outputTokens;
+
+  Map<String, Object?> toJson() => {
+    'status': status.name,
+    'attempts': attempts,
+    'note': note,
+    'feedback': feedback,
+    'activeSeconds': activeSeconds,
+    'inputTokens': inputTokens,
+    'outputTokens': outputTokens,
+  };
 
   static BlockState fromJson(Map<String, Object?> j) => BlockState(
     status: BlockStatus.values.firstWhere((s) => s.name == j['status'], orElse: () => BlockStatus.pending),
     attempts: j['attempts'] as int? ?? 0,
     note: j['note'] as String? ?? '',
     feedback: j['feedback'] as String? ?? '',
+    activeSeconds: j['activeSeconds'] as int? ?? 0,
+    inputTokens: j['inputTokens'] as int? ?? 0,
+    outputTokens: j['outputTokens'] as int? ?? 0,
   );
 }
 
@@ -48,6 +75,9 @@ class LoopState {
 
   /// Seconds the loop has been running on this plan, across sessions.
   int activeSeconds = 0;
+
+  /// Commits AutoLoop created for this plan.
+  int commits = 0;
 
   int get totalTokens => inputTokens + outputTokens;
 
@@ -70,6 +100,7 @@ class LoopState {
       state.inputTokens = j['inputTokens'] as int? ?? 0;
       state.outputTokens = j['outputTokens'] as int? ?? 0;
       state.activeSeconds = j['activeSeconds'] as int? ?? 0;
+      state.commits = j['commits'] as int? ?? 0;
       if (samePlan) {
         final b = (j['blocks'] as Map?)?.cast<String, Object?>() ?? const {};
         for (final e in b.entries) {
@@ -96,6 +127,7 @@ class LoopState {
         'inputTokens': inputTokens,
         'outputTokens': outputTokens,
         'activeSeconds': activeSeconds,
+        'commits': commits,
         'blocks': {for (final e in blocks.entries) e.key: e.value.toJson()},
       }),
     );

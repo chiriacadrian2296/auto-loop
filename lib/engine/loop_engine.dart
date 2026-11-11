@@ -132,9 +132,16 @@ class LoopEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _log(LogKind kind, String text) {
-    logs.add(LogEntry(kind, text));
+  /// When the running agent last printed anything (null when not running).
+  DateTime? lastOutputAt;
+
+  void _addLog(LogEntry e) {
+    logs.add(e);
     if (logs.length > _maxLogs) logs.removeRange(0, logs.length - _maxLogs);
+  }
+
+  void _log(LogKind kind, String text) {
+    _addLog(LogEntry(kind, text));
     notifyListeners();
   }
 
@@ -393,6 +400,7 @@ class LoopEngine extends ChangeNotifier {
       '▶ Blocco ${block.index + 1}/${plan.blocks.length} «${block.title}» — invocazione ${bs.attempts}',
     );
     runStartedAt = DateTime.now();
+    lastOutputAt = runStartedAt;
     _setPhase(LoopPhase.running, 'Blocco ${block.index + 1}: ${block.title}');
 
     final stream = backend.newStream();
@@ -409,10 +417,10 @@ class LoopEngine extends ChangeNotifier {
         environment: profileEnvironment(settings.profileId, settings.agent),
         rawLog: raw,
         onLine: (line, stderr) {
+          lastOutputAt = DateTime.now();
           for (final e in stream.handle(line, stderr: stderr)) {
-            logs.add(e);
+            _addLog(e);
           }
-          if (logs.length > _maxLogs) logs.removeRange(0, logs.length - _maxLogs);
           notifyListeners();
         },
       );
@@ -430,10 +438,15 @@ class LoopEngine extends ChangeNotifier {
       _process = null;
     }
     await raw.close();
+    final began = runStartedAt;
     runStartedAt = null;
+    lastOutputAt = null;
 
     state.inputTokens += stream.inputTokens;
     state.outputTokens += stream.outputTokens;
+    bs.inputTokens += stream.inputTokens;
+    bs.outputTokens += stream.outputTokens;
+    if (began != null) bs.activeSeconds += DateTime.now().difference(began).inSeconds;
     final finalText = backend.readFinalMessage(lastMessage) ?? stream.finalText;
     final (verdict, reason) = parseVerdict(finalText);
     final summary = _summary(finalText);
@@ -551,6 +564,7 @@ class LoopEngine extends ChangeNotifier {
         'Blocco ${block.index + 1} del piano ${p.basename(planPath!)}.',
       ], dir);
       if (r.exitCode == 0) {
+        state!.commits++;
         _log(LogKind.success, 'Commit creato: autoloop: $title');
       } else {
         _log(LogKind.warning, 'Commit non riuscito: ${r.stderr.toString().trim()}');

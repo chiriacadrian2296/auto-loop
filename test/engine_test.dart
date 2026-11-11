@@ -169,6 +169,10 @@ testo
       expect(engine.phase, LoopPhase.finished, reason: engine.logs.map((l) => l.text).join('\n'));
       expect(engine.state!.runs, 4);
       expect(engine.state!.totalTokens, 440);
+      for (final b in engine.plan!.blocks) {
+        expect(engine.blockState(b).totalTokens, 220); // two invocations of 110 tokens
+      }
+      expect(engine.state!.commits, 2);
       expect(File(p.join(dir.path, 'out2.txt')).existsSync(), isTrue);
       final log = await Process.run('git', ['log', '--oneline'], workingDirectory: dir.path);
       expect(log.stdout.toString(), allOf(contains('autoloop: Uno'), contains('autoloop: Due')));

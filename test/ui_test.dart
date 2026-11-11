@@ -33,7 +33,7 @@ void main() {
 
     await tester.tap(find.textContaining('Setup del progetto'));
     await tester.pump();
-    expect(find.text('Completato'), findsOneWidget);
+    expect(find.text('Segna completato'), findsOneWidget);
 
     // Advanced sections start closed with a summary, and open on click.
     expect(find.text('Richiamo dopo'), findsNothing);
