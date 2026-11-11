@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -79,7 +81,8 @@ class SettingsPanel extends StatelessWidget {
                   inGroup: true,
                   icon: Icons.description_outlined,
                   title: planPath == null ? 'Scegli il file del piano' : p.basename(planPath!),
-                  subtitle: planPath == null ? '.md o .txt' : p.dirname(planPath!),
+                  subtitle: planPath == null ? '.md o .txt' : _shortPath(p.dirname(planPath!)),
+                  tooltip: planPath,
                   highlighted: planPath == null,
                   onTap: onPickPlan,
                   action: planPath == null
@@ -91,8 +94,16 @@ class SettingsPanel extends StatelessWidget {
                   inGroup: true,
                   icon: Icons.folder_outlined,
                   title: workDir == null ? 'Scegli la cartella' : p.basename(workDir!),
-                  subtitle: workDir ?? 'Dove l\'agente crea e modifica i file',
+                  subtitle: workDir == null ? 'Dove l\'agente crea e modifica i file' : _shortPath(workDir!),
+                  tooltip: workDir,
                   onTap: onPickWorkDir,
+                  action: workDir == null
+                      ? null
+                      : _TinyIcon(
+                          icon: Icons.open_in_new_rounded,
+                          tooltip: 'Apri in Esplora file',
+                          onPressed: () => Process.run('explorer.exe', [workDir!]),
+                        ),
                 ),
                 _ChoiceCard<SplitStrategy>(
                   caption: 'Suddivisione in blocchi',
@@ -401,6 +412,27 @@ class SettingsPanel extends StatelessWidget {
   }
 }
 
+/// Last two segments of a path, enough to recognise it at a glance.
+String _shortPath(String path) {
+  final parts = p.split(path);
+  if (parts.length <= 3) return path;
+  return '…${p.separator}${p.joinAll(parts.sublist(parts.length - 2))}';
+}
+
+/// What the less obvious fields do, shown from the "i" next to their name.
+const _fieldInfo = <String, String>{
+  'Richiamo dopo': 'Pausa tra la fine di un\'invocazione dell\'agente e la successiva.',
+  'Tentativi': 'Quante volte l\'agente viene richiamato sullo stesso blocco prima di segnarlo come bloccato.',
+  'Silenzio max': 'Se l\'agente non scrive nulla per questo tempo, viene fermato e richiamato.',
+  'Durata max': 'Tempo massimo di una singola invocazione: oltre, viene fermata e il blocco riprende.',
+  'Riprova ogni': 'Ogni quanto riprovare quando la CLI segnala che la quota è esaurita.',
+  'Budget token': 'Il loop si ferma dopo aver consumato in totale questi token. 0 = nessun limite.',
+  'Comando di verifica':
+      'Eseguito con cmd.exe nella cartella di lavoro quando l\'agente dichiara il blocco finito. '
+      'Se fallisce, l\'output torna all\'agente.',
+  'Regole per ogni blocco': 'Testo aggiunto a ogni prompt, utile per stack, stile e cose da non toccare.',
+};
+
 /// Related settings in one rounded card, as rows separated by hairlines.
 class _Group extends StatelessWidget {
   const _Group({required this.children, this.indent = 54});
@@ -652,7 +684,11 @@ class _PathCard extends StatelessWidget {
     this.action,
     this.caption,
     this.inGroup = false,
+    this.tooltip,
   });
+
+  /// Full text shown on hover (e.g. the complete path).
+  final String? tooltip;
   final IconData icon;
   final String title, subtitle;
   final VoidCallback onTap;
@@ -670,7 +706,7 @@ class _PathCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final radius = BorderRadius.circular(inGroup ? 0 : 12);
-    return Material(
+    final card = Material(
       color: highlighted ? c.primarySoft : (inGroup ? Colors.transparent : c.field),
       borderRadius: radius,
       child: InkWell(
@@ -732,6 +768,9 @@ class _PathCard extends StatelessWidget {
         ),
       ),
     );
+    return tooltip == null
+        ? card
+        : Tooltip(message: tooltip!, waitDuration: const Duration(milliseconds: 600), child: card);
   }
 }
 
@@ -749,9 +788,23 @@ class _Field extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text),
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text),
+                ),
+              ),
+              if (_fieldInfo[label] case final info?) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: info,
+                  waitDuration: const Duration(milliseconds: 150),
+                  child: Icon(Icons.info_outline_rounded, size: 14, color: c.muted),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 6),
           child,

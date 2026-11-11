@@ -260,6 +260,14 @@ void main() {
         await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 1)));
         await tester.pump(const Duration(milliseconds: 100));
       }
+      for (final title in ['RICHIAMO', 'QUOTA E BUDGET', 'FINE BLOCCO', 'ISTRUZIONI']) {
+        final f = find.text(title);
+        if (f.evaluate().isEmpty) continue;
+        await tester.ensureVisible(f);
+        await tester.tap(f);
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.runAsync(() async {
         final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
         final image = await boundary.toImage();
