@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'agents.dart';
+
 enum BlockStatus {
   pending('Da fare'),
   done('Completato'),
@@ -140,5 +142,54 @@ class LoopState {
     if (!dir.existsSync()) dir.createSync(recursive: true);
     final ignore = File(p.join(dir.path, '.gitignore'));
     if (!ignore.existsSync()) ignore.writeAsStringSync('*\n');
+  }
+}
+
+/// The activity log of one plan, one JSON line per entry, so it survives
+/// restarts: `<project>/.autoloop/activity-<plan>.jsonl`.
+class ActivityLog {
+  ActivityLog(String workDir, String planPath)
+    : file = File(p.join(LoopState.dirOf(workDir), 'activity-${p.basenameWithoutExtension(planPath)}.jsonl')),
+      _workDir = workDir;
+
+  final File file;
+  final String _workDir;
+
+  /// The most recent [max] entries.
+  List<LogEntry> read({int max = 4000}) {
+    if (!file.existsSync()) return [];
+    try {
+      final lines = file.readAsLinesSync();
+      final tail = lines.length > max ? lines.sublist(lines.length - max) : lines;
+      return [
+        for (final l in tail)
+          if (l.trim().isNotEmpty) ?_decode(l),
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static LogEntry? _decode(String line) {
+    try {
+      return LogEntry.fromJson(jsonDecode(line));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void append(LogEntry e) {
+    try {
+      LoopState.ensureDir(_workDir);
+      file.writeAsStringSync('${jsonEncode(e.toJson())}\n', mode: FileMode.append, flush: false);
+    } catch (_) {
+      // The on-screen log still works if the folder is read-only.
+    }
+  }
+
+  void clear() {
+    try {
+      if (file.existsSync()) file.writeAsStringSync('');
+    } catch (_) {}
   }
 }

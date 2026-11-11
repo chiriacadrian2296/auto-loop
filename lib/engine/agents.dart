@@ -10,6 +10,16 @@ class LogEntry {
   final LogKind kind;
   final String text;
   final DateTime at;
+
+  Map<String, Object?> toJson() => {'k': kind.name, 't': text, 'at': at.toIso8601String()};
+
+  static LogEntry? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final kind = LogKind.values.where((k) => k.name == j['k']).firstOrNull;
+    final text = j['t'], at = DateTime.tryParse('${j['at']}');
+    if (kind == null || text is! String || at == null) return null;
+    return LogEntry(kind, text, at: at);
+  }
 }
 
 /// Problems that are not the agent's fault and must not be retried blindly.

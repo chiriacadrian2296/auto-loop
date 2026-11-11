@@ -94,6 +94,8 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
         at: at(831),
       ),
     ];
+    final activity = ActivityLog(dir.path, planFile.path);
+    logs.forEach(activity.append);
     return DemoData._(dir.path, planFile.path, logs);
   }
 }

@@ -183,6 +183,10 @@ testo
       // Progress is persisted: a new engine sees everything done.
       final again = LoopEngine(settings())..load(workDir: dir.path, planPath: plan.path);
       expect(again.phase, LoopPhase.finished);
+      // ...and so is the activity log, which survives a restart.
+      expect(again.logs.map((e) => e.text), engine.logs.map((e) => e.text));
+      again.clearLogs();
+      expect((LoopEngine(settings())..load(workDir: dir.path, planPath: plan.path)).logs, isEmpty);
     });
 
     test('quota stop pauses without consuming an attempt, then resumes', () async {

@@ -33,9 +33,7 @@ Future<void> main(List<String> args) async {
 
   final engine = LoopEngine(LoopSettings.decode(prefs.getString('settings')));
   if (demo != null) {
-    engine
-      ..demo = true
-      ..logs.addAll(demo.logs);
+    engine.demo = true;
   }
   runApp(AutoLoopApp(engine: engine, prefs: prefs));
 }

@@ -19,6 +19,7 @@ void main() {
       BlockStatus.pending,
     ]);
     expect(engine.totalTime.inMinutes, 134);
+    expect(engine.logs, hasLength(demo.logs.length)); // loaded from the demo's saved history
 
     await engine.start();
     expect(engine.phase, LoopPhase.idle);

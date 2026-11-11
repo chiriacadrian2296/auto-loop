@@ -98,6 +98,11 @@ class LoopEngine extends ChangeNotifier {
     this.planPath = planPath;
     plan = parsePlan(raw, strategy: settings.strategy);
     state = LoopState.load(workDir, planPath);
+    // The log on screen is the plan's saved history.
+    _activity = ActivityLog(workDir, planPath);
+    logs
+      ..clear()
+      ..addAll(_activity!.read(max: _maxLogs));
     for (final b in plan!.blocks) {
       final s = state!.of(b.id);
       if (b.preChecked && s.status == BlockStatus.pending && s.attempts == 0) {
@@ -132,13 +137,17 @@ class LoopEngine extends ChangeNotifier {
 
   void clearLogs() {
     logs.clear();
+    _activity?.clear();
     notifyListeners();
   }
 
   /// When the running agent last printed anything (null when not running).
   DateTime? lastOutputAt;
 
+  ActivityLog? _activity;
+
   void _addLog(LogEntry e) {
+    _activity?.append(e);
     logs.add(e);
     if (logs.length > _maxLogs) logs.removeRange(0, logs.length - _maxLogs);
   }
