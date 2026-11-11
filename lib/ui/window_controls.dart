@@ -37,7 +37,10 @@ class WindowDragArea extends StatelessWidget {
 
 /// Minimize / maximize / close, styled like Windows 11 caption buttons.
 class WindowButtons extends StatefulWidget {
-  const WindowButtons({super.key});
+  const WindowButtons({super.key, this.leading = const []});
+
+  /// Extra caption-style buttons shown before minimize (e.g. the theme).
+  final List<Widget> leading;
 
   @override
   State<WindowButtons> createState() => _WindowButtonsState();
@@ -80,6 +83,7 @@ class _WindowButtonsState extends State<WindowButtons> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        ...widget.leading,
         WindowCaptionButton.minimize(brightness: brightness, onPressed: () => _current()?.minimize()),
         // Not wrapped in MaximizeButtonArea: declaring it as the system
         // maximize button (for the Windows 11 snap flyout) makes Windows
@@ -103,4 +107,34 @@ void bringWindowToFront() {
     w.show();
     w.focus();
   } catch (_) {}
+}
+
+/// Cycles the theme system → light → dark, styled like the window buttons.
+class ThemeCaptionButton extends StatelessWidget {
+  const ThemeCaptionButton({super.key, required this.mode, required this.onChanged});
+  final ThemeMode mode;
+  final ValueChanged<ThemeMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final (IconData icon, String now, ThemeMode next, String then) = switch (mode) {
+      ThemeMode.system => (Icons.brightness_auto_outlined, 'segue il sistema', ThemeMode.light, 'chiaro'),
+      ThemeMode.light => (Icons.light_mode_outlined, 'chiaro', ThemeMode.dark, 'scuro'),
+      ThemeMode.dark => (Icons.dark_mode_outlined, 'scuro', ThemeMode.system, 'come il sistema'),
+    };
+    return Tooltip(
+      message: 'Tema: $now · clic per $then',
+      waitDuration: const Duration(milliseconds: 400),
+      child: WindowCaptionButton(
+        brightness: brightness,
+        icon: Icon(
+          icon,
+          size: 15,
+          color: brightness == Brightness.dark ? Colors.white : Colors.black.withValues(alpha: 0.9),
+        ),
+        onPressed: () => onChanged(next),
+      ),
+    );
+  }
 }

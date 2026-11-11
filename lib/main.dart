@@ -28,9 +28,12 @@ class AutoLoopApp extends StatefulWidget {
 }
 
 class _AutoLoopAppState extends State<AutoLoopApp> {
+  // 'system' (default), 'light' or 'dark'.
   late final ValueNotifier<ThemeMode> _mode =
-      ValueNotifier(widget.prefs.getString('theme') == 'dark' ? ThemeMode.dark : ThemeMode.light)..addListener(() {
-        widget.prefs.setString('theme', _mode.value == ThemeMode.dark ? 'dark' : 'light');
+      ValueNotifier(
+        ThemeMode.values.firstWhere((m) => m.name == widget.prefs.getString('theme'), orElse: () => ThemeMode.system),
+      )..addListener(() {
+        widget.prefs.setString('theme', _mode.value.name);
         setState(() {});
       });
 

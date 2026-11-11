@@ -329,7 +329,6 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final active = engine.isActive;
     final blocker = active ? null : _blocker();
-    final dark = widget.themeMode.value == ThemeMode.dark;
     return Scaffold(
       body: DropTarget(
         onDragEntered: (_) => setState(() => _dragging = true),
@@ -341,8 +340,8 @@ class _HomePageState extends State<HomePage> {
               children: [
                 _TopBar(
                   engine: engine,
-                  dark: dark,
-                  onToggleTheme: () => widget.themeMode.value = dark ? ThemeMode.light : ThemeMode.dark,
+                  themeMode: widget.themeMode.value,
+                  onThemeChanged: (m) => widget.themeMode.value = m,
                   onStart: blocker != null || active || engine.phase == LoopPhase.finished ? null : engine.start,
                   blocker: blocker == null ? null : (blocker.$2, blocker.$3),
                   onPause: active && !engine.pauseRequested ? engine.requestPause : null,
@@ -441,8 +440,8 @@ class _HomePageState extends State<HomePage> {
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.engine,
-    required this.dark,
-    required this.onToggleTheme,
+    required this.themeMode,
+    required this.onThemeChanged,
     this.blocker,
     this.onStart,
     this.onPause,
@@ -450,8 +449,8 @@ class _TopBar extends StatelessWidget {
   });
 
   final LoopEngine engine;
-  final bool dark;
-  final VoidCallback onToggleTheme;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeChanged;
 
   /// Why the start button is disabled, and how to fix it.
   final (String, VoidCallback)? blocker;
@@ -589,22 +588,9 @@ class _TopBar extends StatelessWidget {
                 ),
               ),
             ),
-            // Window buttons, with the theme switch tucked underneath.
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const WindowButtons(),
-                Padding(
-                  padding: const EdgeInsets.only(right: 10, top: 2),
-                  child: IconButton(
-                    tooltip: dark ? 'Tema chiaro' : 'Tema scuro',
-                    onPressed: onToggleTheme,
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 18,
-                    icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
-                  ),
-                ),
-              ],
+            // Window frame: the theme switch sits with the window buttons.
+            WindowButtons(
+              leading: [ThemeCaptionButton(mode: themeMode, onChanged: onThemeChanged)],
             ),
           ],
         ),
