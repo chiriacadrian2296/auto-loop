@@ -76,7 +76,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(SettingsPanel), findsNothing);
     expect(prefs.getBool('sidebarOpen'), isFalse);
-    await tester.tap(find.text('PANNELLO DI CONTROLLO'));
+    await tester.tap(find.byTooltip('Apri il pannello di controllo'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsPanel), findsOneWidget);
 

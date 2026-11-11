@@ -228,7 +228,14 @@ class PanelHeader extends StatelessWidget {
             padding: EdgeInsets.only(left: 20, right: actions.isEmpty ? 20 : 10),
             child: Row(
               children: [
-                Expanded(child: SectionLabel(title)),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: -0.1, color: c.text),
+                  ),
+                ),
                 ...actions,
               ],
             ),

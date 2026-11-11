@@ -693,16 +693,16 @@ class _CollapsibleState extends State<_Collapsible> {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Divider(color: c.border)),
+                        const Spacer(),
                         Padding(
                           padding: const EdgeInsets.only(left: 12, right: 6),
                           child: Text(
                             widget.title.toUpperCase(),
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: 1.6,
-                              color: widget.warning ? c.danger : c.text,
+                              letterSpacing: 1.4,
+                              color: widget.warning ? c.danger : c.muted,
                             ),
                           ),
                         ),
@@ -717,7 +717,7 @@ class _CollapsibleState extends State<_Collapsible> {
                           child: Icon(Icons.expand_more_rounded, size: 18, color: c.muted),
                         ),
                         const SizedBox(width: 6),
-                        Expanded(child: Divider(color: c.border)),
+                        const Spacer(),
                       ],
                     ),
                     AnimatedSize(

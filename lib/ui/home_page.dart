@@ -420,7 +420,7 @@ class _HomePageState extends State<HomePage> {
                                       ],
                                     ),
                                   )
-                                : _SidebarRail(warning: blocker != null, onOpen: () => _setSidebar(true)),
+                                : _SidebarRail(onOpen: () => _setSidebar(true)),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -648,50 +648,30 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// What the closed control panel leaves behind: a button to reopen it, a
-/// vertical title and, if something blocks the start, a warning.
+/// What the closed control panel leaves behind: the same round button as
+/// the close one, in the same place; the space below is empty.
 class _SidebarRail extends StatelessWidget {
-  const _SidebarRail({required this.warning, required this.onOpen});
-  final bool warning;
+  const _SidebarRail({required this.onOpen});
   final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onOpen,
-        child: Column(
-          children: [
-            SizedBox(
-              height: 54,
-              child: Center(
-                child: Tooltip(
-                  message: 'Apri il pannello di controllo',
-                  child: Icon(Icons.keyboard_double_arrow_right_rounded, size: 20, color: c.muted),
-                ),
-              ),
+    return Column(
+      children: [
+        SizedBox(
+          height: 54,
+          child: Center(
+            child: IconButton(
+              tooltip: 'Apri il pannello di controllo',
+              onPressed: onOpen,
+              iconSize: 20,
+              icon: const Icon(Icons.keyboard_double_arrow_right_rounded),
             ),
-            Divider(height: 1, color: c.border),
-            const SizedBox(height: 18),
-            if (warning) ...[
-              Tooltip(
-                message: 'Manca qualcosa per avviare: apri il pannello',
-                child: Icon(Icons.error_rounded, size: 18, color: c.danger),
-              ),
-              const SizedBox(height: 14),
-            ],
-            RotatedBox(
-              quarterTurns: 3,
-              child: Text(
-                'PANNELLO DI CONTROLLO',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.6, color: c.muted),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+        Divider(height: 1, color: c.border),
+      ],
     );
   }
 }
