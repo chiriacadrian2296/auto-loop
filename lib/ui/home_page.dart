@@ -66,12 +66,64 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _ticker?.cancel();
     engine.removeListener(_onEngine);
+    _planWatch?.cancel();
+    _planDebounce?.cancel();
     HardwareKeyboard.instance.removeHandler(_onKey);
     super.dispose();
   }
 
   void _onEngine() {
+    // A plan edited while the loop was running is picked up once it stops.
+    if (_planChanged && !engine.isActive) {
+      _planChanged = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _reload();
+        engine.note('Piano ricaricato: il file era stato modificato durante l\'esecuzione.');
+      });
+    }
     if (mounted) setState(() {});
+  }
+
+  // ---- the plan file on disk
+
+  StreamSubscription<FileSystemEvent>? _planWatch;
+  String? _watchedPlan;
+  Timer? _planDebounce;
+  bool _planChanged = false;
+
+  /// Reloads the plan when its file changes on disk (editors save in bursts,
+  /// hence the short debounce). While running, the reload waits for the stop.
+  void _watchPlan() {
+    final plan = _planPath;
+    if (plan == _watchedPlan) return;
+    _planWatch?.cancel();
+    _planWatch = null;
+    _watchedPlan = plan;
+    if (plan == null || !File(plan).existsSync()) return;
+    try {
+      _planWatch = File(plan).parent.watch().listen((event) {
+        if (!p.equals(event.path, plan)) return;
+        _planDebounce?.cancel();
+        _planDebounce = Timer(const Duration(milliseconds: 600), () {
+          if (!mounted || !File(plan).existsSync()) return;
+          if (engine.isActive) {
+            if (!_planChanged) engine.note('Il piano è stato modificato: verrà ricaricato quando il loop si ferma.');
+            _planChanged = true;
+          } else {
+            _reload();
+            engine.note('Piano ricaricato: il file è stato modificato.');
+          }
+        });
+      });
+    } catch (_) {
+      // Watching is a convenience; the plan can always be reopened by hand.
+    }
+  }
+
+  void _openPlanInEditor() {
+    final plan = _planPath;
+    if (plan != null) Process.run('cmd.exe', ['/c', 'start', '', plan]);
   }
 
   Future<void> _detectClis({bool force = false}) async {
@@ -131,6 +183,7 @@ class _HomePageState extends State<HomePage> {
     if (_workDir == null || _planPath == null) return;
     _loadError = engine.load(workDir: _workDir!, planPath: _planPath!);
     if (_loadError == null) _remember(_planPath!, _workDir!);
+    _watchPlan();
     setState(() {});
   }
 
@@ -430,7 +483,17 @@ class _HomePageState extends State<HomePage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                const PanelHeader('Avanzamento'),
+                                PanelHeader(
+                                  'Avanzamento',
+                                  actions: [
+                                    IconButton(
+                                      tooltip: 'Apri il piano nell\'editor',
+                                      onPressed: _planPath == null ? null : _openPlanInEditor,
+                                      iconSize: 19,
+                                      icon: const Icon(Icons.edit_note_rounded),
+                                    ),
+                                  ],
+                                ),
                                 Expanded(
                                   child: _loadError != null
                                       ? _EmptyState(
