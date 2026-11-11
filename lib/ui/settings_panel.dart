@@ -60,8 +60,25 @@ class SettingsPanel extends StatelessWidget {
     final efforts = catalog.effortsFor(s.model);
     final selectedModel = catalog.find(s.model);
     final summaryRecall =
-        'Dopo ${s.relaunchDelaySeconds} s · ${s.maxAttemptsPerBlock} tentativi · '
-        'silenzio ${s.idleTimeoutMinutes} min · max ${s.runTimeoutMinutes} min';
+        'Dopo ${s.relaunchDelaySeconds} s · ${s.maxAttemptsPerBlock} tentativi · max ${s.runTimeoutMinutes} min';
+    final summaryPlan = [
+      planPath == null ? 'Nessun piano' : p.basename(planPath!),
+      if (workDir != null) p.basename(workDir!),
+      s.strategy.label,
+    ].join(' · ');
+    final summaryAgent = [
+      s.agent.label,
+      selectedModel?.label ?? (s.model.isEmpty ? 'modello predefinito' : s.model),
+      if (s.effort.isNotEmpty) _effortName(s.effort).toLowerCase(),
+      s.autonomy == Autonomy.full ? 'accesso completo' : 'protetta',
+    ].join(' · ');
+    final summaryAccount = version == null
+        ? 'CLI non trovata'
+        : account == null
+        ? 'Controllo…'
+        : account.loggedIn
+        ? [account.email ?? 'Connesso', if (!s.profile.isDefault) s.profile.name].join(' · ')
+        : 'Non connesso';
     final summaryQuota = [
       s.quotaBehavior == QuotaBehavior.wait ? 'Riprova ogni ${s.quotaWaitMinutes} min' : 'Si ferma',
       s.maxTotalTokens == 0 ? 'budget illimitato' : 'budget ${_compactTokens(s.maxTotalTokens)} token',
@@ -73,170 +90,179 @@ class SettingsPanel extends StatelessWidget {
     ].join(' · ');
     final rules = s.extraInstructions.trim().replaceAll(RegExp(r'\s+'), ' ');
     final summaryRules = rules.isEmpty ? 'Nessuna regola aggiuntiva' : rules;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (locked) const _RunningBanner(),
-        // What the running loop cannot change mid-way.
-        AbsorbPointer(
-          absorbing: locked,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: locked ? 0.5 : 1,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Section('Piano', first: true, warning: issues.contains('Piano')),
-                _Group(
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+            children: [
+              if (locked) const _RunningBanner(),
+              // Piano, Agente and Account cannot change while the loop runs.
+              _Collapsible(
+                title: 'Piano',
+                summary: summaryPlan,
+                warning: issues.contains('Piano'),
+                locked: locked,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _PathCard(
-                      caption: 'File del piano',
-                      inGroup: true,
-                      icon: Icons.description_outlined,
-                      title: planPath == null ? 'Scegli il file del piano' : p.basename(planPath!),
-                      subtitle: planPath == null ? '.md o .txt' : _shortPath(p.dirname(planPath!)),
-                      tooltip: planPath,
-                      highlighted: planPath == null,
-                      onTap: onPickPlan,
-                      action: planPath == null
-                          ? null
-                          : _TinyIcon(
-                              icon: Icons.refresh_rounded,
-                              tooltip: 'Ricarica dal disco',
-                              onPressed: onReloadPlan,
-                            ),
-                    ),
-                    _PathCard(
-                      caption: 'Cartella di lavoro',
-                      inGroup: true,
-                      icon: Icons.folder_outlined,
-                      title: workDir == null ? 'Scegli la cartella' : p.basename(workDir!),
-                      subtitle: workDir == null ? 'Dove l\'agente crea e modifica i file' : _shortPath(workDir!),
-                      tooltip: workDir,
-                      onTap: onPickWorkDir,
-                      action: workDir == null
-                          ? null
-                          : _TinyIcon(
-                              icon: Icons.open_in_new_rounded,
-                              tooltip: 'Apri in Esplora file',
-                              onPressed: () => Process.run('explorer.exe', [workDir!]),
-                            ),
-                    ),
-                    _ChoiceCard<SplitStrategy>(
-                      caption: 'Suddivisione in blocchi',
-                      icon: Icons.view_agenda_outlined,
-                      dialogTitle: 'Suddivisione in blocchi',
-                      dialogSubtitle: 'Come dividere il piano: l\'agente svolge un blocco alla volta.',
-                      value: s.strategy,
-                      choices: [
-                        for (final v in SplitStrategy.values)
-                          Choice(
-                            value: v,
-                            label: v.label,
-                            description: _strategyInfo[v]!.$2,
-                            short: _strategyInfo[v]!.$1,
-                          ),
+                    _Group(
+                      children: [
+                        _PathCard(
+                          caption: 'File del piano',
+                          inGroup: true,
+                          icon: Icons.description_outlined,
+                          title: planPath == null ? 'Scegli il file del piano' : p.basename(planPath!),
+                          subtitle: planPath == null ? '.md o .txt' : _shortPath(p.dirname(planPath!)),
+                          tooltip: planPath,
+                          highlighted: planPath == null,
+                          onTap: onPickPlan,
+                          action: planPath == null
+                              ? null
+                              : _TinyIcon(
+                                  icon: Icons.refresh_rounded,
+                                  tooltip: 'Ricarica dal disco',
+                                  onPressed: onReloadPlan,
+                                ),
+                        ),
+                        _PathCard(
+                          caption: 'Cartella di lavoro',
+                          inGroup: true,
+                          icon: Icons.folder_outlined,
+                          title: workDir == null ? 'Scegli la cartella' : p.basename(workDir!),
+                          subtitle: workDir == null ? 'Dove l\'agente crea e modifica i file' : _shortPath(workDir!),
+                          tooltip: workDir,
+                          onTap: onPickWorkDir,
+                          action: workDir == null
+                              ? null
+                              : _TinyIcon(
+                                  icon: Icons.open_in_new_rounded,
+                                  tooltip: 'Apri in Esplora file',
+                                  onPressed: () => Process.run('explorer.exe', [workDir!]),
+                                ),
+                        ),
+                        _ChoiceCard<SplitStrategy>(
+                          caption: 'Suddivisione in blocchi',
+                          icon: Icons.view_agenda_outlined,
+                          dialogTitle: 'Suddivisione in blocchi',
+                          dialogSubtitle: 'Come dividere il piano: l\'agente svolge un blocco alla volta.',
+                          value: s.strategy,
+                          choices: [
+                            for (final v in SplitStrategy.values)
+                              Choice(
+                                value: v,
+                                dividerAfter: v == SplitStrategy.auto,
+                                label: v.label,
+                                description: _strategyInfo[v]!.$2,
+                                short: _strategyInfo[v]!.$1,
+                              ),
+                          ],
+                          onChanged: (v) {
+                            s.strategy = v;
+                            onStrategyChanged();
+                          },
+                        ),
                       ],
-                      onChanged: (v) {
-                        s.strategy = v;
-                        onStrategyChanged();
-                      },
                     ),
                   ],
                 ),
-                if (projectDir != null)
-                  const _Note('Tutte le impostazioni di questa barra, tranne file e cartella, vengono ricordate per questa cartella di lavoro.'),
-                _Section('Agente', warning: issues.contains('Agente')),
-                Row(
+              ),
+              _Collapsible(
+                title: 'Agente',
+                summary: summaryAgent,
+                warning: issues.contains('Agente'),
+                locked: locked,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final k in AgentKind.values) ...[
-                      if (k != AgentKind.values.first) const SizedBox(width: 10),
-                      Expanded(
-                        child: _AgentOption(
-                          kind: k,
-                          selected: s.agent == k,
-                          version: versions[k],
-                          onTap: () {
-                            s.agent = k;
+                    Row(
+                      children: [
+                        for (final k in AgentKind.values) ...[
+                          if (k != AgentKind.values.first) const SizedBox(width: 10),
+                          Expanded(
+                            child: _AgentOption(
+                              kind: k,
+                              selected: s.agent == k,
+                              version: versions[k],
+                              onTap: () {
+                                s.agent = k;
+                                onChanged();
+                              },
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _Group(
+                      children: [
+                        _ModelPicker(
+                          caption: 'Modello',
+                          catalog: catalog,
+                          value: s.model,
+                          onChanged: (v) {
+                            s.model = v;
+                            // Keep the effort only if the new model supports it.
+                            if (s.effort.isNotEmpty && !catalog.effortsFor(v).contains(s.effort)) s.effort = '';
                             onChanged();
                           },
                         ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _Group(
-                  children: [
-                    _ModelPicker(
-                      caption: 'Modello',
-                      catalog: catalog,
-                      value: s.model,
-                      onChanged: (v) {
-                        s.model = v;
-                        // Keep the effort only if the new model supports it.
-                        if (s.effort.isNotEmpty && !catalog.effortsFor(v).contains(s.effort)) s.effort = '';
-                        onChanged();
-                      },
-                    ),
-                    if (efforts.isNotEmpty)
-                      _EffortPicker(
-                        caption: 'Ragionamento',
-                        efforts: efforts,
-                        value: s.effort,
-                        defaultLevel: selectedModel?.defaultEffort,
-                        onChanged: (v) {
-                          s.effort = v;
-                          onChanged();
-                        },
-                      ),
-                    _ChoiceCard<Autonomy>(
-                      caption: 'Permessi',
-                      icon: s.autonomy == Autonomy.full ? Icons.lock_open_rounded : Icons.shield_outlined,
-                      dialogTitle: 'Permessi dell\'agente',
-                      dialogSubtitle: 'Quanta libertà ha ${s.agent.label} mentre lavora da solo.',
-                      value: s.autonomy,
-                      choices: [
-                        Choice(
-                          value: Autonomy.sandboxed,
-                          label: 'Protetta',
-                          short: s.agent == AgentKind.codex
-                              ? 'Sandbox sulla cartella del progetto'
-                              : 'Azioni rischiose bloccate',
-                          description: s.agent == AgentKind.codex
-                              ? 'Sandbox sulla cartella del progetto: modifica file ed esegue comandi al suo interno.'
-                              : 'Le azioni sicure (modifiche, build, test) sono approvate in automatico, quelle rischiose bloccate.',
-                        ),
-                        const Choice(
-                          value: Autonomy.full,
-                          label: 'Accesso completo',
-                          short: 'Nessuna sandbox né conferma',
-                          description: 'Nessuna sandbox e nessuna conferma: può eseguire qualsiasi comando.',
+                        if (efforts.isNotEmpty)
+                          _EffortPicker(
+                            caption: 'Ragionamento',
+                            efforts: efforts,
+                            value: s.effort,
+                            defaultLevel: selectedModel?.defaultEffort,
+                            onChanged: (v) {
+                              s.effort = v;
+                              onChanged();
+                            },
+                          ),
+                        _ChoiceCard<Autonomy>(
+                          caption: 'Permessi',
+                          icon: s.autonomy == Autonomy.full ? Icons.lock_open_rounded : Icons.shield_outlined,
+                          dialogTitle: 'Permessi dell\'agente',
+                          dialogSubtitle: 'Quanta libertà ha ${s.agent.label} mentre lavora da solo.',
+                          value: s.autonomy,
+                          choices: [
+                            Choice(
+                              value: Autonomy.sandboxed,
+                              label: 'Protetta',
+                              short: s.agent == AgentKind.codex
+                                  ? 'Sandbox sulla cartella del progetto'
+                                  : 'Azioni rischiose bloccate',
+                              description: s.agent == AgentKind.codex
+                                  ? 'Sandbox sulla cartella del progetto: modifica file ed esegue comandi al suo interno.'
+                                  : 'Le azioni sicure (modifiche, build, test) sono approvate in automatico, quelle rischiose bloccate.',
+                            ),
+                            const Choice(
+                              value: Autonomy.full,
+                              label: 'Accesso completo',
+                              short: 'Nessuna sandbox né conferma',
+                              description: 'Nessuna sandbox e nessuna conferma: può eseguire qualsiasi comando.',
+                            ),
+                          ],
+                          onChanged: (v) {
+                            s.autonomy = v;
+                            onChanged();
+                          },
                         ),
                       ],
-                      onChanged: (v) {
-                        s.autonomy = v;
-                        onChanged();
-                      },
                     ),
+                    if (s.autonomy == Autonomy.full)
+                      const _Note('Accesso completo: usalo solo su progetti sotto git o con un backup.', warning: true),
                   ],
                 ),
-                if (s.autonomy == Autonomy.full)
-                  const _Note('Accesso completo: usalo solo su progetti sotto git o con un backup.', warning: true),
-                _Section('Account', warning: issues.contains('Account')),
-                _Group(
+              ),
+              _Collapsible(
+                title: 'Account',
+                summary: summaryAccount,
+                warning: issues.contains('Account'),
+                locked: locked,
+                child: _Group(
                   children: [
-                    _PathCard(
-                      caption: 'Profilo',
-                      inGroup: true,
-                      icon: s.profile.isDefault ? Icons.computer_rounded : Icons.badge_outlined,
-                      title: s.profile.name,
-                      subtitle: s.profile.isDefault
-                          ? 'Accessi già presenti sul computer'
-                          : 'Accessi separati, solo per AutoLoop',
-                      trailing: Icons.unfold_more_rounded,
-                      onTap: onOpenAccounts,
-                    ),
+                    // One row: profile and account open the same panel.
                     _PathCard(
                       caption: 'Account ${s.agent.label}',
                       inGroup: true,
@@ -249,190 +275,188 @@ class SettingsPanel extends StatelessWidget {
                           : account.loggedIn
                           ? (account.email ?? 'Connesso')
                           : 'Non connesso',
-                      subtitle: version == null
-                          ? 'Indica dove si trova la CLI'
-                          : account == null
-                          ? ''
-                          : account.loggedIn
-                          ? [
-                              if (planLabel(account.plan).isNotEmpty) 'Piano ${planLabel(account.plan)}',
-                              if (account.method != null) 'via ${account.method}',
-                            ].join(' · ')
-                          : 'Clicca per accedere',
+                      subtitle: [
+                        'Profilo «${s.profile.name}»',
+                        if (account?.loggedIn == true && planLabel(account!.plan).isNotEmpty)
+                          'Piano ${planLabel(account.plan)}',
+                        if (version == null || account?.loggedIn == false) 'clicca per configurare',
+                      ].join(' · '),
                       onTap: onOpenAccounts,
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-        ),
-        // Read again at every invocation: safe to change while running.
-        _Collapsible(
-          title: 'Richiamo',
-          summary: summaryRecall,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Pair(
-                _NumberField(
-                  'Richiamo dopo',
-                  's',
-                  s.relaunchDelaySeconds,
-                  (v) => s.relaunchDelaySeconds = v,
-                  onChanged,
-                ),
-                _NumberField(
-                  'Tentativi per blocco',
-                  '',
-                  s.maxAttemptsPerBlock,
-                  (v) => s.maxAttemptsPerBlock = v,
-                  onChanged,
-                  min: 1,
-                ),
               ),
-              _Pair(
-                _NumberField(
-                  'Silenzio max',
-                  'min',
-                  s.idleTimeoutMinutes,
-                  (v) => s.idleTimeoutMinutes = v,
-                  onChanged,
-                  min: 1,
-                ),
-                _NumberField(
-                  'Durata max',
-                  'min',
-                  s.runTimeoutMinutes,
-                  (v) => s.runTimeoutMinutes = v,
-                  onChanged,
-                  min: 1,
-                ),
-              ),
-            ],
-          ),
-        ),
-        _Collapsible(
-          title: 'Quota e budget',
-          summary: summaryQuota,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Field(
-                label: 'Quando la quota finisce',
-                child: _ChoiceCard<QuotaBehavior>(
-                  icon: s.quotaBehavior == QuotaBehavior.wait
-                      ? Icons.update_rounded
-                      : Icons.pause_circle_outline_rounded,
-                  dialogTitle: 'Quando la quota finisce',
-                  dialogSubtitle: 'Cosa fare quando la CLI segnala il limite di utilizzo.',
-                  value: s.quotaBehavior,
-                  choices: [
-                    Choice(
-                      value: QuotaBehavior.wait,
-                      label: QuotaBehavior.wait.label,
-                      short: 'Riprova ogni ${s.quotaWaitMinutes} min',
-                      description: 'Aspetta e riprova ogni ${s.quotaWaitMinutes} minuti, finché la quota non torna.',
+              // Read again at every invocation: safe to change while running.
+              _Collapsible(
+                title: 'Richiamo',
+                summary: summaryRecall,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Pair(
+                      _NumberField(
+                        'Richiamo dopo',
+                        's',
+                        s.relaunchDelaySeconds,
+                        (v) => s.relaunchDelaySeconds = v,
+                        onChanged,
+                      ),
+                      _NumberField(
+                        'Tentativi per blocco',
+                        '',
+                        s.maxAttemptsPerBlock,
+                        (v) => s.maxAttemptsPerBlock = v,
+                        onChanged,
+                        min: 1,
+                      ),
                     ),
-                    Choice(
-                      value: QuotaBehavior.stop,
-                      label: QuotaBehavior.stop.label,
-                      short: 'Il loop va in pausa',
-                      description: 'Mette il loop in pausa: lo riprendi tu quando vuoi.',
+                    _Pair(
+                      _NumberField(
+                        'Silenzio max',
+                        'min',
+                        s.idleTimeoutMinutes,
+                        (v) => s.idleTimeoutMinutes = v,
+                        onChanged,
+                        min: 1,
+                      ),
+                      _NumberField(
+                        'Durata max',
+                        'min',
+                        s.runTimeoutMinutes,
+                        (v) => s.runTimeoutMinutes = v,
+                        onChanged,
+                        min: 1,
+                      ),
                     ),
                   ],
-                  onChanged: (v) {
-                    s.quotaBehavior = v;
-                    onChanged();
-                  },
                 ),
               ),
-              _Pair(
-                _NumberField(
-                  'Riprova ogni',
-                  'min',
-                  s.quotaWaitMinutes,
-                  (v) => s.quotaWaitMinutes = v,
-                  onChanged,
-                  min: 1,
-                  enabled: s.quotaBehavior == QuotaBehavior.wait,
+              _Collapsible(
+                title: 'Quota e budget',
+                summary: summaryQuota,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Field(
+                      label: 'Quando la quota finisce',
+                      child: _ChoiceCard<QuotaBehavior>(
+                        icon: s.quotaBehavior == QuotaBehavior.wait
+                            ? Icons.update_rounded
+                            : Icons.pause_circle_outline_rounded,
+                        dialogTitle: 'Quando la quota finisce',
+                        dialogSubtitle: 'Cosa fare quando la CLI segnala il limite di utilizzo.',
+                        value: s.quotaBehavior,
+                        choices: [
+                          Choice(
+                            value: QuotaBehavior.wait,
+                            label: QuotaBehavior.wait.label,
+                            short: 'Riprova ogni ${s.quotaWaitMinutes} min',
+                            description:
+                                'Aspetta e riprova ogni ${s.quotaWaitMinutes} minuti, finché la quota non torna.',
+                          ),
+                          Choice(
+                            value: QuotaBehavior.stop,
+                            label: QuotaBehavior.stop.label,
+                            short: 'Il loop va in pausa',
+                            description: 'Mette il loop in pausa: lo riprendi tu quando vuoi.',
+                          ),
+                        ],
+                        onChanged: (v) {
+                          s.quotaBehavior = v;
+                          onChanged();
+                        },
+                      ),
+                    ),
+                    _Pair(
+                      _NumberField(
+                        'Riprova ogni',
+                        'min',
+                        s.quotaWaitMinutes,
+                        (v) => s.quotaWaitMinutes = v,
+                        onChanged,
+                        min: 1,
+                        enabled: s.quotaBehavior == QuotaBehavior.wait,
+                      ),
+                      _NumberField('Budget token', 'token', s.maxTotalTokens, (v) => s.maxTotalTokens = v, onChanged),
+                    ),
+                  ],
                 ),
-                _NumberField('Budget token', 'token', s.maxTotalTokens, (v) => s.maxTotalTokens = v, onChanged),
+              ),
+              _Collapsible(
+                title: 'Fine blocco',
+                summary: summaryEnd,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Field(
+                      label: 'Comando di verifica',
+                      hint: 'Deve terminare con exit 0 perché il blocco sia completato.',
+                      child: TextFormField(
+                        key: ValueKey('field-verify-$projectDir'),
+                        initialValue: s.verifyCommand,
+                        style: const TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
+                        decoration: const InputDecoration(hintText: 'es. flutter test'),
+                        onChanged: (v) {
+                          s.verifyCommand = v;
+                          onChanged();
+                        },
+                      ),
+                    ),
+                    _Group(
+                      indent: 14,
+                      children: [
+                        _Toggle(
+                          title: 'Commit git a ogni blocco',
+                          subtitle: 'Se la cartella è un repository',
+                          value: s.gitCommit,
+                          onChanged: (v) {
+                            s.gitCommit = v;
+                            onChanged();
+                          },
+                        ),
+                        _Toggle(
+                          title: 'Salta i blocchi bloccati',
+                          subtitle: 'Altrimenti il loop va in pausa',
+                          value: s.skipBlocked,
+                          onChanged: (v) {
+                            s.skipBlocked = v;
+                            onChanged();
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              _Collapsible(
+                title: 'Istruzioni',
+                summary: summaryRules,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Field(
+                      label: 'Regole per ogni blocco',
+                      hint: 'Aggiunte a ogni prompt, oltre al piano.',
+                      child: TextFormField(
+                        key: ValueKey('field-instructions-$projectDir'),
+                        initialValue: s.extraInstructions,
+                        minLines: 3,
+                        maxLines: 8,
+                        style: const TextStyle(fontSize: 13, height: 1.4),
+                        decoration: const InputDecoration(hintText: 'Stack, stile, cosa non toccare…'),
+                        onChanged: (v) {
+                          s.extraInstructions = v;
+                          onChanged();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
-        _Collapsible(
-          title: 'Fine blocco',
-          summary: summaryEnd,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Field(
-                label: 'Comando di verifica',
-                hint: 'Deve terminare con exit 0 perché il blocco sia completato.',
-                child: TextFormField(
-                  key: ValueKey('field-verify-$projectDir'),
-                  initialValue: s.verifyCommand,
-                  style: const TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
-                  decoration: const InputDecoration(hintText: 'es. flutter test'),
-                  onChanged: (v) {
-                    s.verifyCommand = v;
-                    onChanged();
-                  },
-                ),
-              ),
-              _Group(
-                indent: 14,
-                children: [
-                  _Toggle(
-                    title: 'Commit git a ogni blocco',
-                    subtitle: 'Se la cartella è un repository',
-                    value: s.gitCommit,
-                    onChanged: (v) {
-                      s.gitCommit = v;
-                      onChanged();
-                    },
-                  ),
-                  _Toggle(
-                    title: 'Salta i blocchi bloccati',
-                    subtitle: 'Altrimenti il loop va in pausa',
-                    value: s.skipBlocked,
-                    onChanged: (v) {
-                      s.skipBlocked = v;
-                      onChanged();
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        _Collapsible(
-          title: 'Istruzioni',
-          summary: summaryRules,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Field(
-                label: 'Regole per ogni blocco',
-                hint: 'Aggiunte a ogni prompt, oltre al piano.',
-                child: TextFormField(
-                  key: ValueKey('field-instructions-$projectDir'),
-                  initialValue: s.extraInstructions,
-                  minLines: 3,
-                  maxLines: 8,
-                  style: const TextStyle(fontSize: 13, height: 1.4),
-                  decoration: const InputDecoration(hintText: 'Stack, stile, cosa non toccare…'),
-                  onChanged: (v) {
-                    s.extraInstructions = v;
-                    onChanged();
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
+        if (projectDir != null) _ProjectFooter(projectDir: projectDir!),
       ],
     );
   }
@@ -448,7 +472,8 @@ String _shortPath(String path) {
 /// What the less obvious fields do, shown from the "i" next to their name.
 const _fieldInfo = <String, String>{
   'Richiamo dopo': 'Pausa tra la fine di un\'invocazione dell\'agente e la successiva.',
-  'Tentativi per blocco': 'Quante volte l\'agente viene richiamato sullo stesso blocco prima di segnarlo come bloccato.',
+  'Tentativi per blocco':
+      'Quante volte l\'agente viene richiamato sullo stesso blocco prima di segnarlo come bloccato.',
   'Silenzio max': 'Se l\'agente non scrive nulla per questo tempo, viene fermato e richiamato.',
   'Durata max': 'Tempo massimo di una singola invocazione: oltre, viene fermata e il blocco riprende.',
   'Riprova ogni': 'Ogni quanto riprovare quando la CLI segnala che la quota è esaurita.',
@@ -461,7 +486,7 @@ const _fieldInfo = <String, String>{
 
 /// Related settings in one rounded card, as rows separated by hairlines.
 class _Group extends StatelessWidget {
-  const _Group({required this.children, this.indent = 54});
+  const _Group({required this.children, this.indent = 0});
   final List<Widget> children;
 
   /// Where the separators start: past the icon for cards, flush for toggles.
@@ -506,6 +531,56 @@ class _Note extends StatelessWidget {
   }
 }
 
+/// Says, at the foot of the panel, that these settings travel with the
+/// project folder.
+class _ProjectFooter extends StatelessWidget {
+  const _ProjectFooter({required this.projectDir});
+  final String projectDir;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Tooltip(
+      message:
+          'Salvate in ${p.join(p.basename(projectDir), '.autoloop', 'settings.json')}.\n'
+          'Restano uguali per tutti i progetti: percorsi delle CLI e profili account.',
+      waitDuration: const Duration(milliseconds: 300),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: c.border)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.bookmark_added_outlined, size: 17, color: c.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Impostazioni salvate nel progetto',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.text),
+                  ),
+                  Text(
+                    'Le ritrovi ogni volta che riapri «${p.basename(projectDir)}»',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, color: c.muted),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.info_outline_rounded, size: 14, color: c.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RunningBanner extends StatelessWidget {
   const _RunningBanner();
 
@@ -524,7 +599,7 @@ class _RunningBanner extends StatelessWidget {
           Expanded(
             child: Text(
               'Loop in esecuzione: piano, agente e account sono bloccati. '
-              'Le impostazioni qui sotto si possono cambiare e valgono dalla prossima invocazione.',
+              'Le altre impostazioni si possono cambiare e valgono dalla prossima invocazione.',
               style: TextStyle(fontSize: 12, height: 1.4, color: c.text),
             ),
           ),
@@ -543,12 +618,25 @@ String _compactTokens(int n) => n >= 1000000
 /// A section that starts closed and shows a one-line summary of its
 /// settings; clicking the title opens it.
 class _Collapsible extends StatefulWidget {
-  const _Collapsible({required this.title, required this.summary, required this.child});
+  const _Collapsible({
+    required this.title,
+    required this.summary,
+    required this.child,
+    this.warning = false,
+    this.locked = false,
+  });
   final String title, summary;
   final Widget child;
 
-  // Survives the list recycling sections that scroll out of view.
-  static final _open = <String>{};
+  /// Something in this section prevents the loop from starting.
+  final bool warning;
+
+  /// The running loop cannot pick up changes here: shown dimmed, not editable.
+  final bool locked;
+
+  // Survives the list recycling sections that scroll out of view. The main
+  // sections start open, the advanced ones closed.
+  static final _open = <String>{'Piano', 'Agente'};
 
   @override
   State<_Collapsible> createState() => _CollapsibleState();
@@ -590,10 +678,15 @@ class _CollapsibleState extends State<_Collapsible> {
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.6,
-                              color: c.text,
+                              color: widget.warning ? c.danger : c.text,
                             ),
                           ),
                         ),
+                        if (widget.warning)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Icon(Icons.error_rounded, size: 15, color: c.danger),
+                          ),
                         AnimatedRotation(
                           turns: open ? 0.5 : 0,
                           duration: const Duration(milliseconds: 200),
@@ -613,7 +706,7 @@ class _CollapsibleState extends State<_Collapsible> {
                               child: Text(
                                 widget.summary,
                                 textAlign: TextAlign.center,
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(fontSize: 11.5, height: 1.4, color: c.muted),
                               ),
@@ -630,51 +723,20 @@ class _CollapsibleState extends State<_Collapsible> {
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
           child: open
-              ? Padding(padding: const EdgeInsets.only(top: 8), child: widget.child)
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: AbsorbPointer(
+                    absorbing: widget.locked,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: widget.locked ? 0.5 : 1,
+                      child: widget.child,
+                    ),
+                  ),
+                )
               : const SizedBox(width: double.infinity),
         ),
       ],
-    );
-  }
-}
-
-/// Centered section title between two hairlines.
-class _Section extends StatelessWidget {
-  const _Section(this.title, {this.first = false, this.warning = false});
-  final String title;
-  final bool first;
-
-  /// Something here prevents the loop from starting.
-  final bool warning;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Padding(
-      padding: EdgeInsets.only(top: first ? 2 : 22, bottom: 14),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: c.border)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              title.toUpperCase(),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.6,
-                color: warning ? c.danger : c.text,
-              ),
-            ),
-          ),
-          if (warning)
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: Icon(Icons.error_rounded, size: 15, color: c.danger),
-            ),
-          Expanded(child: Divider(color: c.border)),
-        ],
-      ),
     );
   }
 }
@@ -703,7 +765,7 @@ class _AgentOption extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           child: Column(
             children: [
-              AgentBadge(kind: kind, size: 34),
+              AgentBadge(kind: kind, size: 34, selected: selected),
               const SizedBox(height: 8),
               Text(
                 kind.label,
@@ -1103,18 +1165,21 @@ class _ModelPicker extends StatelessWidget {
   final String value;
   final ValueChanged<String> onChanged;
 
-  static const _custom = '\u0000custom';
-
   Future<void> _pick(BuildContext context) async {
     final picked = await showChoiceDialog<String>(
       context: context,
       title: 'Modello',
       subtitle: catalog.isEmpty
-          ? 'Elenco non rilevato: puoi usare il predefinito o scrivere un nome.'
+          ? 'Elenco non rilevato: resta disponibile il modello predefinito.'
           : '${catalog.models.length} modelli dal ${catalog.source}',
       selected: value,
       choices: [
-        const Choice(value: '', label: 'Predefinito della CLI', description: 'Il modello configurato nella CLI.'),
+        const Choice(
+          value: '',
+          label: 'Predefinito della CLI',
+          description: 'Il modello configurato nella CLI.',
+          dividerAfter: true,
+        ),
         for (final m in catalog.models)
           Choice(
             value: m.id,
@@ -1122,45 +1187,11 @@ class _ModelPicker extends StatelessWidget {
             tag: m.label.toLowerCase() == m.id ? '' : m.id,
             description: m.description,
           ),
+        // A model set earlier by hand stays selectable until changed.
         if (value.isNotEmpty && catalog.find(value) == null) Choice(value: value, label: value, tag: 'personalizzato'),
-        const Choice(
-          value: _custom,
-          label: 'Altro modello…',
-          description: 'Scrivi il nome completo di un modello.',
-          accent: true,
-        ),
       ],
     );
-    if (picked == null || !context.mounted) return;
-    if (picked == _custom) {
-      await _askCustom(context);
-    } else {
-      onChanged(picked);
-    }
-  }
-
-  Future<void> _askCustom(BuildContext context) async {
-    final controller = TextEditingController(text: value);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Modello personalizzato'),
-        content: SizedBox(
-          width: 360,
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(hintText: 'Nome completo del modello'),
-            onSubmitted: (v) => Navigator.pop(context, v),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annulla')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Usa')),
-        ],
-      ),
-    );
-    if (result != null) onChanged(result.trim());
+    if (picked != null) onChanged(picked);
   }
 
   @override
@@ -1219,6 +1250,7 @@ class _EffortPicker extends StatelessWidget {
         Choice(
           value: '',
           label: 'Predefinito',
+          dividerAfter: true,
           tag: defaultLevel ?? '',
           description: defaultLevel == null
               ? 'Il livello configurato nella CLI.'

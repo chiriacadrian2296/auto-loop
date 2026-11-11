@@ -10,7 +10,11 @@ class Choice<T> {
     this.description = '',
     this.accent = false,
     this.short,
+    this.dividerAfter = false,
   });
+
+  /// Draws a separator below this choice (e.g. after the default option).
+  final bool dividerAfter;
   final T value;
   final String label;
 
@@ -84,12 +88,18 @@ Future<T?> showChoiceDialog<T>({
                   shrinkWrap: true,
                   padding: const EdgeInsets.fromLTRB(12, 6, 12, 14),
                   children: [
-                    for (final choice in choices)
+                    for (final choice in choices) ...[
                       _ChoiceRow(
                         choice: choice,
                         selected: !choice.accent && choice.value == selected,
                         onTap: () => Navigator.pop(context, choice.value),
                       ),
+                      if (choice.dividerAfter)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          child: Divider(height: 1, color: c.border),
+                        ),
+                    ],
                   ],
                 ),
               ),

@@ -180,13 +180,12 @@ void main() {
         subtitle: '8 modelli dal catalogo di Codex',
         selected: 'gpt-6.1-sol',
         choices: const [
-          Choice(value: '', label: 'Predefinito della CLI', description: 'Il modello configurato nella CLI.'),
+          Choice(value: '', label: 'Predefinito della CLI', description: 'Il modello configurato nella CLI.', dividerAfter: true),
           Choice(value: 'gpt-6.1-sol', label: 'GPT-6.1-Sol', tag: 'gpt-6.1-sol',
               description: 'Latest workhorse model for coding and everyday work.'),
           Choice(value: 'gpt-6-astra', label: 'GPT-6-Astra', tag: 'gpt-6-astra',
               description: 'Frontier model for the hardest problems.'),
           Choice(value: 'gpt-6-luna', label: 'GPT-6-Luna', tag: 'gpt-6-luna', description: 'Fast and inexpensive.'),
-          Choice(value: 'x', label: 'Altro modello…', description: 'Scrivi il nome completo di un modello.', accent: true),
         ],
       );
       for (var i = 0; i < 20; i++) {

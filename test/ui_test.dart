@@ -61,6 +61,7 @@ void main() {
 
     // The plan card offers recent plans plus the file browser.
     final planCard = find.text('FILE DEL PIANO');
+    await tester.scrollUntilVisible(planCard, -300, scrollable: sidebar);
     await tester.ensureVisible(planCard);
     await tester.pumpAndSettle();
     await tester.tap(planCard);
