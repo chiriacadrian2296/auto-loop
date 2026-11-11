@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
 
 import 'accounts.dart';
 import 'plan_parser.dart';
@@ -173,6 +176,76 @@ class LoopSettings {
   }
 
   String encode() => jsonEncode(toJson());
+
+  // ---------------------------------------------------------- per project
+
+  /// Settings that belong to the work, not to the computer: they are saved
+  /// in each project's `.autoloop/settings.json`. CLI paths and the list of
+  /// profiles stay global.
+  static const projectKeys = {
+    'agent', 'codexModel', 'claudeModel', 'codexEffort', 'claudeEffort', 'autonomy',
+    'relaunchDelaySeconds', 'idleTimeoutMinutes', 'runTimeoutMinutes', 'maxAttemptsPerBlock',
+    'quotaBehavior', 'quotaWaitMinutes', 'maxTotalTokens', 'verifyCommand', 'gitCommit',
+    'strategy', 'extraInstructions', 'skipBlocked', 'profileId',
+  };
+
+  static String projectFile(String workDir) => p.join(workDir, '.autoloop', 'settings.json');
+
+  Map<String, Object?> projectJson() {
+    final all = toJson();
+    return {for (final k in projectKeys) k: all[k]};
+  }
+
+  /// Overwrites the project-scoped fields with [j], keeping global ones.
+  void applyProject(Map<String, Object?> j) {
+    final o = fromJson({...toJson(), for (final e in j.entries) if (projectKeys.contains(e.key)) e.key: e.value});
+    agent = o.agent;
+    codexModel = o.codexModel;
+    claudeModel = o.claudeModel;
+    codexEffort = o.codexEffort;
+    claudeEffort = o.claudeEffort;
+    autonomy = o.autonomy;
+    relaunchDelaySeconds = o.relaunchDelaySeconds;
+    idleTimeoutMinutes = o.idleTimeoutMinutes;
+    runTimeoutMinutes = o.runTimeoutMinutes;
+    maxAttemptsPerBlock = o.maxAttemptsPerBlock;
+    quotaBehavior = o.quotaBehavior;
+    quotaWaitMinutes = o.quotaWaitMinutes;
+    maxTotalTokens = o.maxTotalTokens;
+    verifyCommand = o.verifyCommand;
+    gitCommit = o.gitCommit;
+    strategy = o.strategy;
+    extraInstructions = o.extraInstructions;
+    skipBlocked = o.skipBlocked;
+    // A profile deleted since then falls back to the system one.
+    profileId = allProfiles.any((x) => x.id == o.profileId) ? o.profileId : AccountProfile.defaultId;
+  }
+
+  /// Loads the project's saved settings, if any. Returns whether it found them.
+  bool loadProject(String workDir) {
+    final f = File(projectFile(workDir));
+    if (!f.existsSync()) return false;
+    try {
+      applyProject((jsonDecode(f.readAsStringSync()) as Map).cast<String, Object?>());
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void saveProject(String workDir) {
+    try {
+      final f = File(projectFile(workDir));
+      if (!f.parent.existsSync()) {
+        f.parent.createSync(recursive: true);
+        // Same rule as the rest of .autoloop/: never committed.
+        File(p.join(f.parent.path, '.gitignore')).writeAsStringSync('*\n');
+      }
+      f.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(projectJson()));
+    } catch (_) {
+      // A read-only folder must not break the app; settings stay global.
+    }
+  }
 
   static LoopSettings decode(String? s) {
     if (s == null || s.isEmpty) return LoopSettings();

@@ -25,6 +25,7 @@ class SettingsPanel extends StatelessWidget {
     required this.accounts,
     required this.onOpenAccounts,
     this.issues = const {},
+    this.projectDir,
     required this.onPickPlan,
     required this.onPickWorkDir,
     required this.onReloadPlan,
@@ -43,6 +44,9 @@ class SettingsPanel extends StatelessWidget {
 
   /// Sections with a problem that blocks the start ('Piano', 'Agente', 'Account').
   final Set<String> issues;
+
+  /// Work folder whose own settings file holds the settings below.
+  final String? projectDir;
   final VoidCallback onPickPlan, onPickWorkDir, onDetect, onChanged, onStrategyChanged;
   final VoidCallback? onReloadPlan;
 
@@ -140,6 +144,8 @@ class SettingsPanel extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (projectDir != null)
+                  const _Note('Tutte le impostazioni di questa barra, tranne file e cartella, vengono ricordate per questa cartella di lavoro.'),
                 _Section('Agente', warning: issues.contains('Agente')),
                 Row(
                   children: [
@@ -366,7 +372,7 @@ class SettingsPanel extends StatelessWidget {
                 label: 'Comando di verifica',
                 hint: 'Deve terminare con exit 0 perché il blocco sia completato.',
                 child: TextFormField(
-                  key: const ValueKey('field-verify'),
+                  key: ValueKey('field-verify-$projectDir'),
                   initialValue: s.verifyCommand,
                   style: const TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
                   decoration: const InputDecoration(hintText: 'es. flutter test'),
@@ -412,7 +418,7 @@ class SettingsPanel extends StatelessWidget {
                 label: 'Regole per ogni blocco',
                 hint: 'Aggiunte a ogni prompt, oltre al piano.',
                 child: TextFormField(
-                  key: const ValueKey('field-instructions'),
+                  key: ValueKey('field-instructions-$projectDir'),
                   initialValue: s.extraInstructions,
                   minLines: 3,
                   maxLines: 8,

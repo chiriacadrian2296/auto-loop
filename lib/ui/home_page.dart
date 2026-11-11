@@ -101,10 +101,29 @@ class _HomePageState extends State<HomePage> {
 
   void _saveSettings() {
     widget.prefs.setString('settings', engine.settings.encode());
+    // The work-related part is also remembered by the project itself.
+    if (_projectDir != null) engine.settings.saveProject(_projectDir!);
     if (mounted) setState(() {});
   }
 
+  /// Folder whose `.autoloop/settings.json` the current settings came from.
+  String? _projectDir;
+
+  /// Switches to the settings saved in [dir], if it has any.
+  void _enterProject(String dir) {
+    if (dir == _projectDir || engine.isActive) return;
+    final profile = engine.settings.profileId;
+    engine.settings.loadProject(dir);
+    _projectDir = dir;
+    widget.prefs.setString('settings', engine.settings.encode());
+    if (profile != engine.settings.profileId) {
+      _accounts.clear();
+      _detectClis();
+    }
+  }
+
   void _reload() {
+    if (_workDir != null) _enterProject(_workDir!);
     if (_workDir == null || _planPath == null) return;
     _loadError = engine.load(workDir: _workDir!, planPath: _planPath!);
     setState(() {});
@@ -198,6 +217,7 @@ class _HomePageState extends State<HomePage> {
                         accounts: _accounts,
                         onOpenAccounts: _openAccounts,
                         issues: {?blocker?.$1},
+                        projectDir: _projectDir,
                         onPickPlan: _pickPlan,
                         onPickWorkDir: _pickWorkDir,
                         onReloadPlan: _planPath == null || active
