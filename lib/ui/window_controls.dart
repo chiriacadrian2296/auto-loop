@@ -110,15 +110,33 @@ void bringWindowToFront() {
 }
 
 /// Cycles the theme system → light → dark, styled like the window buttons.
-class ThemeCaptionButton extends StatelessWidget {
+class ThemeCaptionButton extends StatefulWidget {
   const ThemeCaptionButton({super.key, required this.mode, required this.onChanged});
   final ThemeMode mode;
   final ValueChanged<ThemeMode> onChanged;
 
   @override
+  State<ThemeCaptionButton> createState() => _ThemeCaptionButtonState();
+}
+
+/// Same size, colours and hover as window_manager's caption buttons (which
+/// can only draw their own glyphs), with a Material icon instead.
+class _ThemeCaptionButtonState extends State<ThemeCaptionButton> {
+  bool _hover = false, _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final (IconData icon, String now, ThemeMode next, String then) = switch (mode) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final base = dark ? Colors.white : Colors.black;
+    final bg = _pressed
+        ? base.withValues(alpha: dark ? 0.0419 : 0.0241)
+        : _hover
+        ? base.withValues(alpha: dark ? 0.0605 : 0.0373)
+        : Colors.transparent;
+    final fg = dark
+        ? Colors.white.withValues(alpha: _pressed ? 0.786 : 1)
+        : Colors.black.withValues(alpha: _pressed ? 0.6063 : 0.8956);
+    final (IconData icon, String now, ThemeMode next, String then) = switch (widget.mode) {
       ThemeMode.system => (Icons.brightness_auto_outlined, 'segue il sistema', ThemeMode.light, 'chiaro'),
       ThemeMode.light => (Icons.light_mode_outlined, 'chiaro', ThemeMode.dark, 'scuro'),
       ThemeMode.dark => (Icons.dark_mode_outlined, 'scuro', ThemeMode.system, 'come il sistema'),
@@ -126,14 +144,23 @@ class ThemeCaptionButton extends StatelessWidget {
     return Tooltip(
       message: 'Tema: $now · clic per $then',
       waitDuration: const Duration(milliseconds: 400),
-      child: WindowCaptionButton(
-        brightness: brightness,
-        icon: Icon(
-          icon,
-          size: 15,
-          color: brightness == Brightness.dark ? Colors.white : Colors.black.withValues(alpha: 0.9),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapCancel: () => setState(() => _pressed = false),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTap: () => widget.onChanged(next),
+          child: Container(
+            width: 46,
+            height: 32,
+            color: bg,
+            alignment: Alignment.center,
+            child: Icon(icon, size: 15, color: fg),
+          ),
         ),
-        onPressed: () => onChanged(next),
       ),
     );
   }
