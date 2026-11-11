@@ -96,7 +96,7 @@ class SettingsPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
             children: [
               if (locked) const _RunningBanner(),
-              const _ExpandAll(),
+              // Expand/collapse-all is hidden for now; the button is kept below.
               // Piano, Agente and Account cannot change while the loop runs.
               _Collapsible(
                 title: 'Piano',
@@ -552,6 +552,7 @@ class _ProjectFooter extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _ExpandAll extends StatelessWidget {
   const _ExpandAll();
 
