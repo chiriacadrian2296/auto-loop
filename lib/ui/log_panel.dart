@@ -45,37 +45,33 @@ class _LogPanelState extends State<LogPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
-          child: Row(
-            children: [
-              const Expanded(child: SectionLabel('Attività')),
-              _Toggle(label: 'Comandi', value: _showTools, onChanged: (v) => setState(() => _showTools = v)),
-              const SizedBox(width: 6),
-              _Toggle(label: 'Segui', value: _follow, onChanged: (v) => setState(() => _follow = v)),
-              const SizedBox(width: 6),
-              IconButton(
-                tooltip: 'Apri PROGRESS.md',
-                onPressed: widget.onOpenProgress,
-                iconSize: 19,
-                icon: const Icon(Icons.sticky_note_2_outlined),
-              ),
-              IconButton(
-                tooltip: 'Apri cartella dei log',
-                onPressed: widget.onOpenLogs,
-                iconSize: 19,
-                icon: const Icon(Icons.folder_open_outlined),
-              ),
-              IconButton(
-                tooltip: 'Pulisci',
-                onPressed: widget.engine.logs.isEmpty ? null : widget.engine.clearLogs,
-                iconSize: 19,
-                icon: const Icon(Icons.delete_sweep_outlined),
-              ),
-            ],
-          ),
+        PanelHeader(
+          'Attività',
+          actions: [
+            _Toggle(label: 'Comandi', value: _showTools, onChanged: (v) => setState(() => _showTools = v)),
+            const SizedBox(width: 6),
+            _Toggle(label: 'Segui', value: _follow, onChanged: (v) => setState(() => _follow = v)),
+            const SizedBox(width: 6),
+            IconButton(
+              tooltip: 'Apri PROGRESS.md',
+              onPressed: widget.onOpenProgress,
+              iconSize: 19,
+              icon: const Icon(Icons.sticky_note_2_outlined),
+            ),
+            IconButton(
+              tooltip: 'Apri cartella dei log',
+              onPressed: widget.onOpenLogs,
+              iconSize: 19,
+              icon: const Icon(Icons.folder_open_outlined),
+            ),
+            IconButton(
+              tooltip: 'Pulisci',
+              onPressed: widget.engine.logs.isEmpty ? null : widget.engine.clearLogs,
+              iconSize: 19,
+              icon: const Icon(Icons.delete_sweep_outlined),
+            ),
+          ],
         ),
-        Divider(height: 1, color: c.border),
         Expanded(
           child: entries.isEmpty
               ? Center(

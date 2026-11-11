@@ -62,6 +62,7 @@ void main() {
         'workDir': dir.path,
         'planPath': plan.path,
         'theme': dark ? 'dark' : 'light',
+        'sidebarOpen': !dark, // the dark shot shows the closed control panel
       });
       final prefs = await SharedPreferences.getInstance();
       final engine = LoopEngine(LoopSettings(agent: AgentKind.claude, verifyCommand: 'flutter test'));

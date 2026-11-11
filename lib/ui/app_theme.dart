@@ -208,3 +208,34 @@ class SectionLabel extends StatelessWidget {
     ],
   );
 }
+
+/// The same header for every panel: title on the left, actions on the
+/// right, a hairline below.
+class PanelHeader extends StatelessWidget {
+  const PanelHeader(this.title, {super.key, this.actions = const []});
+  final String title;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 54,
+          child: Padding(
+            padding: EdgeInsets.only(left: 20, right: actions.isEmpty ? 20 : 10),
+            child: Row(
+              children: [
+                Expanded(child: SectionLabel(title)),
+                ...actions,
+              ],
+            ),
+          ),
+        ),
+        Divider(height: 1, color: c.border),
+      ],
+    );
+  }
+}

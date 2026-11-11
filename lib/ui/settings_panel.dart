@@ -1109,13 +1109,17 @@ class _NumberFieldState extends State<_NumberField> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    Widget arrow(IconData icon, int direction) => Tooltip(
-      message: '${direction > 0 ? '+' : '−'}$_stepLabel',
-      waitDuration: const Duration(milliseconds: 400),
-      child: InkWell(
-        onTap: widget.enabled ? () => _step(direction) : null,
-        borderRadius: BorderRadius.circular(4),
-        child: Icon(icon, size: 16, color: widget.enabled ? c.muted : c.muted.withValues(alpha: 0.4)),
+    // Secondary to the text field itself, so kept out of the semantics tree
+    // (their tooltips also trip Flutter's checks when built off-screen).
+    Widget arrow(IconData icon, int direction) => ExcludeSemantics(
+      child: Tooltip(
+        message: '${direction > 0 ? '+' : '−'}$_stepLabel',
+        waitDuration: const Duration(milliseconds: 400),
+        child: InkWell(
+          onTap: widget.enabled ? () => _step(direction) : null,
+          borderRadius: BorderRadius.circular(4),
+          child: Icon(icon, size: 16, color: widget.enabled ? c.muted : c.muted.withValues(alpha: 0.4)),
+        ),
       ),
     );
     return _Field(

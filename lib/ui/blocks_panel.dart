@@ -31,17 +31,15 @@ class _BlocksPanelState extends State<BlocksPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionLabel('Avanzamento'),
-              const SizedBox(height: 8),
               Text(
                 widget.planName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: c.text, letterSpacing: -0.2),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text),
               ),
               const SizedBox(height: 2),
               Text(

@@ -256,6 +256,20 @@ class _HomePageState extends State<HomePage> {
 
   bool _confirming = false;
 
+  late bool _sidebarOpen = widget.prefs.getBool('sidebarOpen') ?? true;
+
+  /// True once the opening animation has finished: the content appears only
+  /// then, so it is never laid out wider than the space it has.
+  late bool _sidebarShown = _sidebarOpen;
+
+  void _setSidebar(bool open) {
+    setState(() {
+      _sidebarOpen = open;
+      if (!open) _sidebarShown = false;
+    });
+    widget.prefs.setBool('sidebarOpen', open);
+  }
+
   /// "Ferma ora" kills the agent mid-work, so it asks first.
   Future<void> _confirmStop() async {
     if (_confirming || !engine.isActive) return;
@@ -353,56 +367,94 @@ class _HomePageState extends State<HomePage> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SizedBox(
-                          width: 330,
+                        // The control panel slides closed to a thin rail once set up.
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 240),
+                          curve: Curves.easeOutCubic,
+                          width: _sidebarOpen ? 330 : 56,
+                          onEnd: () => setState(() => _sidebarShown = _sidebarOpen),
                           child: Panel(
-                            child: SettingsPanel(
-                              settings: engine.settings,
-                              locked: active,
-                              workDir: _workDir,
-                              planPath: _planPath,
-                              versions: _versions,
-                              catalogs: _catalogs,
-                              accounts: _accounts,
-                              onOpenAccounts: _openAccounts,
-                              issues: {?blocker?.$1},
-                              projectDir: _projectDir,
-                              onPickPlan: _pickPlan,
-                              onPickWorkDir: _pickWorkDir,
-                              onReloadPlan: _planPath == null || active ? null : _reload,
-                              onDetect: () => _detectClis(force: true),
-                              onChanged: _saveSettings,
-                              onStrategyChanged: () {
-                                _saveSettings();
-                                _reload();
-                              },
-                            ),
+                            child: _sidebarOpen && _sidebarShown
+                                // Shown once the panel has reached full width.
+                                ? OverflowBox(
+                                    alignment: Alignment.topLeft,
+                                    minWidth: 330,
+                                    maxWidth: 330,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        PanelHeader(
+                                          'Pannello di controllo',
+                                          actions: [
+                                            IconButton(
+                                              tooltip: 'Chiudi il pannello',
+                                              onPressed: () => _setSidebar(false),
+                                              iconSize: 20,
+                                              icon: const Icon(Icons.keyboard_double_arrow_left_rounded),
+                                            ),
+                                          ],
+                                        ),
+                                        Expanded(
+                                          child: SettingsPanel(
+                                            settings: engine.settings,
+                                            locked: active,
+                                            workDir: _workDir,
+                                            planPath: _planPath,
+                                            versions: _versions,
+                                            catalogs: _catalogs,
+                                            accounts: _accounts,
+                                            onOpenAccounts: _openAccounts,
+                                            issues: {?blocker?.$1},
+                                            projectDir: _projectDir,
+                                            onPickPlan: _pickPlan,
+                                            onPickWorkDir: _pickWorkDir,
+                                            onReloadPlan: _planPath == null || active ? null : _reload,
+                                            onDetect: () => _detectClis(force: true),
+                                            onChanged: _saveSettings,
+                                            onStrategyChanged: () {
+                                              _saveSettings();
+                                              _reload();
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : _SidebarRail(warning: blocker != null, onOpen: () => _setSidebar(true)),
                           ),
                         ),
                         const SizedBox(width: 16),
                         SizedBox(
                           width: 360,
                           child: Panel(
-                            child: _loadError != null
-                                ? _EmptyState(
-                                    icon: Icons.error_outline_rounded,
-                                    title: 'Piano non caricato',
-                                    text: _loadError!,
-                                  )
-                                : engine.plan == null
-                                ? _EmptyState(
-                                    icon: Icons.description_outlined,
-                                    title: 'Nessun piano',
-                                    text:
-                                        'Scegli un file .md o .txt: verrà diviso in blocchi '
-                                        'che l\'agente svolge uno alla volta.',
-                                    action: FilledButton.icon(
-                                      onPressed: _pickPlan,
-                                      icon: const Icon(Icons.upload_file_rounded, size: 18),
-                                      label: const Text('Scegli piano'),
-                                    ),
-                                  )
-                                : BlocksPanel(engine: engine, planName: p.basename(_planPath!)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const PanelHeader('Avanzamento'),
+                                Expanded(
+                                  child: _loadError != null
+                                      ? _EmptyState(
+                                          icon: Icons.error_outline_rounded,
+                                          title: 'Piano non caricato',
+                                          text: _loadError!,
+                                        )
+                                      : engine.plan == null
+                                      ? _EmptyState(
+                                          icon: Icons.description_outlined,
+                                          title: 'Nessun piano',
+                                          text:
+                                              'Scegli un file .md o .txt: verrà diviso in blocchi '
+                                              'che l\'agente svolge uno alla volta.',
+                                          action: FilledButton.icon(
+                                            onPressed: _pickPlan,
+                                            icon: const Icon(Icons.upload_file_rounded, size: 18),
+                                            label: const Text('Scegli piano'),
+                                          ),
+                                        )
+                                      : BlocksPanel(engine: engine, planName: p.basename(_planPath!)),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -490,14 +542,11 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final plan = engine.plan;
     final state = engine.state;
     final width = MediaQuery.sizeOf(context).width;
     final active = engine.isActive;
     final paused = engine.phase == LoopPhase.paused;
     final context_ = _context();
-    final total = plan?.blocks.length ?? 0;
-    final progress = total == 0 ? 0.0 : engine.doneCount / total;
 
     Widget divider() =>
         Container(width: 1, height: 24, margin: const EdgeInsets.symmetric(horizontal: 18), color: c.border);
@@ -594,39 +643,54 @@ class _TopBar extends StatelessWidget {
             ),
           ],
         ),
-        _ProgressLine(value: progress, working: active && engine.phase != LoopPhase.quotaWait),
       ],
     );
   }
 }
 
-/// Thin full-width plan progress under the bar; while the agent works, the
-/// remaining part shimmers so activity is visible even at a glance.
-class _ProgressLine extends StatelessWidget {
-  const _ProgressLine({required this.value, required this.working});
-  final double value;
-  final bool working;
+/// What the closed control panel leaves behind: a button to reopen it, a
+/// vertical title and, if something blocks the start, a warning.
+class _SidebarRail extends StatelessWidget {
+  const _SidebarRail({required this.warning, required this.onOpen});
+  final bool warning;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return SizedBox(
-      height: 3,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (working)
-            LinearProgressIndicator(color: c.primary.withValues(alpha: 0.35), backgroundColor: c.primarySoft)
-          else
-            ColoredBox(color: value > 0 ? c.primarySoft : Colors.transparent),
-          TweenAnimationBuilder<double>(
-            tween: Tween(end: value),
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeOutCubic,
-            builder: (context, v, _) =>
-                LinearProgressIndicator(value: v, color: c.primary, backgroundColor: Colors.transparent),
-          ),
-        ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpen,
+        child: Column(
+          children: [
+            SizedBox(
+              height: 54,
+              child: Center(
+                child: Tooltip(
+                  message: 'Apri il pannello di controllo',
+                  child: Icon(Icons.keyboard_double_arrow_right_rounded, size: 20, color: c.muted),
+                ),
+              ),
+            ),
+            Divider(height: 1, color: c.border),
+            const SizedBox(height: 18),
+            if (warning) ...[
+              Tooltip(
+                message: 'Manca qualcosa per avviare: apri il pannello',
+                child: Icon(Icons.error_rounded, size: 18, color: c.danger),
+              ),
+              const SizedBox(height: 14),
+            ],
+            RotatedBox(
+              quarterTurns: 3,
+              child: Text(
+                'PANNELLO DI CONTROLLO',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.6, color: c.muted),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
