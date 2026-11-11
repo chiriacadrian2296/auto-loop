@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../engine/agents.dart';
 import '../engine/loop_engine.dart';
+import '../engine/settings.dart';
+import 'agent_badge.dart';
 import 'app_theme.dart';
 import 'markdown_text.dart';
 
@@ -9,7 +11,7 @@ enum _Filter {
   all('Tutto'),
   messages('Messaggi'),
   commands('Comandi'),
-  problems('Problemi');
+  events('Eventi');
 
   const _Filter(this.label);
   final String label;
@@ -18,7 +20,8 @@ enum _Filter {
     _Filter.all => true,
     _Filter.messages => e.kind == LogKind.agent,
     _Filter.commands => e.kind == LogKind.tool,
-    _Filter.problems => e.kind == LogKind.warning || e.kind == LogKind.error,
+    // Everything AutoLoop itself reports: checks, commits, warnings, errors.
+    _Filter.events => e.kind != LogKind.agent && e.kind != LogKind.tool,
   };
 }
 
@@ -117,6 +120,26 @@ class _LogPanelState extends State<LogPanel> {
     super.dispose();
   }
 
+  Future<void> _confirmClear() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Svuotare il registro attività?'),
+        content: const Text(
+          'Toglie le righe da questo pannello e cancella la loro copia salvata, quindi non '
+          'ricompariranno alla riapertura.\n\n'
+          'Restano: i log completi di ogni invocazione (.autoloop/logs), PROGRESS.md e '
+          'l\'avanzamento dei blocchi.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Svuota')),
+        ],
+      ),
+    );
+    if (ok == true) widget.engine.clearLogs();
+  }
+
   void _toBottom({bool animate = true}) {
     if (!_scroll.hasClients) return;
     final target = _scroll.position.maxScrollExtent;
@@ -161,7 +184,7 @@ class _LogPanelState extends State<LogPanel> {
           ),
         );
       }
-      if (open) rows.addAll(visible.map(_LogLine.new));
+      if (open) rows.addAll(visible.map((e) => _LogLine(e, agent: engine.settings.agent)));
     }
     final silent = engine.phase == LoopPhase.running && engine.lastOutputAt != null
         ? DateTime.now().difference(engine.lastOutputAt!)
@@ -191,8 +214,8 @@ class _LogPanelState extends State<LogPanel> {
               icon: const Icon(Icons.folder_open_outlined),
             ),
             IconButton(
-              tooltip: 'Pulisci',
-              onPressed: logs.isEmpty ? null : engine.clearLogs,
+              tooltip: 'Svuota il registro',
+              onPressed: logs.isEmpty ? null : _confirmClear,
               iconSize: 19,
               icon: const Icon(Icons.delete_sweep_outlined),
             ),
@@ -364,29 +387,39 @@ class _GroupHeader extends StatelessWidget {
                     style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: c.primary),
                   ),
                 ),
-                if (title != null) ...[
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text),
-                    ),
+                // Title, outcome and summary share the middle; the time
+                // always sits at the right edge.
+                Expanded(
+                  child: Row(
+                    children: [
+                      if (title != null) ...[
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 10),
+                      ?badge,
+                      if (badge != null) const SizedBox(width: 6),
+                      Text(summary, maxLines: 1, style: TextStyle(fontSize: 11.5, color: c.muted)),
+                    ],
                   ),
-                ],
-                const SizedBox(width: 10),
-                ?badge,
-                if (badge != null) const SizedBox(width: 6),
-                Text(summary, maxLines: 1, style: TextStyle(fontSize: 11.5, color: c.muted)),
-                const Spacer(),
-                const SizedBox(width: 10),
-                Text(
-                  _clock(start),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: c.muted.withValues(alpha: 0.8),
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+                SizedBox(
+                  width: _timeWidth,
+                  child: Text(
+                    _clock(start),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: c.muted.withValues(alpha: 0.8),
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
               ],
@@ -413,10 +446,13 @@ class _WorkingLine extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 22,
-            child: SizedBox.square(
-              dimension: 12,
-              child: CircularProgressIndicator(strokeWidth: 2, color: c.primary.withValues(alpha: 0.7)),
+            width: 34,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox.square(
+                dimension: 12,
+                child: CircularProgressIndicator(strokeWidth: 2, color: c.primary.withValues(alpha: 0.7)),
+              ),
             ),
           ),
           Text(
@@ -429,67 +465,156 @@ class _WorkingLine extends StatelessWidget {
   }
 }
 
-class _LogLine extends StatelessWidget {
-  const _LogLine(this.entry);
+/// Time column shared by lines and group headers, so all times line up on
+/// the right edge.
+const _timeWidth = 64.0;
+
+/// One line of the stream, in one of three voices:
+/// the agent speaking (a bubble next to its logo), the agent running
+/// commands (compact monospace, indented), AutoLoop reporting (icon + text).
+class _LogLine extends StatefulWidget {
+  const _LogLine(this.entry, {required this.agent});
   final LogEntry entry;
+  final AgentKind agent;
+
+  @override
+  State<_LogLine> createState() => _LogLineState();
+}
+
+class _LogLineState extends State<_LogLine> {
+  bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final (IconData? icon, Color color, bool monoText) = switch (entry.kind) {
-      LogKind.agent => (null, c.text, false),
-      LogKind.tool => (Icons.chevron_right_rounded, c.muted, true),
-      LogKind.system => (null, c.muted, false),
-      LogKind.info => (Icons.info_outline_rounded, c.primary, false),
-      LogKind.success => (Icons.check_circle_rounded, c.success, false),
-      LogKind.warning => (Icons.warning_amber_rounded, c.warning, false),
-      LogKind.error => (Icons.error_outline_rounded, c.danger, false),
-    };
-
-    final style = TextStyle(
-      fontSize: monoText ? 12 : (entry.kind == LogKind.system ? 12 : 13.5),
-      height: 1.5,
-      color: color,
-      fontFamily: monoText ? mono : null,
-      fontFamilyFallback: monoText ? monoFallback : null,
-      fontWeight: entry.kind == LogKind.success || entry.kind == LogKind.error ? FontWeight.w600 : null,
+    final entry = widget.entry;
+    final time = SizedBox(
+      width: _timeWidth,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 120),
+        opacity: _hover ? 1 : 0,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Text(
+            _clock(entry.at),
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 11,
+              color: c.muted.withValues(alpha: 0.8),
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+      ),
     );
 
-    final agent = entry.kind == LogKind.agent;
-    // The time of each line is there on hover; the group header carries the
-    // start time, so the stream itself stays quiet.
-    return Tooltip(
-      message: _clock(entry.at),
-      waitDuration: const Duration(milliseconds: 700),
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: agent ? 5 : 1.5),
+    final Widget line = switch (entry.kind) {
+      LogKind.agent => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: 22,
-              child: icon == null
-                  ? (agent
-                        ? Align(
-                            alignment: Alignment.topLeft,
-                            child: Container(
-                              margin: const EdgeInsets.only(top: 4, left: 5),
-                              width: 3,
-                              height: 15,
-                              decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(2)),
-                            ),
-                          )
-                        : null)
-                  : Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Icon(icon, size: 15, color: color),
-                    ),
-            ),
+            AgentBadge(kind: widget.agent, size: 24, background: c.field),
+            const SizedBox(width: 10),
             Expanded(
-              child: agent ? MarkdownText(entry.text, style: style) : Text(entry.text, style: style),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+                decoration: BoxDecoration(
+                  color: c.field,
+                  borderRadius: const BorderRadius.only(
+                    topRight: Radius.circular(12),
+                    bottomLeft: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                    topLeft: Radius.circular(3),
+                  ),
+                ),
+                child: MarkdownText(entry.text, style: TextStyle(fontSize: 13.5, height: 1.5, color: c.text)),
+              ),
             ),
+            time,
           ],
         ),
+      ),
+      LogKind.tool => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(width: 34),
+            Padding(
+              padding: const EdgeInsets.only(top: 3, right: 6),
+              child: Icon(Icons.terminal_rounded, size: 13, color: c.muted.withValues(alpha: 0.7)),
+            ),
+            Expanded(
+              child: Text(
+                entry.text,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.5,
+                  color: c.muted,
+                  fontFamily: mono,
+                  fontFamilyFallback: monoFallback,
+                ),
+              ),
+            ),
+            time,
+          ],
+        ),
+      ),
+      _ => _EventLine(entry: entry, time: time),
+    };
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: line,
+    );
+  }
+}
+
+/// AutoLoop's own voice: an icon in the logo column, then the message.
+class _EventLine extends StatelessWidget {
+  const _EventLine({required this.entry, required this.time});
+  final LogEntry entry;
+  final Widget time;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final (IconData? icon, Color color, bool strong) = switch (entry.kind) {
+      LogKind.success => (Icons.check_circle_rounded, c.success, true),
+      LogKind.warning => (Icons.warning_amber_rounded, c.warning, true),
+      LogKind.error => (Icons.error_outline_rounded, c.danger, true),
+      LogKind.info => (Icons.info_outline_rounded, c.primary, false),
+      _ => (null, c.muted, false),
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 34,
+            child: icon == null
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(top: 2, left: 4),
+                    child: Icon(icon, size: 16, color: color),
+                  ),
+          ),
+          Expanded(
+            child: Text(
+              entry.text,
+              style: TextStyle(
+                fontSize: entry.kind == LogKind.system ? 12 : 13,
+                height: 1.5,
+                color: color,
+                fontWeight: strong ? FontWeight.w600 : null,
+              ),
+            ),
+          ),
+          time,
+        ],
       ),
     );
   }

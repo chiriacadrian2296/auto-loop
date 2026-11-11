@@ -135,6 +135,9 @@ class LoopEngine extends ChangeNotifier {
   /// Adds an informational line to the activity log (for UI-side events).
   void note(String text) => _log(LogKind.info, text);
 
+  /// The activity log as a plain-text file, for reading in an editor.
+  File? exportActivity() => _activity?.exportText(logs, title: p.basename(planPath ?? ''));
+
   void clearLogs() {
     logs.clear();
     _activity?.clear();

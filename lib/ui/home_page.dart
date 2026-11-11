@@ -123,7 +123,7 @@ class _HomePageState extends State<HomePage> {
 
   void _openPlanInEditor() {
     final plan = _planPath;
-    if (plan != null) Process.run('cmd.exe', ['/c', 'start', '', plan]);
+    if (plan != null) _openInEditor(plan);
   }
 
   Future<void> _detectClis({bool force = false}) async {
@@ -302,9 +302,23 @@ class _HomePageState extends State<HomePage> {
     _reload();
   }
 
+  /// Opens a file with its default editor, like the plan.
+  void _openInEditor(String path) => Process.run('cmd.exe', ['/c', 'start', '', path]);
+
   void _openLogs() {
+    final file = engine.exportActivity();
+    if (file != null) _openInEditor(file.path);
+  }
+
+  void _openProgress() {
     LoopState.ensureDir(_workDir!);
-    Process.run('explorer.exe', [LoopState.dirOf(_workDir!)]);
+    final f = File(LoopState.progressFileOf(_workDir!));
+    if (!f.existsSync()) {
+      f.writeAsStringSync(
+        '# Progresso AutoLoop\n\nL\'agente annota qui cosa ha fatto e cosa resta, tra un\'invocazione e l\'altra.\n',
+      );
+    }
+    _openInEditor(f.path);
   }
 
   bool _confirming = false;
@@ -525,16 +539,8 @@ class _HomePageState extends State<HomePage> {
                           child: Panel(
                             child: LogPanel(
                               engine: engine,
-                              onOpenLogs: _workDir == null ? null : _openLogs,
-                              onOpenProgress:
-                                  _workDir == null || !File(LoopState.progressFileOf(_workDir!)).existsSync()
-                                  ? null
-                                  : () => Process.run('cmd.exe', [
-                                      '/c',
-                                      'start',
-                                      '',
-                                      LoopState.progressFileOf(_workDir!),
-                                    ]),
+                              onOpenLogs: engine.plan == null ? null : _openLogs,
+                              onOpenProgress: _workDir == null ? null : _openProgress,
                             ),
                           ),
                         ),

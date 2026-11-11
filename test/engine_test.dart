@@ -173,6 +173,9 @@ testo
         expect(engine.blockState(b).totalTokens, 220); // two invocations of 110 tokens
       }
       expect(engine.state!.commits, 2);
+      // The readable export used by "Apri i log".
+      final text = engine.exportActivity()!.readAsStringSync();
+      expect(text, allOf(contains('── Blocco 1/2'), contains('AGENTE'), contains('OK')));
       expect(File(p.join(dir.path, 'out2.txt')).existsSync(), isTrue);
       final log = await Process.run('git', ['log', '--oneline'], workingDirectory: dir.path);
       expect(log.stdout.toString(), allOf(contains('autoloop: Uno'), contains('autoloop: Due')));

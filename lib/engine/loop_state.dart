@@ -192,4 +192,37 @@ class ActivityLog {
       if (file.existsSync()) file.writeAsStringSync('');
     } catch (_) {}
   }
+
+  /// Writes [entries] as plain text next to the JSON history, to read them
+  /// in any editor. Returns the file.
+  File exportText(List<LogEntry> entries, {required String title}) {
+    LoopState.ensureDir(_workDir);
+    final out = File(file.path.replaceFirst(RegExp(r'\.jsonl$'), '.txt'));
+    String two(int n) => n.toString().padLeft(2, '0');
+    String stamp(DateTime t) =>
+        '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
+    const label = {
+      LogKind.agent: 'AGENTE ',
+      LogKind.tool: 'COMANDO',
+      LogKind.system: 'SISTEMA',
+      LogKind.info: 'INFO   ',
+      LogKind.success: 'OK     ',
+      LogKind.warning: 'AVVISO ',
+      LogKind.error: 'ERRORE ',
+    };
+    final b = StringBuffer('Attività di AutoLoop · $title\n\n');
+    for (final e in entries) {
+      if (e.kind == LogKind.info && e.text.startsWith('▶')) {
+        b.writeln('\n── ${e.text.substring(1).trim()} ── ${stamp(e.at)}');
+        continue;
+      }
+      final lines = e.text.split('\n');
+      b.writeln('${stamp(e.at)}  ${label[e.kind]}  ${lines.first}');
+      for (final l in lines.skip(1)) {
+        b.writeln('${' ' * 30}$l');
+      }
+    }
+    out.writeAsStringSync(b.toString());
+    return out;
+  }
 }
