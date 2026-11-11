@@ -343,8 +343,6 @@ class _HomePageState extends State<HomePage> {
                   engine: engine,
                   dark: dark,
                   onToggleTheme: () => widget.themeMode.value = dark ? ThemeMode.light : ThemeMode.dark,
-                  onAccounts: _openAccounts,
-                  onOpenLogs: _workDir == null ? null : _openLogs,
                   onStart: blocker != null || active || engine.phase == LoopPhase.finished ? null : engine.start,
                   blocker: blocker == null ? null : (blocker.$2, blocker.$3),
                   onPause: active && !engine.pauseRequested ? engine.requestPause : null,
@@ -413,12 +411,7 @@ class _HomePageState extends State<HomePage> {
                           child: Panel(
                             child: LogPanel(
                               engine: engine,
-                              onOpenLogs: _workDir == null
-                                  ? null
-                                  : () {
-                                      LoopState.ensureDir(_workDir!);
-                                      Process.run('explorer.exe', [LoopState.dirOf(_workDir!)]);
-                                    },
+                              onOpenLogs: _workDir == null ? null : _openLogs,
                               onOpenProgress:
                                   _workDir == null || !File(LoopState.progressFileOf(_workDir!)).existsSync()
                                   ? null
@@ -450,8 +443,6 @@ class _TopBar extends StatelessWidget {
     required this.engine,
     required this.dark,
     required this.onToggleTheme,
-    required this.onAccounts,
-    this.onOpenLogs,
     this.blocker,
     this.onStart,
     this.onPause,
@@ -460,8 +451,7 @@ class _TopBar extends StatelessWidget {
 
   final LoopEngine engine;
   final bool dark;
-  final VoidCallback onToggleTheme, onAccounts;
-  final VoidCallback? onOpenLogs;
+  final VoidCallback onToggleTheme;
 
   /// Why the start button is disabled, and how to fix it.
   final (String, VoidCallback)? blocker;
@@ -478,28 +468,23 @@ class _TopBar extends StatelessWidget {
       ? '${(n / 1000).toStringAsFixed(1)}k'
       : '$n';
 
-  /// What the bar says next to the status: the plan when idle, the block
-  /// being worked on while running, the reason when it stopped on its own.
-  (String, String?) _context() {
+  /// What is happening right now, beyond the status label: the block being
+  /// worked on, or why the loop stopped on its own. Nothing when idle.
+  (String, String?)? _context() {
     final plan = engine.plan;
-    if (plan == null) return ('Nessun piano', null);
-    final name = p.basename(engine.planPath ?? '');
     final i = engine.currentBlock;
+    if (plan == null) return null;
     switch (engine.phase) {
-      case LoopPhase.running || LoopPhase.verifying || LoopPhase.stopping when i != null:
+      case LoopPhase.running || LoopPhase.verifying || LoopPhase.stopping || LoopPhase.waiting when i != null:
         final b = plan.blocks[i];
         return (
           'Blocco ${i + 1} di ${plan.blocks.length}',
           '${b.title} · invocazione ${engine.blockState(b).attempts}',
         );
-      case LoopPhase.waiting:
-        return ('Richiamo in attesa', name);
-      case LoopPhase.quotaWait:
-        return ('Quota esaurita', engine.statusMessage);
       case LoopPhase.paused when !const ['In pausa.', 'Fermato.', ''].contains(engine.statusMessage):
-        return (name, engine.statusMessage);
+        return (engine.statusMessage, null);
       default:
-        return (name, null);
+        return null;
     }
   }
 
@@ -511,12 +496,15 @@ class _TopBar extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final active = engine.isActive;
     final paused = engine.phase == LoopPhase.paused;
-    final (headline, detail) = _context();
+    final context_ = _context();
     final total = plan?.blocks.length ?? 0;
     final progress = total == 0 ? 0.0 : engine.doneCount / total;
 
-    // The native title bar is hidden: this bar is draggable and carries the
-    // window buttons at its top-right corner.
+    Widget divider() =>
+        Container(width: 1, height: 24, margin: const EdgeInsets.symmetric(horizontal: 18), color: c.border);
+
+    // Reading order, left to right: brand │ controls + status │ what is
+    // happening + numbers. The right edge keeps only the window buttons.
     return Column(
       children: [
         Row(
@@ -525,54 +513,16 @@ class _TopBar extends StatelessWidget {
             Expanded(
               child: WindowDragArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 16, 14, 14),
+                  padding: const EdgeInsets.fromLTRB(22, 16, 12, 16),
                   child: Row(
                     children: [
-                      const LogoMark(size: 30),
-                      const SizedBox(width: 12),
+                      const LogoMark(size: 28),
+                      const SizedBox(width: 10),
                       Text(
                         'AutoLoop',
-                        style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
                       ),
-                      const SizedBox(width: 22),
-                      _StatusPill(engine: engine, format: _fmt),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: headline,
-                                style: TextStyle(fontWeight: FontWeight.w600, color: c.text),
-                              ),
-                              if (detail != null) TextSpan(text: '  ·  $detail'),
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: c.muted, fontSize: 13),
-                        ),
-                      ),
-                      // On narrower windows the stats give way instead of overflowing.
-                      if (state != null && width >= (blocker == null ? 1150 : 1380)) ...[
-                        _Stat(value: _compact(state.totalTokens), label: 'token'),
-                        if (width >= (blocker == null ? 1260 : 1500))
-                          _Stat(value: _fmt(engine.totalTime), label: 'tempo'),
-                        const SizedBox(width: 6),
-                      ],
-                      _MoreMenu(
-                        dark: dark,
-                        onAccounts: onAccounts,
-                        onToggleTheme: onToggleTheme,
-                        onOpenLogs: onOpenLogs,
-                      ),
-                      const SizedBox(width: 8),
-                      if (blocker case (final reason, final fix)) ...[
-                        Flexible(
-                          child: _BlockerChip(reason: reason, onTap: fix),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
+                      divider(),
                       // Only the controls that make sense right now.
                       if (active) ...[
                         _RoundAction(
@@ -600,12 +550,62 @@ class _TopBar extends StatelessWidget {
                           onPressed: onStart,
                           primary: true,
                         ),
+                      const SizedBox(width: 12),
+                      _StatusPill(engine: engine, format: _fmt),
+                      if (blocker case (final reason, final fix)) ...[
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: _BlockerChip(reason: reason, onTap: fix),
+                        ),
+                      ],
+                      if (state != null || context_ != null) divider(),
+                      if (state != null && width >= 1100) ...[
+                        _Stat(value: _compact(state.totalTokens), label: 'token'),
+                        const SizedBox(width: 16),
+                        _Stat(value: _fmt(engine.totalTime), label: 'tempo'),
+                      ],
+                      if (context_ case (final headline, final detail)) ...[
+                        if (state != null && width >= 1100) divider(),
+                        Expanded(
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: headline,
+                                  style: TextStyle(fontWeight: FontWeight.w600, color: c.text),
+                                ),
+                                if (detail != null) TextSpan(text: '  ·  $detail'),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: c.muted, fontSize: 13),
+                          ),
+                        ),
+                      ] else
+                        const Spacer(),
                     ],
                   ),
                 ),
               ),
             ),
-            const WindowButtons(),
+            // Window buttons, with the theme switch tucked underneath.
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const WindowButtons(),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10, top: 2),
+                  child: IconButton(
+                    tooltip: dark ? 'Tema chiaro' : 'Tema scuro',
+                    onPressed: onToggleTheme,
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
         _ProgressLine(value: progress, working: active && engine.phase != LoopPhase.quotaWait),
@@ -642,52 +642,6 @@ class _ProgressLine extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Settings-like actions that are not about the loop itself.
-class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({required this.dark, required this.onAccounts, required this.onToggleTheme, this.onOpenLogs});
-  final bool dark;
-  final VoidCallback onAccounts, onToggleTheme;
-  final VoidCallback? onOpenLogs;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    PopupMenuItem<VoidCallback> item(IconData icon, String label, VoidCallback? action) => PopupMenuItem(
-      value: action,
-      enabled: action != null,
-      height: 40,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: action == null ? c.muted.withValues(alpha: 0.5) : c.muted),
-          const SizedBox(width: 12),
-          Text(label, style: TextStyle(fontSize: 13.5, color: action == null ? c.muted : c.text)),
-        ],
-      ),
-    );
-    return PopupMenuButton<VoidCallback>(
-      tooltip: 'Altro',
-      position: PopupMenuPosition.under,
-      color: c.surface,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: c.border),
-      ),
-      icon: Icon(Icons.more_horiz_rounded, color: c.muted),
-      onSelected: (action) => action(),
-      itemBuilder: (context) => [
-        item(Icons.manage_accounts_outlined, 'Account e CLI', onAccounts),
-        item(
-          dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-          dark ? 'Tema chiaro' : 'Tema scuro',
-          onToggleTheme,
-        ),
-        item(Icons.folder_open_outlined, 'Apri la cartella dei log', onOpenLogs),
-      ],
     );
   }
 }
@@ -745,8 +699,9 @@ class _BlockerChip extends StatelessWidget {
         child: InkWell(
           customBorder: const StadiumBorder(),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -795,7 +750,8 @@ class _StatusPill extends StatelessWidget {
       timer = format(DateTime.now().difference(engine.runStartedAt!));
     }
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
+      height: 36,
+      padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(99)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -941,9 +897,9 @@ class _RoundAction extends StatelessWidget {
         disabledBackgroundColor: primary ? c.border : c.surface,
         disabledForegroundColor: c.muted.withValues(alpha: 0.5),
         side: primary ? null : BorderSide(color: c.border),
-        fixedSize: const Size(44, 44),
+        fixedSize: const Size(40, 40),
       ),
-      icon: Icon(icon, size: primary ? 24 : 20),
+      icon: Icon(icon, size: primary ? 22 : 19),
     );
   }
 }
