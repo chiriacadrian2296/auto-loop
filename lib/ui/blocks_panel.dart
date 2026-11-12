@@ -39,9 +39,12 @@ List<(String, IconData, BlockStatus)> _actionsFor(BlockStatus status) => [
 ];
 
 class BlocksPanel extends StatefulWidget {
-  const BlocksPanel({super.key, required this.engine, required this.planName});
+  const BlocksPanel({super.key, required this.engine, required this.planName, this.onShowInLog});
   final LoopEngine engine;
   final String planName;
+
+  /// Opens the activity log at this block's invocations.
+  final ValueChanged<PlanBlock>? onShowInLog;
 
   @override
   State<BlocksPanel> createState() => _BlocksPanelState();
@@ -163,7 +166,12 @@ class _BlocksPanelState extends State<BlocksPanel> {
               ? const SizedBox(width: double.infinity)
               : SizedBox(
                   height: 300,
-                  child: _BlockDetail(engine: engine, block: selected, onClose: () => setState(() => _selected = null)),
+                  child: _BlockDetail(
+                    engine: engine,
+                    block: selected,
+                    onClose: () => setState(() => _selected = null),
+                    onShowInLog: widget.onShowInLog,
+                  ),
                 ),
         ),
       ],
@@ -303,13 +311,19 @@ class _TimelineItem extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // The line runs behind; the node sits on top of it.
                 SizedBox(
                   width: 44,
-                  child: Column(
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Expanded(child: Container(width: 2, color: isFirst ? Colors.transparent : lineColor)),
+                      Column(
+                        children: [
+                          Expanded(child: Container(width: 2, color: isFirst ? Colors.transparent : lineColor)),
+                          Expanded(child: Container(width: 2, color: isLast ? Colors.transparent : lineColor)),
+                        ],
+                      ),
                       _Node(index: block.index, status: state.status, running: current),
-                      Expanded(child: Container(width: 2, color: isLast ? Colors.transparent : lineColor)),
                     ],
                   ),
                 ),
@@ -365,8 +379,11 @@ class _Node extends StatelessWidget {
     final c = context.colors;
     const size = 26.0;
     if (running) {
-      return SizedBox.square(
-        dimension: size,
+      // Opaque disc behind the ring, so the line does not show through it.
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: c.surface, shape: BoxShape.circle),
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -423,10 +440,11 @@ class _Node extends StatelessWidget {
 /// The selected block: what came out of it, what it asks, and what can be
 /// done with it.
 class _BlockDetail extends StatelessWidget {
-  const _BlockDetail({required this.engine, required this.block, required this.onClose});
+  const _BlockDetail({required this.engine, required this.block, required this.onClose, this.onShowInLog});
   final LoopEngine engine;
   final PlanBlock block;
   final VoidCallback onClose;
+  final ValueChanged<PlanBlock>? onShowInLog;
 
   @override
   Widget build(BuildContext context) {
@@ -545,6 +563,22 @@ class _BlockDetail extends StatelessWidget {
               spacing: 8,
               runSpacing: 6,
               children: [
+                if (onShowInLog != null && s.attempts > 0)
+                  FilledButton.tonalIcon(
+                    onPressed: () => onShowInLog!(block),
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      textStyle: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: uiFont,
+                        fontFamilyFallback: uiFallback,
+                      ),
+                    ),
+                    icon: const Icon(Icons.manage_search_rounded, size: 16),
+                    label: const Text('Mostra nel registro'),
+                  ),
                 for (final (text, icon, target) in _actionsFor(s.status))
                   OutlinedButton.icon(
                     onPressed: locked ? null : () => engine.setBlockStatus(block, target),

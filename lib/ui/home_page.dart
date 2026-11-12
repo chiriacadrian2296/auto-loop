@@ -323,6 +323,10 @@ class _HomePageState extends State<HomePage> {
 
   bool _confirming = false;
 
+  /// "Mostra nel registro": (block index, request number), so repeating the
+  /// same block still notifies.
+  final _revealInLog = ValueNotifier<(int, int)?>(null);
+
   late bool _sidebarOpen = widget.prefs.getBool('sidebarOpen') ?? true;
 
   /// True once the opening animation has finished: the content appears only
@@ -528,7 +532,12 @@ class _HomePageState extends State<HomePage> {
                                             label: const Text('Scegli piano'),
                                           ),
                                         )
-                                      : BlocksPanel(engine: engine, planName: p.basename(_planPath!)),
+                                      : BlocksPanel(
+                                          engine: engine,
+                                          planName: p.basename(_planPath!),
+                                          onShowInLog: (b) =>
+                                              _revealInLog.value = (b.index, (_revealInLog.value?.$2 ?? 0) + 1),
+                                        ),
                                 ),
                               ],
                             ),
@@ -539,6 +548,7 @@ class _HomePageState extends State<HomePage> {
                           child: Panel(
                             child: LogPanel(
                               engine: engine,
+                              reveal: _revealInLog,
                               onOpenLogs: engine.plan == null ? null : _openLogs,
                               onOpenProgress: _workDir == null ? null : _openProgress,
                             ),

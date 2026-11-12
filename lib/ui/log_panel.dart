@@ -85,9 +85,12 @@ String _clock(DateTime t) =>
 String _span(Duration d) => d.inSeconds < 60 ? '${d.inSeconds} s' : '${d.inMinutes} min';
 
 class LogPanel extends StatefulWidget {
-  const LogPanel({super.key, required this.engine, this.onOpenLogs, this.onOpenProgress});
+  const LogPanel({super.key, required this.engine, this.onOpenLogs, this.onOpenProgress, this.reveal});
   final LoopEngine engine;
   final VoidCallback? onOpenLogs, onOpenProgress;
+
+  /// Requests to show a block's invocations: (block index, request number).
+  final ValueNotifier<(int, int)?>? reveal;
 
   @override
   State<LogPanel> createState() => _LogPanelState();
@@ -107,9 +110,74 @@ class _LogPanelState extends State<LogPanel> {
   /// the default is: only the latest invocation open.
   final _toggled = <LogEntry>{};
 
+  final _headerKeys = <LogEntry, GlobalKey>{};
+
+  /// Header briefly highlighted after "Mostra nel registro".
+  LogEntry? _flash;
+
+  /// Where the header to reveal sits among the rows (for lazy lists).
+  final _rowIndex = <LogEntry, int>{};
+  int _rowCount = 0;
+
+  bool _isHeaderOf(LogEntry h, int block) => h.text.contains('Blocco ${block + 1}/');
+
+  void _onReveal() {
+    final request = widget.reveal?.value;
+    if (request == null) return;
+    final block = request.$1;
+    final headers = [
+      for (final e in widget.engine.logs)
+        if (e.kind == LogKind.info && e.text.startsWith('▶') && _isHeaderOf(e, block)) e,
+    ];
+    if (headers.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Nessuna attività registrata per questo blocco.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final lastHeader = widget.engine.logs.lastWhere((e) => e.kind == LogKind.info && e.text.startsWith('▶'));
+    setState(() {
+      _filter = _Filter.all;
+      _atBottom = false;
+      _unseen = false;
+      // Open exactly this block's invocations (the latest is open by default).
+      _toggled
+        ..clear()
+        ..addAll(headers.where((h) => !identical(h, lastHeader)));
+      if (!headers.any((h) => identical(h, lastHeader))) _toggled.add(lastHeader);
+      _flash = headers.first;
+    });
+    _scrollTo(headers.first);
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted && identical(_flash, headers.first)) setState(() => _flash = null);
+    });
+  }
+
+  /// Brings [header] into view; rows are built lazily, so jump close first.
+  void _scrollTo(LogEntry header, [int attempt = 0]) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final ctx = _headerKeys[header]?.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx, alignment: 0.05, duration: const Duration(milliseconds: 250));
+        return;
+      }
+      if (attempt > 4) return;
+      final i = _rowIndex[header];
+      if (i != null && _rowCount > 0) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent * (i / _rowCount));
+      }
+      _scrollTo(header, attempt + 1);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    widget.reveal?.addListener(_onReveal);
     _scroll.addListener(() {
       if (!_scroll.hasClients) return;
       final bottom = _scroll.position.pixels >= _scroll.position.maxScrollExtent - 40;
@@ -124,6 +192,7 @@ class _LogPanelState extends State<LogPanel> {
 
   @override
   void dispose() {
+    widget.reveal?.removeListener(_onReveal);
     _scroll.dispose();
     super.dispose();
   }
@@ -183,8 +252,11 @@ class _LogPanelState extends State<LogPanel> {
       final header = g.header;
       final open = header == null || (last != _toggled.contains(header));
       if (header != null) {
+        _rowIndex[header] = rows.length;
         rows.add(
           _GroupHeader(
+            key: _headerKeys.putIfAbsent(header, GlobalKey.new),
+            highlighted: identical(header, _flash),
             group: g,
             open: open,
             live: last && engine.isActive,
@@ -194,6 +266,7 @@ class _LogPanelState extends State<LogPanel> {
       }
       if (open) rows.addAll(visible.map((e) => _LogLine(e, agent: engine.settings.agent)));
     }
+    _rowCount = rows.length;
     final silent = engine.phase == LoopPhase.running && engine.lastOutputAt != null
         ? DateTime.now().difference(engine.lastOutputAt!)
         : null;
@@ -335,7 +408,15 @@ class _FilterBar extends StatelessWidget {
 }
 
 class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({required this.group, required this.open, required this.live, required this.onTap});
+  const _GroupHeader({
+    super.key,
+    required this.group,
+    required this.open,
+    required this.live,
+    required this.onTap,
+    this.highlighted = false,
+  });
+  final bool highlighted;
   final _Group group;
   final bool open, live;
   final VoidCallback onTap;
@@ -375,7 +456,8 @@ class _GroupHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 6),
       child: Material(
-        color: Colors.transparent,
+        color: highlighted ? c.primarySoft : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
@@ -410,6 +492,7 @@ class _GroupHeader extends StatelessWidget {
                       if (title != null) ...[
                         const SizedBox(width: 8),
                         Flexible(
+                          flex: 3,
                           child: Text(
                             title,
                             maxLines: 1,
@@ -421,7 +504,15 @@ class _GroupHeader extends StatelessWidget {
                       const SizedBox(width: 10),
                       ?badge,
                       if (badge != null) const SizedBox(width: 6),
-                      Text(summary, maxLines: 1, style: TextStyle(fontSize: 11.5, color: c.muted)),
+                      Flexible(
+                        flex: 2,
+                        child: Text(
+                          summary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11.5, color: c.muted),
+                        ),
+                      ),
                     ],
                   ),
                 ),
