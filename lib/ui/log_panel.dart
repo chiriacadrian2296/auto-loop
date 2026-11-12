@@ -628,8 +628,9 @@ class _LogLineState extends State<_LogLine> {
       ),
       LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.muted.withValues(alpha: 0.5)),
       LogKind.success => Icon(Icons.check_circle_rounded, size: size, color: c.success),
-      LogKind.result => Icon(Icons.task_alt_rounded, size: size, color: c.success),
-      LogKind.task => Icon(Icons.flag_rounded, size: size, color: c.primary),
+      // Start flag and finish flag.
+      LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: c.primary),
+      LogKind.result => Icon(Icons.sports_score_rounded, size: size, color: c.primary),
       LogKind.warning => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
       LogKind.error => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
       LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: size, color: c.primary),
@@ -642,26 +643,15 @@ class _LogLineState extends State<_LogLine> {
         e.text,
         style: TextStyle(fontSize: 12, height: 1.6, color: c.muted, fontFamily: mono, fontFamilyFallback: monoFallback),
       ),
-      LogKind.task => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Compito', style: body.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 2),
-          MarkdownText(e.text, style: body.copyWith(fontSize: 13, color: c.muted)),
-        ],
+      // Task and result mirror each other: the icon says which is which.
+      LogKind.task || LogKind.result => MarkdownText(
+        // Earlier versions put "Completato in …" before the summary; the
+        // invocation header already shows those numbers.
+        e.text.startsWith('Completato in ') && e.text.contains('\n\n')
+            ? e.text.substring(e.text.indexOf('\n\n') + 2).trim()
+            : e.text,
+        style: body.copyWith(color: c.muted),
       ),
-      LogKind.result => () {
-        final cut = e.text.indexOf('\n\n');
-        final head = cut < 0 ? e.text : e.text.substring(0, cut);
-        final rest = cut < 0 ? '' : e.text.substring(cut + 2).trim();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(head, style: body.copyWith(fontWeight: FontWeight.w600)),
-            if (rest.isNotEmpty) ...[const SizedBox(height: 2), MarkdownText(rest, style: body)],
-          ],
-        );
-      }(),
       _ => Text(e.text, style: body.copyWith(fontSize: 13, color: c.text.withValues(alpha: 0.85))),
     };
 

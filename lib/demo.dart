@@ -98,7 +98,6 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
       LogEntry(LogKind.success, 'Commit 4f2a9c1 · 3 file · +142 −18', at: at(79)),
       LogEntry(
         LogKind.result,
-        'Completato in 3 invocazioni · 41 min · 362k token\n\n'
         'Sezione progetti con sei card responsive, link ai repository e immagini ottimizzate.',
         at: at(79),
       ),

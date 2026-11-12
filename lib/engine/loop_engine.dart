@@ -524,13 +524,8 @@ class LoopEngine extends ChangeNotifier {
         bs.note = summary;
         bs.feedback = '';
         state.save(dir);
-        final runs = bs.attempts == 1 ? '1 invocazione' : '${bs.attempts} invocazioni';
-        final facts = [
-          runs,
-          if (bs.activeSeconds > 0) _span(bs.activeSeconds),
-          if (bs.totalTokens > 0) '${_k(bs.totalTokens)} token',
-        ];
-        _log(LogKind.result, ['Completato in ${facts.join(' · ')}', if (summary.isNotEmpty) summary].join('\n\n'));
+        // Numbers are in the invocation header: the result is the summary.
+        _log(LogKind.result, summary.isEmpty ? 'Blocco completato.' : summary);
         return _RunResult.blockDone;
       case AgentVerdict.blocked:
         bs.status = BlockStatus.blocked;
@@ -559,8 +554,6 @@ class LoopEngine extends ChangeNotifier {
     final m = seconds ~/ 60;
     return m < 60 ? '$m min' : '${m ~/ 60} h ${m % 60} min';
   }
-
-  static String _k(int n) => n >= 1000 ? '${(n / 1000).round()}k' : '$n';
 
   String _summary(String text) {
     final cleaned = text.replaceAll(RegExp(r'AUTOLOOP_STATUS:[^\n]*', caseSensitive: false), '').trim();

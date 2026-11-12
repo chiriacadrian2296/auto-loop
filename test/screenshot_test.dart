@@ -106,7 +106,7 @@ void main() {
         LogEntry(LogKind.tool, 'Verifica: flutter test', at: t),
         LogEntry(LogKind.success, 'Verifica superata in 21 s · All tests passed!', at: t),
         LogEntry(LogKind.success, 'Commit 9c41e07 · 4 file · +188 −2', at: t),
-        LogEntry(LogKind.result, 'Completato in 2 invocazioni · 18 min · 240k token\n\nRepository JSON con test.', at: t),
+        LogEntry(LogKind.result, 'Repository JSON con test.', at: t),
         LogEntry(LogKind.info,
             '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 1',
             at: t),
