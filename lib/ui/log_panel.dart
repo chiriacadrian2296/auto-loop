@@ -1191,19 +1191,6 @@ class _ActivityStripState extends State<ActivityStrip> {
     );
   }
 
-  /// A bracket as wide as what it groups, with its marker in the middle:
-  /// above the icons for an invocation, below them for a block.
-  Widget _bracket({required bool above, required Widget marker}) {
-    final c = context.colors;
-    return SizedBox(
-      height: _bracketHeight,
-      child: CustomPaint(
-        painter: _BracketPainter(above: above, color: c.muted.withValues(alpha: 0.6)),
-        child: Center(child: marker),
-      ),
-    );
-  }
-
   static const _bracketHeight = 18.0;
   static const _iconRow = 26.0;
 
@@ -1224,14 +1211,6 @@ class _ActivityStripState extends State<ActivityStrip> {
       ),
     );
   }
-
-  Widget _icons(List<LogEntry> items) => SizedBox(
-    height: _iconRow,
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [for (final e in items) Padding(padding: const EdgeInsets.symmetric(horizontal: 1), child: _item(e))],
-    ),
-  );
 
   @override
   Widget build(BuildContext context) {
@@ -1257,86 +1236,130 @@ class _ActivityStripState extends State<ActivityStrip> {
       }
     }
 
-    Widget run(_StripRun r) => IntrinsicWidth(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _bracket(
-            above: true,
-            marker: _clickable(
-              r.header,
-              _marker(Icons.replay_rounded, r.number, 'Invocazione ${r.number} · ${_clock(r.header.at)}'),
-            ),
-          ),
-          Center(child: _icons(r.items)),
-        ],
-      ),
-    );
+    // One slot per icon, spread evenly over the width as before; an
+    // invocation with no line shown still gets an (empty) slot.
+    final slots = <LogEntry?>[...loose];
+    final runSpans = <(_StripRun, int, int)>[];
+    final blockSpans = <(_StripBlock, int, int)>[];
+    for (final b in blocks) {
+      final blockStart = slots.length;
+      for (final r in b.runs) {
+        final start = slots.length;
+        if (r.items.isEmpty) {
+          slots.add(null);
+        } else {
+          slots.addAll(r.items);
+        }
+        runSpans.add((r, start, slots.length - 1));
+      }
+      blockSpans.add((b, blockStart, slots.length - 1));
+    }
+    if (slots.isEmpty) return Text('Nessuna attività', style: TextStyle(fontSize: 12.5, color: c.muted));
 
-    Widget block(_StripBlock b) => IntrinsicWidth(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              for (final (i, r) in b.runs.indexed) ...[if (i > 0) const SizedBox(width: 10), run(r)],
-            ],
-          ),
-          _bracket(
-            above: false,
-            marker: _clickable(
-              b.header,
-              _marker(Icons.layers_outlined, b.number, 'Blocco ${b.number}: ${b.title}'),
-              block: true,
-            ),
-          ),
-        ],
-      ),
-    );
+    const slot = 24.0, minStep = 28.0, markerBox = 90.0;
+    const height = _bracketHeight * 2 + _iconRow;
+    final bracketColor = c.muted.withValues(alpha: 0.6);
 
-    final groups = [
-      if (loose.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(top: _bracketHeight, bottom: _bracketHeight),
-          child: _icons(loose),
-        ),
-      for (final b in blocks) block(b),
-    ];
-    if (groups.isEmpty) return Text('Nessuna attività', style: TextStyle(fontSize: 12.5, color: c.muted));
-
-    // Spread over the whole width while it fits; once it does not, the
-    // newest stays on the right and the oldest scrolls away. The icons are
-    // strung on a line, like the progress timeline.
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => widget.selection?.select(null, this),
-      child: Stack(
-        children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            top: _bracketHeight + _iconRow / 2 - 1,
-            child: Container(height: 2, color: c.border),
-          ),
-          LayoutBuilder(
-            builder: (context, box) => SingleChildScrollView(
-              controller: _scroll,
-              scrollDirection: Axis.horizontal,
-              reverse: true,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: box.maxWidth),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    for (final g in groups) Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: g),
-                  ],
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final n = slots.length;
+          // Spread over the width while it fits; otherwise scroll, the
+          // newest staying on the right.
+          final width = n * minStep > box.maxWidth ? n * minStep : box.maxWidth;
+          double x(int i) => n == 1 ? slot / 2 : slot / 2 + i * (width - slot) / (n - 1);
+
+          // Brackets run from the centre of the first icon to the centre
+          // of the last one of their group.
+          List<Widget> bracket(int from, int to, {required bool above, required Widget marker}) {
+            var left = x(from), right = x(to);
+            if (right - left < 16) {
+              final mid = (left + right) / 2;
+              left = mid - 8;
+              right = mid + 8;
+            }
+            final mid = (left + right) / 2;
+            final top = above ? 0.0 : _bracketHeight + _iconRow;
+            return [
+              Positioned(
+                left: left,
+                top: top,
+                width: right - left,
+                height: _bracketHeight,
+                child: CustomPaint(
+                  painter: _BracketPainter(above: above, color: bracketColor),
                 ),
               ),
+              Positioned(
+                left: mid - markerBox / 2,
+                top: top,
+                width: markerBox,
+                height: _bracketHeight,
+                child: Center(child: marker),
+              ),
+            ];
+          }
+
+          final children = <Widget>[
+            Positioned(
+              left: 0,
+              right: 0,
+              top: _bracketHeight + _iconRow / 2 - 1,
+              child: Container(height: 2, color: c.border),
             ),
-          ),
-        ],
+          ];
+          for (final (r, from, to) in runSpans) {
+            children.addAll(
+              bracket(
+                from,
+                to,
+                above: true,
+                marker: _clickable(
+                  r.header,
+                  _marker(Icons.replay_rounded, r.number, 'Invocazione ${r.number} · ${_clock(r.header.at)}'),
+                ),
+              ),
+            );
+          }
+          for (final (b, from, to) in blockSpans) {
+            children.addAll(
+              bracket(
+                from,
+                to,
+                above: false,
+                marker: _clickable(
+                  b.header,
+                  _marker(Icons.layers_outlined, b.number, 'Blocco ${b.number}: ${b.title}'),
+                  block: true,
+                ),
+              ),
+            );
+          }
+          for (final (i, e) in slots.indexed) {
+            if (e == null) continue;
+            children.add(
+              Positioned(
+                left: x(i) - slot / 2,
+                top: _bracketHeight,
+                width: slot,
+                height: _iconRow,
+                child: Center(child: _item(e)),
+              ),
+            );
+          }
+          return SingleChildScrollView(
+            controller: _scroll,
+            scrollDirection: Axis.horizontal,
+            reverse: true,
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: Stack(clipBehavior: Clip.none, children: children),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1358,10 +1381,10 @@ class _BracketPainter extends CustomPainter {
     final y = size.height / 2;
     final end = above ? size.height - 2 : 2.0;
     final path = Path()
-      ..moveTo(3, end)
-      ..lineTo(3, y)
-      ..lineTo(size.width - 3, y)
-      ..lineTo(size.width - 3, end);
+      ..moveTo(0, end)
+      ..lineTo(0, y)
+      ..lineTo(size.width, y)
+      ..lineTo(size.width, end);
     canvas.drawPath(path, paint);
   }
 
