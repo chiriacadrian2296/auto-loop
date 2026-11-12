@@ -252,7 +252,7 @@ class _TimelineItem extends StatelessWidget {
     final current = engine.currentBlock == block.index && engine.isActive;
     final running = current && engine.runStartedAt != null;
     final done = state.status == BlockStatus.done;
-    final lineColor = done ? c.primary.withValues(alpha: 0.45) : c.border;
+    final lineColor = done ? c.success.withValues(alpha: 0.45) : c.border;
     final seconds = _blockSeconds(engine, block);
     // The same numbers for every block, as icons; the state in words only
     // when the node alone does not say it.
@@ -418,43 +418,31 @@ class _Node extends StatelessWidget {
         ),
       );
     }
-    final (Color bg, Color fg, Color border, Widget child) = switch (status) {
-      BlockStatus.done => (
-        c.primary,
-        Colors.white,
-        c.primary,
-        const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+    // Filled discs without border; the number sits exactly in the middle.
+    final number = Text(
+      '${index + 1}',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 12,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        color: c.text.withValues(alpha: 0.8),
+        leadingDistribution: TextLeadingDistribution.even,
       ),
-      BlockStatus.blocked => (
-        c.danger,
-        Colors.white,
-        c.danger,
-        const Icon(Icons.priority_high_rounded, size: 15, color: Colors.white),
-      ),
-      BlockStatus.skipped => (c.field, c.muted, c.border, Icon(Icons.redo_rounded, size: 14, color: c.muted)),
-      BlockStatus.pending => (
-        c.surface,
-        c.muted,
-        c.muted.withValues(alpha: 0.6),
-        Text(
-          '${index + 1}',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.text.withValues(alpha: 0.8)),
-        ),
-      ),
+      textHeightBehavior: const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
+    );
+    final (Color bg, Widget child) = switch (status) {
+      BlockStatus.done => (c.success, const Icon(Icons.check_rounded, size: 16, color: Colors.white)),
+      BlockStatus.blocked => (c.danger, const Icon(Icons.priority_high_rounded, size: 15, color: Colors.white)),
+      BlockStatus.skipped => (c.muted.withValues(alpha: 0.18), Icon(Icons.redo_rounded, size: 14, color: c.muted)),
+      BlockStatus.pending => (c.muted.withValues(alpha: 0.28), number),
     };
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: bg,
-        shape: BoxShape.circle,
-        border: Border.all(color: border, width: 2),
-      ),
-      child: DefaultTextStyle.merge(
-        style: TextStyle(color: fg),
-        child: child,
-      ),
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      child: child,
     );
   }
 }

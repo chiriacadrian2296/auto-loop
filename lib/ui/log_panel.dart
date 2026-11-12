@@ -300,6 +300,7 @@ class _LogPanelState extends State<LogPanel> {
     final groups = _groupLogs(logs);
     final runs = _runs(groups);
     final rows = <Widget>[];
+    var previousOpen = false;
     for (var r = 0; r < runs.length; r++) {
       final run = runs[r];
       final lastRun = r == runs.length - 1;
@@ -330,14 +331,24 @@ class _LogPanelState extends State<LogPanel> {
             tokensIn: input,
             tokensOut: output,
             open: blockOpen,
-            first: rows.isEmpty,
+            // Open blocks breathe; closed ones sit close together.
+            gap: rows.isEmpty ? 4 : (previousOpen || blockOpen ? 22 : 4),
             highlighted: identical(head, _flash),
             onTap: () =>
                 setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head)),
           ),
         );
       }
+      previousOpen = blockOpen;
       if (!blockOpen) continue;
+      // Invocations sit one step in from their block, like a tab.
+      final indent = head == null ? 0.0 : _indent;
+      Widget tab(Widget w) => indent == 0
+          ? w
+          : Padding(
+              padding: EdgeInsets.only(left: indent),
+              child: w,
+            );
       for (final g in run) {
         final visible = shown[g]!;
         if (_filter != _Filter.all && visible.isEmpty) continue;
@@ -346,15 +357,17 @@ class _LogPanelState extends State<LogPanel> {
         final open = header == null || (last != _toggled.contains(header));
         if (header != null) {
           rows.add(
-            _InvocationHeader(
-              group: g,
-              open: open,
-              live: last && engine.isActive,
-              onTap: () => setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
+            tab(
+              _InvocationHeader(
+                group: g,
+                open: open,
+                live: last && engine.isActive,
+                onTap: () => setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
+              ),
             ),
           );
         }
-        if (open) rows.addAll(visible.map((e) => _LogLine(e, agent: engine.settings.agent)));
+        if (open) rows.addAll(visible.map((e) => tab(_LogLine(e, agent: engine.settings.agent))));
       }
     }
     _rowCount = rows.length;
@@ -510,7 +523,7 @@ class _BlockHeading extends StatelessWidget {
     required this.tokensIn,
     required this.tokensOut,
     required this.open,
-    required this.first,
+    required this.gap,
     required this.onTap,
     this.highlighted = false,
   });
@@ -518,7 +531,8 @@ class _BlockHeading extends StatelessWidget {
   final String title;
   final int invocations, tokensIn, tokensOut;
   final Duration time;
-  final bool open, first, highlighted;
+  final double gap;
+  final bool open, highlighted;
   final VoidCallback onTap;
 
   @override
@@ -531,7 +545,7 @@ class _BlockHeading extends StatelessWidget {
         IconStat(Icons.toll_outlined, _k(tokensIn + tokensOut), 'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out'),
     ];
     return Padding(
-      padding: EdgeInsets.only(top: first ? 4 : 22, bottom: 2),
+      padding: EdgeInsets.only(top: gap, bottom: 2),
       child: Material(
         color: highlighted ? c.primarySoft : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
@@ -549,7 +563,7 @@ class _BlockHeading extends StatelessWidget {
                     child: AnimatedRotation(
                       turns: open ? 0 : -0.25,
                       duration: const Duration(milliseconds: 160),
-                      child: Icon(Icons.expand_more_rounded, size: 20, color: c.muted),
+                      child: _Chevron(color: c),
                     ),
                   ),
                 ),
@@ -624,7 +638,7 @@ class _InvocationHeader extends StatelessWidget {
     final (tokensIn, tokensOut, cost) = group.usage;
     final (Widget? badge, String? status) = switch (group.outcome(live: live)) {
       _Outcome.done => (Icon(Icons.check_circle_rounded, size: 15, color: c.success), 'completato'),
-      _Outcome.again => (Icon(Icons.replay_circle_filled_rounded, size: 15, color: c.primary), 'continua'),
+      _Outcome.again => (Icon(Icons.replay_circle_filled_rounded, size: 15, color: c.muted), 'continua'),
       _Outcome.blocked => (Icon(Icons.error_rounded, size: 15, color: c.danger), 'bloccato'),
       _Outcome.interrupted => (Icon(Icons.warning_rounded, size: 15, color: c.warning), 'interrotto'),
       _Outcome.failed => (Icon(Icons.cancel_rounded, size: 15, color: c.danger), 'problema'),
@@ -663,7 +677,7 @@ class _InvocationHeader extends StatelessWidget {
                     child: AnimatedRotation(
                       turns: open ? 0 : -0.25,
                       duration: const Duration(milliseconds: 160),
-                      child: Icon(Icons.expand_more_rounded, size: 20, color: c.muted),
+                      child: _Chevron(color: c),
                     ),
                   ),
                 ),
@@ -700,6 +714,7 @@ class _InvocationHeader extends StatelessWidget {
 const _sidePad = 8.0;
 const _gutter = 28.0;
 const _timeWidth = 64.0;
+const _indent = 22.0;
 
 /// Reassures that a quiet agent is still at work, and how long until the
 /// supervisor would restart it.
@@ -755,6 +770,15 @@ class _LogLineState extends State<_LogLine> {
     // One icon per line, always in the same column and size. Only icons
     // carry color; texts stay neutral.
     const size = 15.0;
+    final agentIcon = Padding(
+      padding: const EdgeInsets.all(1),
+      child: SvgPicture.asset(
+        AgentBadge.asset(widget.agent),
+        width: size - 2,
+        height: size - 2,
+        colorFilter: ColorFilter.mode(c.primary, BlendMode.srcIn),
+      ),
+    );
     final Widget icon = switch (e.kind) {
       LogKind.agent => Padding(
         padding: const EdgeInsets.all(1),
@@ -765,19 +789,20 @@ class _LogLineState extends State<_LogLine> {
           colorFilter: ColorFilter.mode(c.primary, BlendMode.srcIn),
         ),
       ),
-      LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.text),
+      LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.muted),
       LogKind.success => Icon(Icons.check_circle_rounded, size: size, color: c.success),
       // The same flag: empty when the block starts, filled when it is done.
-      LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: c.primary),
+      LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: c.text),
       LogKind.result => switch (e.outcome) {
-        RunOutcome.done || null => Icon(Icons.flag_rounded, size: size, color: c.primary),
-        RunOutcome.again => Icon(Icons.info_outline_rounded, size: size, color: c.primary),
+        RunOutcome.done || null => Icon(Icons.flag_rounded, size: size, color: c.text),
+        // Going on with the block reads like a word from the agent.
+        RunOutcome.again => agentIcon,
         RunOutcome.interrupted => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
         RunOutcome.blocked || RunOutcome.failed => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
       },
       LogKind.warning => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
       LogKind.error => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
-      LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: size, color: c.primary),
+      LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: size, color: c.muted),
     };
 
     // One grey for every text: the icon says what kind of line it is.
@@ -844,4 +869,19 @@ class _LogLineState extends State<_LogLine> {
       ),
     );
   }
+}
+
+/// The open/close arrow of block and invocation headers, on a dark square
+/// like the action buttons of the progress panel.
+class _Chevron extends StatelessWidget {
+  const _Chevron({required this.color});
+  final AppColors color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 22,
+    height: 22,
+    decoration: BoxDecoration(color: color.field, borderRadius: BorderRadius.circular(6)),
+    child: Icon(Icons.expand_more_rounded, size: 18, color: color.muted),
+  );
 }
