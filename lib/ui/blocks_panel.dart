@@ -44,6 +44,19 @@ class BlocksPanel extends StatefulWidget {
   /// Opens the activity log at this block's invocations.
   final ValueChanged<PlanBlock>? onShowInLog;
 
+  /// The groups (by name) that are closed; shared with the title bar's
+  /// expand/collapse-all button.
+  static final closed = ValueNotifier<Set<String>>({});
+
+  /// "Espandi tutto" / "Comprimi tutto" for the panel's title bar.
+  static Widget expandAllButton() => ValueListenableBuilder<Set<String>>(
+    valueListenable: closed,
+    builder: (context, value, _) => ExpandAllButton(
+      allOpen: value.isEmpty,
+      onPressed: () => closed.value = value.isEmpty ? {for (final b in _Bucket.values) b.label} : {},
+    ),
+  );
+
   @override
   State<BlocksPanel> createState() => _BlocksPanelState();
 }
@@ -62,8 +75,21 @@ enum _Bucket {
 class _BlocksPanelState extends State<BlocksPanel> {
   int? _selected;
 
-  /// Groups the user closed.
-  final _closed = <_Bucket>{};
+  Set<String> get _closed => BlocksPanel.closed.value;
+
+  void _changed() => setState(() {});
+
+  @override
+  void initState() {
+    super.initState();
+    BlocksPanel.closed.addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    BlocksPanel.closed.removeListener(_changed);
+    super.dispose();
+  }
 
   _Bucket _bucketOf(PlanBlock b) {
     final engine = widget.engine;
@@ -107,13 +133,14 @@ class _BlocksPanelState extends State<BlocksPanel> {
       ),
       _ => null,
     };
-    final open = !_closed.contains(bucket);
+    final open = !_closed.contains(bucket.label);
     return Padding(
       padding: EdgeInsets.only(top: first ? 0 : 10, bottom: 2),
       child: SectionTitle(
         title: bucket.label,
         open: open,
-        onTap: () => setState(() => open ? _closed.add(bucket) : _closed.remove(bucket)),
+        onTap: () =>
+            BlocksPanel.closed.value = open ? {..._closed, bucket.label} : ({..._closed}..remove(bucket.label)),
         badge: badge,
         stats: [
           IconStat(
@@ -169,47 +196,11 @@ class _BlocksPanelState extends State<BlocksPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.planName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(end: ratio),
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, v, _) => LinearProgressIndicator(
-                          value: v,
-                          minHeight: 8,
-                          backgroundColor: c.primarySoft,
-                          color: c.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '${(ratio * 100).round()}%',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: c.primary),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text('$done di $total blocchi completati', style: TextStyle(fontSize: 12, color: c.muted)),
-            ],
-          ),
+        ProgressSummary(
+          title: widget.planName,
+          ratio: ratio,
+          label: '$done di $total blocchi completati',
+          color: finished ? c.success : null,
         ),
         if (finished) _Summary(engine: engine),
         const SizedBox(height: 6),
@@ -226,7 +217,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
                     blocks,
                     first: bucket == _Bucket.values.firstWhere((x) => plan.blocks.any((b) => _bucketOf(b) == x)),
                   ),
-                  if (!_closed.contains(bucket))
+                  if (!_closed.contains(bucket.label))
                     for (final (k, b) in blocks.indexed)
                       _TimelineItem(
                         engine: engine,

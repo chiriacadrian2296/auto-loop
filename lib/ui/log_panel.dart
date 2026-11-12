@@ -302,6 +302,23 @@ class _LogPanelState extends State<LogPanel> {
 
     final groups = _groupLogs(logs);
     final runs = _runs(groups);
+    final heads = [for (final r in runs) ?r.first.header];
+    final headers = [for (final g in groups) ?g.header];
+    final lastHead = runs.isEmpty ? null : runs.last.first.header;
+    final lastHeader = groups.isEmpty ? null : groups.last.header;
+    // The latest block and invocation are open by default; toggling flips that.
+    bool isOpen(LogEntry h, LogEntry? latest, Set<LogEntry> toggled) => identical(h, latest) != toggled.contains(h);
+    final allOpen =
+        heads.every((h) => isOpen(h, lastHead, _toggledBlocks)) &&
+        headers.every((h) => isOpen(h, lastHeader, _toggled));
+    void setAll(bool open) => setState(() {
+      _toggledBlocks
+        ..clear()
+        ..addAll(heads.where((h) => identical(h, lastHead) != open));
+      _toggled
+        ..clear()
+        ..addAll(headers.where((h) => identical(h, lastHeader) != open));
+    });
     final rows = <Widget>[];
     var previousOpen = false;
     for (var r = 0; r < runs.length; r++) {
@@ -391,6 +408,7 @@ class _LogPanelState extends State<LogPanel> {
           actions: [
             _FilterBar(value: _filter, onChanged: (f) => setState(() => _filter = f)),
             const SizedBox(width: 6),
+            ExpandAllButton(allOpen: allOpen, onPressed: heads.isEmpty ? null : () => setAll(!allOpen)),
             IconButton(
               tooltip: 'Apri PROGRESS.md',
               onPressed: widget.onOpenProgress,
@@ -902,61 +920,23 @@ class _BlockProgress extends StatelessWidget {
         ? s.stepsDone / s.stepsTotal
         : (s.attempts / max).clamp(0.0, 1.0);
     final label = steps
-        ? '${s.stepsDone} di ${s.stepsTotal} passi'
+        ? '${s.stepsDone} di ${s.stepsTotal} passi completati'
         : done
-        ? 'Completato'
-        : '${s.attempts} di $max invocazioni';
+        ? 'Blocco completato'
+        : '${s.attempts} di $max invocazioni usate';
     final color = switch (s.status) {
       BlockStatus.done => c.success,
       BlockStatus.blocked => c.danger,
       _ => c.primary,
     };
-    return Tooltip(
-      message: steps
+    return ProgressSummary(
+      title: '${block.index + 1}. ${block.title}',
+      ratio: ratio,
+      label: label,
+      color: color,
+      tooltip: steps
           ? 'Passi segnalati dall\'agente'
           : 'L\'agente non ha ancora segnalato i passi: invocazioni usate sul massimo consentito',
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${block.index + 1}. ${block.title}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween(end: ratio),
-                      duration: const Duration(milliseconds: 500),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, v, _) => LinearProgressIndicator(
-                        value: v,
-                        minHeight: 8,
-                        backgroundColor: color.withValues(alpha: 0.15),
-                        color: color,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  '${(ratio * 100).round()}%',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontSize: 12, color: c.muted)),
-          ],
-        ),
-      ),
     );
   }
 }

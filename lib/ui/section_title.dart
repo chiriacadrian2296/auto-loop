@@ -150,3 +150,84 @@ class StatsAfterDash extends StatelessWidget {
     );
   }
 }
+
+/// The summary under a panel's title: a name, a bar with its percentage and
+/// a line saying "N of M …". The same in every panel.
+class ProgressSummary extends StatelessWidget {
+  const ProgressSummary({
+    super.key,
+    required this.title,
+    required this.ratio,
+    required this.label,
+    this.color,
+    this.tooltip,
+  });
+  final String title, label;
+  final double ratio;
+  final Color? color;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final tint = color ?? c.primary;
+    final body = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(end: ratio.clamp(0.0, 1.0)),
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, v, _) => LinearProgressIndicator(
+                      value: v,
+                      minHeight: 8,
+                      backgroundColor: tint.withValues(alpha: 0.15),
+                      color: tint,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '${(ratio.clamp(0.0, 1.0) * 100).round()}%',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: tint),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(label, style: TextStyle(fontSize: 12, color: c.muted)),
+        ],
+      ),
+    );
+    return tooltip == null ? body : Tooltip(message: tooltip!, child: body);
+  }
+}
+
+/// Opens or closes every section of a panel, for its title bar.
+class ExpandAllButton extends StatelessWidget {
+  const ExpandAllButton({super.key, required this.allOpen, required this.onPressed});
+  final bool allOpen;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: allOpen ? 'Comprimi tutto' : 'Espandi tutto',
+    onPressed: onPressed,
+    iconSize: 19,
+    icon: Icon(allOpen ? Icons.unfold_less_rounded : Icons.unfold_more_rounded),
+  );
+}

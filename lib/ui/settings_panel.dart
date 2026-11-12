@@ -24,6 +24,7 @@ class SettingsPanel extends StatelessWidget {
     required this.accounts,
     required this.onOpenAccounts,
     this.issues = const {},
+    this.requirements = const [],
     this.projectDir,
     required this.onPickPlan,
     required this.onPickWorkDir,
@@ -43,6 +44,21 @@ class SettingsPanel extends StatelessWidget {
 
   /// Sections with a problem that blocks the start ('Piano', 'Agente', 'Account').
   final Set<String> issues;
+
+  /// What a start needs, and whether it is there: shown as a bar on top.
+  final List<(String, bool)> requirements;
+
+  /// "Espandi tutto" / "Comprimi tutto" for the panel's title bar.
+  static Widget expandAllButton() => ValueListenableBuilder<Set<String>>(
+    valueListenable: _Collapsible.open,
+    builder: (context, open, _) {
+      final allOpen = _Collapsible.all.every(open.contains);
+      return ExpandAllButton(
+        allOpen: allOpen,
+        onPressed: () => _Collapsible.open.value = allOpen ? <String>{} : {..._Collapsible.all},
+      );
+    },
+  );
 
   /// Work folder whose own settings file holds the settings below.
   final String? projectDir;
@@ -89,9 +105,22 @@ class SettingsPanel extends StatelessWidget {
     ].join(' · ');
     final rules = s.extraInstructions.trim().replaceAll(RegExp(r'\s+'), ' ');
     final summaryRules = rules.isEmpty ? 'Nessuna regola aggiuntiva' : rules;
+    final ready = requirements.where((r) => r.$2).length;
+    final missing = [
+      for (final r in requirements)
+        if (!r.$2) r.$1,
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (requirements.isNotEmpty)
+          ProgressSummary(
+            title: missing.isEmpty ? 'Pronto per partire' : 'Prima di partire',
+            ratio: ready / requirements.length,
+            label: '$ready di ${requirements.length} requisiti pronti',
+            color: missing.isEmpty ? context.colors.success : null,
+            tooltip: missing.isEmpty ? 'Piano, cartella, CLI e account sono a posto' : 'Manca: ${missing.join(', ')}',
+          ),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
@@ -549,40 +578,6 @@ class _ProjectFooter extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ignore: unused_element
-class _ExpandAll extends StatelessWidget {
-  const _ExpandAll();
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return ValueListenableBuilder<Set<String>>(
-      valueListenable: _Collapsible.open,
-      builder: (context, open, _) {
-        final allOpen = _Collapsible.all.every(open.contains);
-        return Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () => _Collapsible.open.value = allOpen ? <String>{} : {..._Collapsible.all},
-            style: TextButton.styleFrom(
-              foregroundColor: c.muted,
-              visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                fontFamily: uiFont,
-                fontFamilyFallback: uiFallback,
-              ),
-            ),
-            icon: Icon(allOpen ? Icons.unfold_less_rounded : Icons.unfold_more_rounded, size: 17),
-            label: Text(allOpen ? 'Comprimi tutto' : 'Espandi tutto'),
-          ),
-        );
-      },
     );
   }
 }

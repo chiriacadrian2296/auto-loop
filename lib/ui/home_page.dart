@@ -410,6 +410,18 @@ class _HomePageState extends State<HomePage> {
     return null;
   }
 
+  /// Everything a start needs, in order, and whether it is in place.
+  List<(String, bool)> _requirements() {
+    final s = engine.settings;
+    final exe = s.executable;
+    return [
+      ('il file del piano', _planPath != null && engine.plan != null && _loadError == null),
+      ('la cartella di lavoro', _workDir != null && Directory(_workDir!).existsSync()),
+      ('la CLI di ${s.agent.label}', exe.isNotEmpty && File(exe).existsSync()),
+      ('l\'accesso a ${s.agent.label}', _accounts[s.agent]?.loggedIn ?? false),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final active = engine.isActive;
@@ -457,6 +469,7 @@ class _HomePageState extends State<HomePage> {
                                         PanelHeader(
                                           'Pannello di controllo',
                                           actions: [
+                                            SettingsPanel.expandAllButton(),
                                             IconButton(
                                               tooltip: 'Chiudi il pannello',
                                               onPressed: () => _setSidebar(false),
@@ -476,6 +489,7 @@ class _HomePageState extends State<HomePage> {
                                             accounts: _accounts,
                                             onOpenAccounts: _openAccounts,
                                             issues: {?blocker?.$1},
+                                            requirements: _requirements(),
                                             projectDir: _projectDir,
                                             onPickPlan: _pickPlan,
                                             onPickWorkDir: _pickWorkDir,
@@ -504,6 +518,7 @@ class _HomePageState extends State<HomePage> {
                                 PanelHeader(
                                   'Avanzamento',
                                   actions: [
+                                    if (engine.plan != null) BlocksPanel.expandAllButton(),
                                     IconButton(
                                       tooltip: 'Apri il piano nell\'editor',
                                       onPressed: _planPath == null ? null : _openPlanInEditor,
