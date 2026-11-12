@@ -623,6 +623,8 @@ class _InvocationHeader extends StatefulWidget {
 }
 
 class _InvocationHeaderState extends State<_InvocationHeader> {
+  bool _hover = false;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -642,33 +644,48 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
         ),
     ];
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 6, bottom: 2),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: widget.onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: _gutter,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: SectionChevron(open: widget.open),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 6, bottom: 2),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: _gutter,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SectionChevron(open: widget.open),
+                    ),
                   ),
-                ),
-                Text(
-                  invocation == null ? 'Invocazione' : 'Invocazione $invocation',
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
-                ),
-                if (badge != null) ...[const SizedBox(width: 10), badge],
-                // Always shown, lined up on the right with the time.
-                RightStats(stats: stats),
-                SectionTime(_clock(start)),
-              ],
+                  Text(
+                    invocation == null ? 'Invocazione' : 'Invocazione $invocation',
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
+                  ),
+                  if (badge != null) ...[const SizedBox(width: 10), badge],
+                  // Lined up on the right with the time, shown on hover like
+                  // the times of the lines (blocks show theirs always).
+                  Expanded(
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 120),
+                      opacity: _hover ? 1 : 0,
+                      child: Row(children: [RightStats(stats: stats)]),
+                    ),
+                  ),
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: _hover ? 1 : 0,
+                    child: SectionTime(_clock(start)),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

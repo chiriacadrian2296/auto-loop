@@ -101,7 +101,13 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
       LogEntry(LogKind.tool, 'Verifica: npx html-validate index.html', at: at(70)),
       LogEntry(LogKind.success, 'Verifica superata in 8 s · 0 errori in 3 file', at: at(78)),
       LogEntry(LogKind.success, 'Commit 4f2a9c1 · 3 file · +142 −18', at: at(79)),
-      LogEntry(LogKind.result, 'Blocco completato.', at: at(79), outcome: RunOutcome.done),
+      LogEntry(
+        LogKind.result,
+        'Sezione progetti con sei card responsive, link ai repository e immagini ottimizzate; '
+        'sotto i 640 px le card passano a una colonna.',
+        at: at(79),
+        outcome: RunOutcome.done,
+      ),
       LogEntry(LogKind.info, '▶ Blocco 4/6 «Modulo contatti» — invocazione 1', at: at(110)),
       LogEntry(
         LogKind.task,

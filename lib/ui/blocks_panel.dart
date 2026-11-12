@@ -202,7 +202,6 @@ class _BlocksPanelState extends State<BlocksPanel> {
           label: '$done di $total blocchi completati',
           color: finished ? c.success : null,
         ),
-        if (finished) _Summary(engine: engine),
         Expanded(
           flex: 3,
           child: ListView(
@@ -258,57 +257,74 @@ class _MenuRow extends StatelessWidget {
   }
 }
 
-/// Shown above the list once every block is done: what the whole plan took.
-class _Summary extends StatelessWidget {
-  const _Summary({required this.engine});
-  final LoopEngine engine;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final s = engine.state!;
-    Widget stat(String value, String label) => Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
-          ),
-          Text(label, style: TextStyle(fontSize: 11.5, color: c.muted)),
-        ],
+/// Opens once every block is done: what the whole plan took.
+Future<void> showPlanCompleted(BuildContext context, LoopEngine engine) {
+  final c = context.colors;
+  final s = engine.state!;
+  Widget stat(String value, String label) => Expanded(
+    child: Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text),
+        ),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 12, color: c.muted)),
+      ],
+    ),
+  );
+  return showDialog<void>(
+    context: context,
+    builder: (context) => Dialog(
+      backgroundColor: c.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: c.border),
       ),
-    );
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(color: c.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 26, 24, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.celebration_outlined, size: 18, color: c.success),
-              const SizedBox(width: 8),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(color: c.success.withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: Icon(Icons.celebration_outlined, size: 26, color: c.success),
+              ),
+              const SizedBox(height: 14),
               Text(
                 'Piano completato',
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: c.success),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Tutti i ${engine.plan!.blocks.length} blocchi sono stati svolti.',
+                style: TextStyle(fontSize: 13, color: c.muted),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  stat(_duration(engine.totalTime.inSeconds), 'tempo'),
+                  stat(_tokens(s.totalTokens), 'token'),
+                  stat('${s.runs}', s.runs == 1 ? 'invocazione' : 'invocazioni'),
+                  stat('${s.commits}', 'commit'),
+                ],
+              ),
+              const SizedBox(height: 22),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Chiudi')),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              stat(_duration(engine.totalTime.inSeconds), 'tempo'),
-              stat(_tokens(s.totalTokens), 'token'),
-              stat('${s.runs}', s.runs == 1 ? 'invocazione' : 'invocazioni'),
-              stat('${s.commits}', s.commits == 1 ? 'commit' : 'commit'),
-            ],
-          ),
-        ],
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _TimelineItem extends StatelessWidget {

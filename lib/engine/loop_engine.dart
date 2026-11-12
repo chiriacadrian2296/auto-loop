@@ -537,7 +537,9 @@ class LoopEngine extends ChangeNotifier {
         bs.note = summary;
         bs.feedback = '';
         state.save(dir);
-        _result(RunOutcome.done, 'Blocco completato.');
+        // Says what was done, like the task says what to do.
+        final what = _whatWasDone(summary);
+        _result(RunOutcome.done, what.isEmpty ? 'Blocco completato.' : what);
         return _RunResult.blockDone;
       case AgentVerdict.blocked:
         bs.status = BlockStatus.blocked;
@@ -590,6 +592,17 @@ class LoopEngine extends ChangeNotifier {
     state?.save(workDir!);
     final rest = e.text.replaceAll(_progressLine, '').replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
     return rest.isEmpty ? null : LogEntry(e.kind, rest, at: e.at);
+  }
+
+  /// The agent's own account of the block, short: its first paragraph
+  /// (or list) that is not just a heading.
+  static String _whatWasDone(String summary) {
+    final paragraphs = summary
+        .split(RegExp(r'\n\s*\n'))
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty && !RegExp(r'^#+\s').hasMatch(p) && !p.startsWith('```'));
+    final first = paragraphs.firstOrNull ?? '';
+    return first.length > 600 ? '${first.substring(0, 600)}…' : first;
   }
 
   String _summary(String text) {

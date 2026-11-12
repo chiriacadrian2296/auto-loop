@@ -52,7 +52,11 @@ class _HomePageState extends State<HomePage> {
     _workDir = widget.prefs.getString('workDir');
     _planPath = widget.prefs.getString('planPath');
     engine.addListener(_onEngine);
-    engine.onAttention = Notifier.show;
+    engine.onAttention = (title, body) {
+      Notifier.show(title, body);
+      // The plan's summary opens as a popup over the window.
+      if (title == 'Piano completato' && mounted) showPlanCompleted(context, engine);
+    };
     HardwareKeyboard.instance.addHandler(_onKey);
     // Re-render once a second for countdowns and elapsed time.
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -613,129 +617,124 @@ class _TopBar extends StatelessWidget {
       ? '${(n / 1000).toStringAsFixed(1)}k'
       : '$n';
 
-  /// What is happening right now, beyond the status label: the block being
-  /// worked on, or why the loop stopped on its own. Nothing when idle.
-  (String, String?)? _context() {
-    final plan = engine.plan;
-    final i = engine.currentBlock;
-    if (plan == null) return null;
-    switch (engine.phase) {
-      case LoopPhase.running || LoopPhase.verifying || LoopPhase.stopping || LoopPhase.waiting when i != null:
-        final b = plan.blocks[i];
-        return (
-          'Blocco ${i + 1} di ${plan.blocks.length}',
-          '${b.title} · invocazione ${engine.blockState(b).attempts}',
-        );
-      case LoopPhase.paused when !const ['In pausa.', 'Fermato.', ''].contains(engine.statusMessage):
-        return (engine.statusMessage, null);
-      default:
-        return null;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final state = engine.state;
-    final width = MediaQuery.sizeOf(context).width;
     final active = engine.isActive;
     final paused = engine.phase == LoopPhase.paused;
-    final context_ = _context();
 
-    Widget divider() =>
-        Container(width: 1, height: 24, margin: const EdgeInsets.symmetric(horizontal: 18), color: c.border);
+    // Only the controls that make sense right now.
+    final controls = active
+        ? [
+            _RoundAction(
+              icon: Icons.pause_rounded,
+              tooltip: engine.pauseRequested
+                  ? 'Pausa richiesta: si ferma alla fine del passo'
+                  : 'Pausa alla fine del passo (Spazio)',
+              onPressed: onPause,
+            ),
+            const SizedBox(width: 8),
+            _RoundAction(
+              icon: Icons.stop_rounded,
+              tooltip: 'Ferma ora (Maiusc+Spazio)',
+              onPressed: onStop,
+              danger: true,
+            ),
+          ]
+        : [
+            _RoundAction(
+              icon: Icons.play_arrow_rounded,
+              tooltip: engine.phase == LoopPhase.finished
+                  ? 'Piano completato'
+                  : paused
+                  ? 'Riprendi (Spazio)'
+                  : 'Avvia (Spazio)',
+              onPressed: onStart,
+              primary: true,
+            ),
+          ];
 
-    // Reading order, left to right: brand │ controls + status │ what is
-    // happening + numbers. The right edge keeps only the window buttons.
-    return Column(
+    // The name alone on the left; the controls in the middle, between the
+    // time spent and the tokens used; the window buttons on the right.
+    return Row(
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: WindowDragArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 16, 12, 16),
-                  child: Row(
-                    children: [
-                      const LogoMark(size: 28),
-                      const SizedBox(width: 10),
-                      Text(
-                        'AutoLoop',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
-                      ),
-                      divider(),
-                      // Only the controls that make sense right now.
-                      if (active) ...[
-                        _RoundAction(
-                          icon: Icons.pause_rounded,
-                          tooltip: engine.pauseRequested
-                              ? 'Pausa richiesta: si ferma alla fine del passo'
-                              : 'Pausa alla fine del passo (Spazio)',
-                          onPressed: onPause,
+        Expanded(
+          child: WindowDragArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 16, 12, 16),
+              child: Row(
+                children: [
+                  const LogoMark(size: 28),
+                  const SizedBox(width: 10),
+                  Text(
+                    'AutoLoop',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
+                  ),
+                  const Spacer(),
+                ],
+              ),
+            ),
+          ),
+        ),
+        WindowDragArea(
+          child: Row(
+            children: [
+              SizedBox(
+                width: 150,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: state == null
+                      ? null
+                      : FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: _Stat(value: _fmt(engine.totalTime), label: 'tempo'),
                         ),
-                        const SizedBox(width: 8),
-                        _RoundAction(
-                          icon: Icons.stop_rounded,
-                          tooltip: 'Ferma ora (Maiusc+Spazio)',
-                          onPressed: onStop,
-                          danger: true,
+                ),
+              ),
+              const SizedBox(width: 18),
+              ...controls,
+              const SizedBox(width: 18),
+              SizedBox(
+                width: 150,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: state == null
+                      ? null
+                      : FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: _Stat(value: _compact(state.totalTokens), label: 'token'),
                         ),
-                      ] else
-                        _RoundAction(
-                          icon: Icons.play_arrow_rounded,
-                          tooltip: engine.phase == LoopPhase.finished
-                              ? 'Piano completato'
-                              : paused
-                              ? 'Riprendi (Spazio)'
-                              : 'Avvia (Spazio)',
-                          onPressed: onStart,
-                          primary: true,
-                        ),
-                      const SizedBox(width: 12),
-                      _StatusPill(engine: engine, format: _fmt),
-                      if (blocker case (final reason, final fix)) ...[
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: _BlockerChip(reason: reason, onTap: fix),
-                        ),
-                      ],
-                      if (state != null || context_ != null) divider(),
-                      if (state != null && width >= 1100) ...[
-                        _Stat(value: _compact(state.totalTokens), label: 'token'),
-                        const SizedBox(width: 16),
-                        _Stat(value: _fmt(engine.totalTime), label: 'tempo'),
-                      ],
-                      if (context_ case (final headline, final detail)) ...[
-                        if (state != null && width >= 1100) divider(),
-                        Expanded(
-                          child: Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: headline,
-                                  style: TextStyle(fontWeight: FontWeight.w600, color: c.text),
-                                ),
-                                if (detail != null) TextSpan(text: '  ·  $detail'),
-                              ],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: c.muted, fontSize: 13),
-                          ),
-                        ),
-                      ] else
-                        const Spacer(),
-                    ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: WindowDragArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: blocker == null
+                          ? const SizedBox(height: 36)
+                          : _BlockerChip(reason: blocker!.$1, onTap: blocker!.$2),
+                    ),
                   ),
                 ),
               ),
-            ),
-            // Window frame: the theme switch sits with the window buttons.
-            WindowButtons(
-              leading: [ThemeCaptionButton(mode: themeMode, onChanged: onThemeChanged)],
-            ),
-          ],
+              // Window frame: the theme switch sits with the window buttons.
+              Align(
+                alignment: Alignment.topCenter,
+                child: WindowButtons(
+                  leading: [ThemeCaptionButton(mode: themeMode, onChanged: onThemeChanged)],
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -846,58 +845,6 @@ class _BlockerChip extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.engine, required this.format});
-  final LoopEngine engine;
-  final String Function(Duration) format;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final color = switch (engine.phase) {
-      LoopPhase.running || LoopPhase.verifying || LoopPhase.waiting => c.primary,
-      LoopPhase.quotaWait => c.warning,
-      LoopPhase.finished => c.success,
-      LoopPhase.paused || LoopPhase.stopping => c.danger,
-      LoopPhase.idle => c.muted,
-    };
-    String? timer;
-    if (engine.waitUntil != null) {
-      final left = engine.waitUntil!.difference(DateTime.now());
-      timer = format(left.isNegative ? Duration.zero : left);
-    } else if (engine.runStartedAt != null) {
-      timer = format(DateTime.now().difference(engine.runStartedAt!));
-    }
-    return Container(
-      height: 36,
-      padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(99)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _PulseDot(color: color, pulsing: engine.phase == LoopPhase.running || engine.phase == LoopPhase.verifying),
-          const SizedBox(width: 8),
-          Text(
-            engine.phase.label,
-            style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
-          ),
-          if (timer != null) ...[
-            const SizedBox(width: 6),
-            Text(
-              timer,
-              style: TextStyle(
-                color: color.withValues(alpha: 0.8),
-                fontSize: 12.5,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
