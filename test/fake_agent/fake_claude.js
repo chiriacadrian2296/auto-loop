@@ -17,6 +17,8 @@ process.stdin.on('end', () => {
     process.exit(1);
   }
   emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write', input: { file_path: `out${block}.txt` } }] } });
+  // Reports its steps the way the prompt asks: one of three per invocation.
+  emit({ type: 'assistant', message: { content: [{ type: 'text', text: `AUTOLOOP_PROGRESS: ${attempt}/3` }] } });
   let status;
   if (attempt === 1) {
     status = 'CONTINUE';

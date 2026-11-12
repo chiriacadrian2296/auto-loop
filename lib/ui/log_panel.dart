@@ -3,6 +3,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../engine/agents.dart';
 import '../engine/loop_engine.dart';
+import '../engine/loop_state.dart';
+import '../engine/plan_parser.dart';
 import '../engine/settings.dart';
 import 'agent_badge.dart';
 import 'app_theme.dart';
@@ -408,6 +410,7 @@ class _LogPanelState extends State<LogPanel> {
             ),
           ],
         ),
+        if (_focusBlock(engine, groups) case final block?) _BlockProgress(engine: engine, block: block),
         Expanded(
           child: rows.isEmpty
               ? Center(
@@ -943,4 +946,96 @@ class _Chevron extends StatelessWidget {
     decoration: BoxDecoration(color: color.field, borderRadius: BorderRadius.circular(6)),
     child: Icon(Icons.expand_more_rounded, size: 18, color: color.muted),
   );
+}
+
+/// The block the log is about: the one running, otherwise the latest one
+/// that appears in the log.
+PlanBlock? _focusBlock(LoopEngine engine, List<_Group> groups) {
+  final plan = engine.plan;
+  if (plan == null) return null;
+  final current = engine.currentBlock;
+  if (current != null && current < plan.blocks.length) return plan.blocks[current];
+  final last = groups.lastWhere((g) => g.header != null, orElse: () => _Group(null)).header;
+  if (last == null) return null;
+  final n = int.tryParse(RegExp(r'Blocco (\d+)/').firstMatch(last.text)?.group(1) ?? '');
+  return n == null || n < 1 || n > plan.blocks.length ? null : plan.blocks[n - 1];
+}
+
+/// How far the block in the log has got: the steps the agent reports or,
+/// until it reports any, the invocations used out of those allowed.
+class _BlockProgress extends StatelessWidget {
+  const _BlockProgress({required this.engine, required this.block});
+  final LoopEngine engine;
+  final PlanBlock block;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final s = engine.blockState(block);
+    final max = engine.settings.maxAttemptsPerBlock;
+    final steps = s.stepsTotal > 0;
+    final done = s.status == BlockStatus.done;
+    final ratio = done
+        ? 1.0
+        : steps
+        ? s.stepsDone / s.stepsTotal
+        : (s.attempts / max).clamp(0.0, 1.0);
+    final label = steps
+        ? '${s.stepsDone} di ${s.stepsTotal} passi'
+        : done
+        ? 'Completato'
+        : '${s.attempts} di $max invocazioni';
+    final color = switch (s.status) {
+      BlockStatus.done => c.success,
+      BlockStatus.blocked => c.danger,
+      _ => c.primary,
+    };
+    return Tooltip(
+      message: steps
+          ? 'Passi segnalati dall\'agente'
+          : 'L\'agente non ha ancora segnalato i passi: invocazioni usate sul massimo consentito',
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${block.index + 1}. ${block.title}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: ratio),
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, _) => LinearProgressIndicator(
+                        value: v,
+                        minHeight: 8,
+                        backgroundColor: color.withValues(alpha: 0.15),
+                        color: color,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${(ratio * 100).round()}%',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(label, style: TextStyle(fontSize: 12, color: c.muted)),
+          ],
+        ),
+      ),
+    );
+  }
 }

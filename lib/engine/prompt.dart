@@ -21,6 +21,7 @@ String buildPrompt({
   required String progress,
   required String feedback,
   required List<String> completedTitles,
+  (int, int)? steps,
 }) {
   final n = plan.blocks.length;
   final verify = settings.verifyCommand.trim();
@@ -85,6 +86,19 @@ String buildPrompt({
       'DONE = il blocco corrente è completo e verificato. CONTINUE = hai fatto progressi ma '
       'resta lavoro (verrai richiamato). BLOCKED = impossibile procedere senza un intervento '
       'umano (credenziali, decisioni di business, risorse mancanti). Usa BLOCKED solo come ultima risorsa.',
+    )
+    ..writeln()
+    ..writeln('## Avanzamento del blocco')
+    ..writeln(
+      'All\'inizio dividi il compito del blocco in passi concreti. Ogni volta che ne completi '
+      'uno, scrivi in un tuo messaggio una riga a sé così: AUTOLOOP_PROGRESS: <fatti>/<totale> '
+      '(per esempio AUTOLOOP_PROGRESS: 2/5). Mantieni lo stesso totale tra un\'invocazione e '
+      'l\'altra; cambialo solo se scopri che i passi sono davvero di più o di meno.',
+    )
+    ..writeln(
+      steps == null
+          ? 'Finora non hai segnalato passi per questo blocco.'
+          : 'Finora hai segnalato: AUTOLOOP_PROGRESS: ${steps.$1}/${steps.$2}.',
     )
     ..writeln()
     ..writeln('## Piano completo (contesto)')

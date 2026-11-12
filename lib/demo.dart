@@ -78,6 +78,10 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
       'Serve la chiave del servizio di invio email: non posso crearla da solo.',
     );
     set(4, BlockStatus.pending, 1, 16, 207600);
+    // Steps the agent reported for the blocked block: four of five done.
+    state.of(plan.blocks[3].id)
+      ..stepsDone = 4
+      ..stepsTotal = 5;
     state.save(dir.path);
 
     final t = DateTime.now().subtract(const Duration(minutes: 12));

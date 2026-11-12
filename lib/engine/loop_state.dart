@@ -24,6 +24,8 @@ class BlockState {
     this.activeSeconds = 0,
     this.inputTokens = 0,
     this.outputTokens = 0,
+    this.stepsDone = 0,
+    this.stepsTotal = 0,
   });
 
   BlockStatus status;
@@ -43,7 +45,13 @@ class BlockState {
 
   int get totalTokens => inputTokens + outputTokens;
 
+  /// Steps the agent reported with AUTOLOOP_PROGRESS (0 of 0: none yet).
+  int stepsDone;
+  int stepsTotal;
+
   Map<String, Object?> toJson() => {
+    'stepsDone': stepsDone,
+    'stepsTotal': stepsTotal,
     'status': status.name,
     'attempts': attempts,
     'note': note,
@@ -61,6 +69,8 @@ class BlockState {
     activeSeconds: j['activeSeconds'] as int? ?? 0,
     inputTokens: j['inputTokens'] as int? ?? 0,
     outputTokens: j['outputTokens'] as int? ?? 0,
+    stepsDone: j['stepsDone'] as int? ?? 0,
+    stepsTotal: j['stepsTotal'] as int? ?? 0,
   );
 }
 

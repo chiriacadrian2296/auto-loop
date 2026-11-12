@@ -124,6 +124,8 @@ class LoopEngine extends ChangeNotifier {
       s.attempts = 0;
       s.feedback = '';
       s.note = '';
+      s.stepsDone = 0;
+      s.stepsTotal = 0;
     }
     state!.save(workDir!);
     if (!isActive) {
@@ -403,6 +405,7 @@ class LoopEngine extends ChangeNotifier {
       planName: p.basename(planPath!),
       progress: progressFile.readAsStringSync(),
       feedback: bs.feedback,
+      steps: bs.stepsTotal > 0 ? (bs.stepsDone, bs.stepsTotal) : null,
       completedTitles: [
         for (final b in plan.blocks)
           if (state.of(b.id).status == BlockStatus.done) b.title,
@@ -443,7 +446,8 @@ class LoopEngine extends ChangeNotifier {
         onLine: (line, stderr) {
           lastOutputAt = DateTime.now();
           for (final e in stream.handle(line, stderr: stderr)) {
-            _addLog(e);
+            final shown = _takeProgress(e, bs);
+            if (shown != null) _addLog(shown);
           }
           notifyListeners();
         },
@@ -529,6 +533,7 @@ class LoopEngine extends ChangeNotifier {
         }
         await _commit(block);
         bs.status = BlockStatus.done;
+        if (bs.stepsTotal > 0) bs.stepsDone = bs.stepsTotal;
         bs.note = summary;
         bs.feedback = '';
         state.save(dir);
@@ -565,8 +570,33 @@ class LoopEngine extends ChangeNotifier {
     return m < 60 ? '$m min' : '${m ~/ 60} h ${m % 60} min';
   }
 
+  static final _progressLine = RegExp(
+    r'^[ \t>*_`-]*AUTOLOOP_PROGRESS:\s*(\d+)\s*/\s*(\d+)[ \t*_`.]*$',
+    multiLine: true,
+    caseSensitive: false,
+  );
+
+  /// Reads the agent's AUTOLOOP_PROGRESS lines into the block's steps and
+  /// removes them from what is shown; null when nothing else is left.
+  LogEntry? _takeProgress(LogEntry e, BlockState bs) {
+    if (e.kind != LogKind.agent || !e.text.toUpperCase().contains('AUTOLOOP_PROGRESS')) return e;
+    for (final m in _progressLine.allMatches(e.text)) {
+      final done = int.parse(m.group(1)!), total = int.parse(m.group(2)!);
+      if (total > 0 && total < 1000) {
+        bs.stepsTotal = total;
+        bs.stepsDone = done.clamp(0, total);
+      }
+    }
+    state?.save(workDir!);
+    final rest = e.text.replaceAll(_progressLine, '').replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+    return rest.isEmpty ? null : LogEntry(e.kind, rest, at: e.at);
+  }
+
   String _summary(String text) {
-    final cleaned = text.replaceAll(RegExp(r'AUTOLOOP_STATUS:[^\n]*', caseSensitive: false), '').trim();
+    final cleaned = text
+        .replaceAll(RegExp(r'AUTOLOOP_STATUS:[^\n]*', caseSensitive: false), '')
+        .replaceAll(_progressLine, '')
+        .trim();
     return cleaned.length > 4000 ? '…${cleaned.substring(cleaned.length - 4000)}' : cleaned;
   }
 

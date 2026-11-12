@@ -178,12 +178,16 @@ testo
       expect(engine.state!.totalTokens, 440);
       for (final b in engine.plan!.blocks) {
         expect(engine.blockState(b).totalTokens, 220); // two invocations of 110 tokens
+        // Steps reported with AUTOLOOP_PROGRESS; a completed block is complete.
+        expect((engine.blockState(b).stepsDone, engine.blockState(b).stepsTotal), (3, 3));
       }
       expect(engine.state!.commits, 2);
       // Every invocation closes with one result line that says how it ended.
       final results = engine.logs.where((e) => e.kind == LogKind.result).toList();
       expect(results, hasLength(4));
       expect(results.map((e) => e.outcome).toSet(), {RunOutcome.again, RunOutcome.done});
+      // Progress lines are read, not shown.
+      expect(engine.logs.map((e) => e.text), everyElement(isNot(contains('AUTOLOOP_PROGRESS'))));
       // The readable export used by "Apri i log".
       final text = engine.exportActivity()!.readAsStringSync();
       expect(text, allOf(contains('── Blocco 1/2'), contains('AGENTE'), contains('OK')));
