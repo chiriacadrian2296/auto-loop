@@ -9,6 +9,7 @@ import '../engine/settings.dart';
 import 'agent_badge.dart';
 import 'app_theme.dart';
 import 'markdown_text.dart';
+import 'section_title.dart';
 
 enum _Filter {
   all('Tutto'),
@@ -545,84 +546,24 @@ class _BlockHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final stats = [
-      IconStat(Icons.replay_rounded, '$invocations', invocations == 1 ? '1 invocazione' : '$invocations invocazioni'),
-      if (time.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(time), 'Durata totale'),
-      if (tokensIn + tokensOut > 0)
-        IconStat(Icons.toll_outlined, _k(tokensIn + tokensOut), 'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out'),
-    ];
     return Padding(
       padding: EdgeInsets.only(top: gap, bottom: 2),
-      child: Material(
-        color: highlighted ? c.primarySoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: _sidePad),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: _gutter,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: AnimatedRotation(
-                      turns: open ? 0 : -0.25,
-                      duration: const Duration(milliseconds: 160),
-                      child: _Chevron(color: c),
-                    ),
-                  ),
-                ),
-                Flexible(
-                  child: Text(
-                    number == null ? title : '$number. $title',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
-                  ),
-                ),
-                if (_badge(outcome, c) case final badge?) ...[const SizedBox(width: 10), badge],
-                _StatsAfterDash(stats: stats),
-              ],
-            ),
+      child: SectionTitle(
+        title: number == null ? title : '$number. $title',
+        open: open,
+        onTap: onTap,
+        highlighted: highlighted,
+        badge: _badge(outcome, c),
+        stats: [
+          IconStat(
+            Icons.replay_rounded,
+            '$invocations',
+            invocations == 1 ? '1 invocazione' : '$invocations invocazioni',
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// "– icon value  icon value", leaving out the stats that do not fit.
-class _StatsAfterDash extends StatelessWidget {
-  const _StatsAfterDash({required this.stats});
-  final List<IconStat> stats;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Expanded(
-      child: LayoutBuilder(
-        builder: (context, box) {
-          var used = 36.0; // dash and its padding, with a little slack
-          final shown = <IconStat>[];
-          for (final s in stats) {
-            final w = s.width(context) + (shown.isEmpty ? 0 : 14);
-            if (used + w > box.maxWidth) break;
-            used += w;
-            shown.add(s);
-          }
-          if (shown.isEmpty) return const SizedBox.shrink();
-          return Row(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Text('–', style: TextStyle(fontSize: 12.5, color: c.muted)),
-              ),
-              for (final (i, w) in shown.indexed) ...[if (i > 0) const SizedBox(width: 14), w],
-            ],
-          );
-        },
+          if (time.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(time), 'Durata totale'),
+          if (tokensIn + tokensOut > 0)
+            IconStat(Icons.toll_outlined, _k(tokensIn + tokensOut), 'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out'),
+        ],
       ),
     );
   }
@@ -699,11 +640,7 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
                     width: _gutter,
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: AnimatedRotation(
-                        turns: widget.open ? 0 : -0.25,
-                        duration: const Duration(milliseconds: 160),
-                        child: _Chevron(color: c),
-                      ),
+                      child: SectionChevron(open: widget.open),
                     ),
                   ),
                   Text(
@@ -759,12 +696,11 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
 /// Every line uses the same grid: [icon column] [text] [time], so texts of
 /// all kinds start at the same place and times line up on the right.
 const _sidePad = 8.0;
-const _gutter = 28.0;
+const _gutter = sectionGutter;
 const _timeWidth = 64.0;
 const _indent = 22.0;
 
-/// Width of the open/close arrow; line icons are centred on it.
-const _arrow = 22.0;
+const _arrow = sectionArrow;
 
 /// Reassures that a quiet agent is still at work, and how long until the
 /// supervisor would restart it.
@@ -931,21 +867,6 @@ class _LogLineState extends State<_LogLine> {
       ),
     );
   }
-}
-
-/// The open/close arrow of block and invocation headers, on a dark square
-/// like the action buttons of the progress panel.
-class _Chevron extends StatelessWidget {
-  const _Chevron({required this.color});
-  final AppColors color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: _arrow,
-    height: _arrow,
-    decoration: BoxDecoration(color: color.field, borderRadius: BorderRadius.circular(6)),
-    child: Icon(Icons.expand_more_rounded, size: 18, color: color.muted),
-  );
 }
 
 /// The block the log is about: the one running, otherwise the latest one

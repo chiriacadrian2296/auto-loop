@@ -4,6 +4,7 @@ import '../engine/loop_engine.dart';
 import '../engine/loop_state.dart';
 import '../engine/plan_parser.dart';
 import 'app_theme.dart';
+import 'section_title.dart';
 
 String _invocations(int n) => n == 1 ? '1 invocazione' : '$n invocazioni';
 
@@ -47,8 +48,91 @@ class BlocksPanel extends StatefulWidget {
   State<BlocksPanel> createState() => _BlocksPanelState();
 }
 
+/// The groups the blocks are shown in, in this order.
+enum _Bucket {
+  done('Completati'),
+  active('In corso e bloccati'),
+  todo('Da fare'),
+  skipped('Saltati');
+
+  const _Bucket(this.label);
+  final String label;
+}
+
 class _BlocksPanelState extends State<BlocksPanel> {
   int? _selected;
+
+  /// Groups the user closed.
+  final _closed = <_Bucket>{};
+
+  _Bucket _bucketOf(PlanBlock b) {
+    final engine = widget.engine;
+    final s = engine.blockState(b);
+    if (engine.currentBlock == b.index && engine.isActive) return _Bucket.active;
+    return switch (s.status) {
+      BlockStatus.done => _Bucket.done,
+      BlockStatus.blocked => _Bucket.active,
+      BlockStatus.skipped => _Bucket.skipped,
+      BlockStatus.pending => s.attempts > 0 ? _Bucket.active : _Bucket.todo,
+    };
+  }
+
+  /// Title of a group: its name, an icon for how it is going, and the totals
+  /// of its blocks.
+  Widget _groupTitle(_Bucket bucket, List<PlanBlock> blocks, {required bool first}) {
+    final engine = widget.engine;
+    final c = context.colors;
+    var invocations = 0, seconds = 0, input = 0, output = 0;
+    for (final b in blocks) {
+      final s = engine.blockState(b);
+      invocations += s.attempts;
+      seconds += _blockSeconds(engine, b);
+      input += s.inputTokens;
+      output += s.outputTokens;
+    }
+    final running = blocks.any((b) => engine.currentBlock == b.index && engine.isActive);
+    final blocked = blocks.any((b) => engine.blockState(b).status == BlockStatus.blocked);
+    final Widget? badge = switch (bucket) {
+      _Bucket.done => Tooltip(
+        message: 'Completati',
+        child: Icon(Icons.check_circle_rounded, size: 15, color: c.success),
+      ),
+      _Bucket.active when running => Tooltip(
+        message: 'In corso',
+        child: SizedBox.square(dimension: 12, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
+      ),
+      _Bucket.active when blocked => Tooltip(
+        message: 'C\'è un blocco fermo',
+        child: Icon(Icons.error_rounded, size: 15, color: c.danger),
+      ),
+      _ => null,
+    };
+    final open = !_closed.contains(bucket);
+    return Padding(
+      padding: EdgeInsets.only(top: first ? 0 : 10, bottom: 2),
+      child: SectionTitle(
+        title: bucket.label,
+        open: open,
+        onTap: () => setState(() => open ? _closed.add(bucket) : _closed.remove(bucket)),
+        badge: badge,
+        stats: [
+          IconStat(
+            Icons.layers_outlined,
+            '${blocks.length}',
+            blocks.length == 1 ? '1 blocco' : '${blocks.length} blocchi',
+          ),
+          if (invocations > 0) IconStat(Icons.replay_rounded, '$invocations', _invocations(invocations)),
+          if (seconds > 0) IconStat(Icons.schedule_rounded, _duration(seconds), 'Durata totale'),
+          if (input + output > 0)
+            IconStat(
+              Icons.toll_outlined,
+              _tokens(input + output),
+              'Token: ${_tokens(input)} in / ${_tokens(output)} out',
+            ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _contextMenu(Offset position, PlanBlock block) async {
     final engine = widget.engine;
@@ -131,25 +215,34 @@ class _BlocksPanelState extends State<BlocksPanel> {
         const SizedBox(height: 6),
         Expanded(
           flex: 3,
-          child: ListView.builder(
+          child: ListView(
             padding: const EdgeInsets.fromLTRB(10, 4, 10, 12),
-            itemCount: total,
-            itemBuilder: (context, i) {
-              final b = plan.blocks[i];
-              return _TimelineItem(
-                engine: engine,
-                block: b,
-                isFirst: i == 0,
-                isLast: i == total - 1,
-                selected: _selected == i,
-                // Selecting a block shows its invocations in the activity log.
-                onTap: () {
-                  setState(() => _selected = i);
-                  if (engine.blockState(b).attempts > 0) widget.onShowInLog?.call(b);
-                },
-                onContextMenu: (pos) => _contextMenu(pos, b),
-              );
-            },
+            children: [
+              for (final bucket in _Bucket.values)
+                if (plan.blocks.where((b) => _bucketOf(b) == bucket).toList() case final blocks
+                    when blocks.isNotEmpty) ...[
+                  _groupTitle(
+                    bucket,
+                    blocks,
+                    first: bucket == _Bucket.values.firstWhere((x) => plan.blocks.any((b) => _bucketOf(b) == x)),
+                  ),
+                  if (!_closed.contains(bucket))
+                    for (final (k, b) in blocks.indexed)
+                      _TimelineItem(
+                        engine: engine,
+                        block: b,
+                        isFirst: k == 0,
+                        isLast: k == blocks.length - 1,
+                        selected: _selected == b.index,
+                        // Selecting a block shows its invocations in the activity log.
+                        onTap: () {
+                          setState(() => _selected = b.index);
+                          if (engine.blockState(b).attempts > 0) widget.onShowInLog?.call(b);
+                        },
+                        onContextMenu: (pos) => _contextMenu(pos, b),
+                      ),
+                ],
+            ],
           ),
         ),
       ],

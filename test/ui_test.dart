@@ -39,7 +39,7 @@ void main() {
     final sidebar = find.descendant(of: find.byType(SettingsPanel), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.textContaining('10 tentativi'), 200, scrollable: sidebar);
     expect(find.textContaining('10 tentativi'), findsOneWidget);
-    await tester.tap(find.text('RICHIAMO'));
+    await tester.tap(find.text('Richiamo'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Richiamo dopo'), findsOneWidget);
 
