@@ -51,7 +51,13 @@ class SectionTitle extends StatelessWidget {
     this.time,
     this.titleColor,
     this.highlighted = false,
+    this.icon,
+    this.iconIndent = 0,
   });
+
+  /// Shown in the column of the line icons, [iconIndent] after the arrow.
+  final Widget? icon;
+  final double iconIndent;
   final String title;
   final bool open, highlighted;
   final VoidCallback onTap;
@@ -78,7 +84,12 @@ class SectionTitle extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, box) {
               final room =
-                  box.maxWidth - sectionGutter - (time == null ? 0 : sectionTimeWidth) - (badge == null ? 0 : 26) - 120;
+                  box.maxWidth -
+                  sectionGutter -
+                  (icon == null ? 0 : iconIndent + sectionGutter) -
+                  (time == null ? 0 : sectionTimeWidth) -
+                  (badge == null ? 0 : 26) -
+                  120;
               final shown = fitStats(context, stats, room);
               return Row(
                 children: [
@@ -89,6 +100,19 @@ class SectionTitle extends StatelessWidget {
                       child: SectionChevron(open: open),
                     ),
                   ),
+                  if (icon != null) ...[
+                    SizedBox(width: iconIndent),
+                    SizedBox(
+                      width: sectionGutter,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: sectionArrow,
+                          child: Center(child: icon),
+                        ),
+                      ),
+                    ),
+                  ],
                   Expanded(
                     child: Row(
                       children: [

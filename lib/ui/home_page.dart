@@ -11,7 +11,6 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/accounts.dart';
-import '../engine/agents.dart';
 import '../engine/cli_locator.dart';
 import '../engine/loop_engine.dart';
 import '../engine/loop_state.dart';
@@ -158,6 +157,37 @@ class _HomePageState extends State<HomePage> {
     if (profile != engine.settings.profileId) _accounts.clear();
     setState(() {});
     await _detectClis();
+  }
+
+  /// Puts the project's settings back to their starting values, after
+  /// asking. The agent and its account stay as they are.
+  Future<void> _resetDefaults() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ripristinare le impostazioni predefinite?'),
+        content: Text(
+          'Modello, ragionamento, permessi, richiamo, quota, verifica, commit, suddivisione e istruzioni '
+          'tornano ai valori di partenza per questo progetto. Agente e account restano '
+          '${engine.settings.agent.label} e il profilo scelto.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ripristina')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final s = engine.settings;
+    final keep = (s.agent, s.profileId);
+    final strategy = s.strategy;
+    s.applyProject(LoopSettings().projectJson());
+    s
+      ..agent = keep.$1
+      ..profileId = keep.$2;
+    _saveSettings();
+    if (s.strategy != strategy) _reload();
+    setState(() {});
   }
 
   void _saveSettings() {
@@ -338,8 +368,8 @@ class _HomePageState extends State<HomePage> {
   /// same block still notifies.
   final _revealInLog = ValueNotifier<(int, int)?>(null);
 
-  /// A line clicked in the strip at the bottom, to show in the activity panel.
-  final _revealEntry = ValueNotifier<LogEntry?>(null);
+  /// The line chosen in the activity panel or the strip at the bottom.
+  final _selection = ActivitySelection();
 
   // The control panel no longer closes (the rail is kept for now).
   late bool _sidebarOpen = true;
@@ -476,6 +506,14 @@ class _HomePageState extends State<HomePage> {
                                         PanelHeader(
                                           'Pannello di controllo',
                                           titleActions: [SettingsPanel.expandAllButton()],
+                                          actions: [
+                                            IconButton(
+                                              tooltip: 'Ripristina predefiniti',
+                                              onPressed: active ? null : _resetDefaults,
+                                              iconSize: 19,
+                                              icon: const Icon(Icons.settings_backup_restore_rounded),
+                                            ),
+                                          ],
                                         ),
                                         Expanded(
                                           child: SettingsPanel(
@@ -563,7 +601,7 @@ class _HomePageState extends State<HomePage> {
                             child: LogPanel(
                               engine: engine,
                               reveal: _revealInLog,
-                              revealEntry: _revealEntry,
+                              selection: _selection,
                               onOpenLogs: engine.plan == null ? null : _openLogs,
                               onOpenProgress: _workDir == null ? null : _openProgress,
                             ),
@@ -579,11 +617,7 @@ class _HomePageState extends State<HomePage> {
                   blocker: blocker == null ? null : (blocker.$2, blocker.$3),
                   onPause: active && !engine.pauseRequested ? engine.requestPause : null,
                   onStop: active && engine.phase != LoopPhase.stopping ? _confirmStop : null,
-                  onReveal: (e) {
-                    // Cleared first, so clicking the same icon again still works.
-                    _revealEntry.value = null;
-                    _revealEntry.value = e;
-                  },
+                  selection: _selection,
                 ),
               ],
             ),
@@ -638,12 +672,12 @@ class _TopBar extends StatelessWidget {
 /// what it does where the app's name is, then the plan's totals and the
 /// whole activity as a strip of icons.
 class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.engine, this.blocker, this.onStart, this.onPause, this.onStop, this.onReveal});
+  const _BottomBar({required this.engine, this.blocker, this.onStart, this.onPause, this.onStop, this.selection});
 
   final LoopEngine engine;
 
-  /// Shows a line of the strip in the activity panel.
-  final ValueChanged<LogEntry>? onReveal;
+  /// The chosen line, shared with the activity panel.
+  final ActivitySelection? selection;
 
   /// Control panel, gap, progress panel: what the controls sit under.
   static const _leftPanelsWidth = 330.0 + 16 + 360;
@@ -713,45 +747,14 @@ class _BottomBar extends StatelessWidget {
                   children: [
                     // Lined up with the logo and the name in the title bar.
                     const SizedBox(width: 6),
-                    Tooltip(
-                      message: tooltip,
-                      child: Material(
-                        color: action == null ? c.border : c.primary,
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: action,
-                          child: SizedBox.square(
-                            dimension: 28,
-                            // The icon takes the colour of the background around it.
-                            child: Icon(icon, size: 18, color: c.background),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    MouseRegion(
-                      cursor: action == null ? MouseCursor.defer : SystemMouseCursors.click,
-                      child: GestureDetector(
-                        onTap: action,
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
-                            color: c.text,
-                          ),
-                        ),
-                      ),
-                    ),
+                    _MainAction(icon: icon, label: label, tooltip: tooltip, onTap: action),
                     if (active) ...[
-                      const SizedBox(width: 12),
-                      _RoundAction(
+                      const SizedBox(width: 22),
+                      _MainAction(
                         icon: Icons.stop_rounded,
+                        label: 'Ferma',
                         tooltip: 'Ferma ora (Maiusc+Spazio)',
-                        onPressed: onStop,
-                        danger: true,
+                        onTap: onStop,
                       ),
                     ],
                     if (blocker case (final reason, final fix)) ...[
@@ -784,7 +787,7 @@ class _BottomBar extends StatelessWidget {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: engine.logs.isEmpty ? const SizedBox() : ActivityStrip(engine: engine, onReveal: onReveal),
+                child: engine.logs.isEmpty ? const SizedBox() : ActivityStrip(engine: engine, selection: selection),
               ),
             ],
           ),
@@ -1006,32 +1009,6 @@ class _Stat extends StatelessWidget {
   }
 }
 
-class _RoundAction extends StatelessWidget {
-  const _RoundAction({required this.icon, required this.tooltip, this.onPressed, this.danger = false});
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: c.surface,
-        foregroundColor: danger ? c.danger : c.text,
-        disabledBackgroundColor: c.surface,
-        disabledForegroundColor: c.muted.withValues(alpha: 0.5),
-        side: BorderSide(color: c.border),
-        fixedSize: const Size(40, 40),
-      ),
-      icon: Icon(icon, size: 19),
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.icon, required this.title, required this.text, this.action});
   final IconData icon;
@@ -1066,6 +1043,50 @@ class _EmptyState extends StatelessWidget {
             ),
             if (action != null) ...[const SizedBox(height: 18), action!],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A control of the bottom bar: a round button whose icon takes the colour
+/// of the background, and its name, both clickable.
+class _MainAction extends StatelessWidget {
+  const _MainAction({required this.icon, required this.label, required this.tooltip, this.onTap});
+  final IconData icon;
+  final String label, tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(color: onTap == null ? c.border : c.primary, shape: BoxShape.circle),
+                child: Icon(icon, size: 18, color: c.background),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                  color: onTap == null ? c.muted : c.text,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

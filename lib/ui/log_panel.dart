@@ -11,6 +11,22 @@ import 'app_theme.dart';
 import 'markdown_text.dart';
 import 'section_title.dart';
 
+/// The line (or invocation start) chosen in the activity panel or in the
+/// strip at the bottom: both show it, and it stays chosen until something
+/// else, or empty space, is clicked.
+class ActivitySelection extends ChangeNotifier {
+  LogEntry? entry;
+
+  /// Who chose it, so that the other side follows (opens, scrolls).
+  Object? source;
+
+  void select(LogEntry? e, Object source) {
+    entry = e;
+    this.source = source;
+    notifyListeners();
+  }
+}
+
 /// The kinds of lines one can filter on.
 enum _Kind {
   messages('Messaggi', Icons.chat_bubble_outline_rounded),
@@ -155,23 +171,15 @@ String _span(Duration d) => d.inSeconds < 60
     : '${d.inHours} h ${d.inMinutes % 60} min';
 
 class LogPanel extends StatefulWidget {
-  const LogPanel({
-    super.key,
-    required this.engine,
-    this.onOpenLogs,
-    this.onOpenProgress,
-    this.reveal,
-    this.revealEntry,
-  });
+  const LogPanel({super.key, required this.engine, this.onOpenLogs, this.onOpenProgress, this.reveal, this.selection});
   final LoopEngine engine;
   final VoidCallback? onOpenLogs, onOpenProgress;
 
   /// Requests to show a block's invocations: (block index, request number).
   final ValueNotifier<(int, int)?>? reveal;
 
-  /// Requests to show one line (or an invocation's start), e.g. clicked in
-  /// the strip at the bottom of the window.
-  final ValueNotifier<LogEntry?>? revealEntry;
+  /// The chosen line, shared with the strip at the bottom of the window.
+  final ActivitySelection? selection;
 
   @override
   State<LogPanel> createState() => _LogPanelState();
@@ -197,13 +205,19 @@ class _LogPanelState extends State<LogPanel> {
 
   final _headerKeys = <LogEntry, GlobalKey>{};
 
-  /// Header briefly highlighted after "Mostra nel registro".
-  LogEntry? _flash;
+  /// The chosen line or header, highlighted until something else is chosen.
+  LogEntry? get _flash => widget.selection?.entry;
 
-  /// Opens what holds [target] and scrolls to it, briefly highlighted.
-  void _onRevealEntry() {
-    final target = widget.revealEntry?.value;
-    if (target == null) return;
+  void _select(LogEntry? e) => widget.selection?.select(e, this);
+
+  /// Chosen elsewhere (the strip, the progress panel): open what holds it
+  /// and scroll to it. Chosen here: just redraw the highlight.
+  void _onSelection() {
+    final target = widget.selection?.entry;
+    if (target == null || identical(widget.selection?.source, this)) {
+      if (mounted) setState(() {});
+      return;
+    }
     final groups = _groupLogs(widget.engine.logs);
     final group = groups
         .where((g) => identical(g.header, target) || g.entries.any((e) => identical(e, target)))
@@ -216,12 +230,8 @@ class _LogPanelState extends State<LogPanel> {
       if (!identical(group.header, target) && !_filter.accepts(target)) _filter = _Filter.all;
       _atBottom = false;
       _unseen = false;
-      _flash = target;
     });
     _scrollTo(target);
-    Future.delayed(const Duration(milliseconds: 1600), () {
-      if (mounted && identical(_flash, target)) setState(() => _flash = null);
-    });
   }
 
   /// Where the header to reveal sits among the rows (for lazy lists).
@@ -258,12 +268,8 @@ class _LogPanelState extends State<LogPanel> {
       _atBottom = false;
       _unseen = false;
       _toggled.removeAll(headers);
-      _flash = headers.first;
     });
-    _scrollTo(headers.first);
-    Future.delayed(const Duration(milliseconds: 1600), () {
-      if (mounted && identical(_flash, headers.first)) setState(() => _flash = null);
-    });
+    widget.selection?.select(headers.first, #progress);
   }
 
   /// Brings [header] into view; rows are built lazily, so jump close first.
@@ -288,7 +294,7 @@ class _LogPanelState extends State<LogPanel> {
   void initState() {
     super.initState();
     widget.reveal?.addListener(_onReveal);
-    widget.revealEntry?.addListener(_onRevealEntry);
+    widget.selection?.addListener(_onSelection);
     _scroll.addListener(() {
       if (!_scroll.hasClients) return;
       final bottom = _scroll.position.pixels >= _scroll.position.maxScrollExtent - 40;
@@ -304,7 +310,7 @@ class _LogPanelState extends State<LogPanel> {
   @override
   void dispose() {
     widget.reveal?.removeListener(_onReveal);
-    widget.revealEntry?.removeListener(_onRevealEntry);
+    widget.selection?.removeListener(_onSelection);
     _scroll.dispose();
     super.dispose();
   }
@@ -406,21 +412,21 @@ class _LogPanelState extends State<LogPanel> {
             highlighted: identical(head, _flash),
             // How the block ended here: as its latest invocation did.
             outcome: run.last.outcome(live: lastRun && engine.isActive),
-            onTap: () =>
-                setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head)),
+            onTap: () {
+              setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head));
+              _select(head);
+            },
           ),
         );
       }
       previousOpen = blockOpen;
       if (!blockOpen) continue;
-      // Invocations sit one step in from their block, like a tab.
-      final indent = head == null ? 0.0 : _indent;
-      Widget tab(Widget w) => indent == 0
-          ? w
-          : Padding(
-              padding: EdgeInsets.only(left: indent),
-              child: w,
-            );
+      // Invocations sit one step in from their block, their lines one more:
+      // the arrows step in, the icons all share one column.
+      Widget tab(Widget w, [int steps = 1]) => Padding(
+        padding: EdgeInsets.only(left: _indent * steps),
+        child: w,
+      );
       for (final g in run) {
         final visible = shown[g]!;
         if (_filter != _Filter.all && visible.isEmpty) continue;
@@ -440,7 +446,10 @@ class _LogPanelState extends State<LogPanel> {
                 group: g,
                 open: open,
                 live: last && engine.isActive,
-                onTap: () => setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
+                onTap: () {
+                  setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header));
+                  _select(header);
+                },
               ),
             ),
           );
@@ -456,7 +465,9 @@ class _LogPanelState extends State<LogPanel> {
                   key: target ? _headerKeys.putIfAbsent(e, GlobalKey.new) : null,
                   agent: engine.settings.agent,
                   highlighted: target,
+                  onTap: () => _select(e),
                 ),
+                2,
               ),
             );
           }
@@ -468,7 +479,12 @@ class _LogPanelState extends State<LogPanel> {
         ? DateTime.now().difference(engine.lastOutputAt!)
         : null;
     if (silent != null && silent.inSeconds >= 20 && _filter == _Filter.all) {
-      rows.add(_WorkingLine(silent: silent, limitMinutes: engine.settings.idleTimeoutMinutes));
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(left: _indent * 2),
+          child: _WorkingLine(silent: silent, limitMinutes: engine.settings.idleTimeoutMinutes),
+        ),
+      );
     }
 
     return Column(
@@ -517,12 +533,16 @@ class _LogPanelState extends State<LogPanel> {
                 )
               : Stack(
                   children: [
-                    SelectionArea(
-                      child: ListView.builder(
-                        controller: _scroll,
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-                        itemCount: rows.length,
-                        itemBuilder: (context, i) => rows[i],
+                    GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () => _select(null),
+                      child: SelectionArea(
+                        child: ListView.builder(
+                          controller: _scroll,
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+                          itemCount: rows.length,
+                          itemBuilder: (context, i) => rows[i],
+                        ),
                       ),
                     ),
                     if (_unseen && !_atBottom)
@@ -649,6 +669,8 @@ class _BlockHeading extends StatelessWidget {
       padding: EdgeInsets.only(top: gap, bottom: 2),
       child: SectionTitle(
         title: number == null ? title : '$number. $title',
+        icon: Icon(Icons.layers_outlined, size: 15, color: c.text),
+        iconIndent: sectionGutter,
         time: start == null ? null : _clock(start!),
         open: open,
         onTap: onTap,
@@ -752,6 +774,16 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
                       child: SectionChevron(open: widget.open),
                     ),
                   ),
+                  SizedBox(
+                    width: _gutter,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        width: _arrow,
+                        child: Center(child: Icon(Icons.replay_rounded, size: 15, color: c.text)),
+                      ),
+                    ),
+                  ),
                   Text(
                     invocation == null ? 'Invocazione' : 'Invocazione $invocation',
                     style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
@@ -786,7 +818,7 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
 const _sidePad = 8.0;
 const _gutter = sectionGutter;
 const _timeWidth = 64.0;
-const _indent = 22.0;
+const _indent = sectionGutter;
 
 const _arrow = sectionArrow;
 
@@ -830,9 +862,10 @@ class _WorkingLine extends StatelessWidget {
 }
 
 class _LogLine extends StatefulWidget {
-  const _LogLine(this.entry, {super.key, required this.agent, this.highlighted = false});
+  const _LogLine(this.entry, {super.key, required this.agent, this.highlighted = false, this.onTap});
   final LogEntry entry;
   final bool highlighted;
+  final VoidCallback? onTap;
   final AgentKind agent;
 
   @override
@@ -916,14 +949,17 @@ class _LogLineState extends State<_LogLine> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          color: widget.highlighted ? c.primarySoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: widget.highlighted ? c.primarySoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: EdgeInsets.symmetric(horizontal: _sidePad, vertical: roomy ? 7 : 3),
+          child: row,
         ),
-        padding: EdgeInsets.symmetric(horizontal: _sidePad, vertical: roomy ? 7 : 3),
-        child: row,
       ),
     );
   }
@@ -1018,11 +1054,11 @@ Widget _lineIcon(LogEntry e, AgentKind agent, AppColors c, {double size = 15}) {
 /// tooltip tells the line; block and invocation numbers mark where each
 /// invocation starts. Filtered like the activity log.
 class ActivityStrip extends StatefulWidget {
-  const ActivityStrip({super.key, required this.engine, this.onReveal});
+  const ActivityStrip({super.key, required this.engine, this.selection});
   final LoopEngine engine;
 
-  /// A click on an icon shows that line in the activity panel.
-  final ValueChanged<LogEntry>? onReveal;
+  /// The chosen line, shared with the activity panel.
+  final ActivitySelection? selection;
 
   @override
   State<ActivityStrip> createState() => _ActivityStripState();
@@ -1036,11 +1072,56 @@ class _ActivityStripState extends State<ActivityStrip> {
     return t.length > 280 ? '${t.substring(0, 280)}…' : t;
   }
 
-  /// Makes an item clickable: it shows [e] in the activity panel.
-  Widget _clickable(LogEntry e, Widget child) => MouseRegion(
-    cursor: widget.onReveal == null ? MouseCursor.defer : SystemMouseCursors.click,
-    child: GestureDetector(onTap: () => widget.onReveal?.call(e), child: child),
-  );
+  final _keys = <LogEntry, GlobalKey>{};
+  final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.selection?.addListener(_onSelection);
+  }
+
+  @override
+  void dispose() {
+    widget.selection?.removeListener(_onSelection);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Chosen in the activity panel: bring it into view here too.
+  void _onSelection() {
+    if (!mounted) return;
+    setState(() {});
+    final e = widget.selection?.entry;
+    if (e == null || identical(widget.selection?.source, this)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _keys[e]?.currentContext;
+      if (ctx != null) Scrollable.ensureVisible(ctx, alignment: 0.5, duration: const Duration(milliseconds: 250));
+    });
+  }
+
+  /// Makes an item clickable and marks it when chosen: it is shown in the
+  /// activity panel too.
+  Widget _clickable(LogEntry e, Widget child, {bool keyed = true}) {
+    final c = context.colors;
+    final chosen = identical(widget.selection?.entry, e);
+    return MouseRegion(
+      key: keyed ? _keys.putIfAbsent(e, GlobalKey.new) : null,
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => widget.selection?.select(e, this),
+        child: Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: chosen ? c.primarySoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: chosen ? c.primary : Colors.transparent, width: 1.5),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
 
   Widget _marker(IconData icon, String value, String tooltip) {
     final c = context.colors;
@@ -1055,7 +1136,7 @@ class _ActivityStripState extends State<ActivityStrip> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: c.muted),
+            Icon(icon, size: 13, color: c.text),
             const SizedBox(width: 3),
             Text(
               value,
@@ -1078,7 +1159,13 @@ class _ActivityStripState extends State<ActivityStrip> {
         final m = RegExp(r'Blocco (\d+)/\d+ «(.*)» — invocazione (\d+)').firstMatch(e.text);
         if (m == null) continue;
         if (m.group(1) != lastBlock) {
-          items.add(_clickable(e, _marker(Icons.layers_outlined, m.group(1)!, 'Blocco ${m.group(1)}: ${m.group(2)}')));
+          items.add(
+            _clickable(
+              e,
+              _marker(Icons.layers_outlined, m.group(1)!, 'Blocco ${m.group(1)}: ${m.group(2)}'),
+              keyed: false,
+            ),
+          );
         }
         lastBlock = m.group(1);
         items.add(
@@ -1111,20 +1198,35 @@ class _ActivityStripState extends State<ActivityStrip> {
         Expanded(
           child: items.isEmpty
               ? Text('Nessuna attività', style: TextStyle(fontSize: 12.5, color: c.muted))
-              // Newest on the right; older ones scroll away to the left. The
+              // Spread over the whole width while they fit; once they do not,
+              // the newest stay on the right and older ones scroll away. The
               // icons are strung on a line, like the progress timeline.
-              : Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Positioned(left: 0, right: 0, child: Container(height: 2, color: c.border)),
-                    ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      reverse: true,
-                      itemCount: items.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 6),
-                      itemBuilder: (context, i) => Center(child: items[items.length - 1 - i]),
-                    ),
-                  ],
+              : GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () => widget.selection?.select(null, this),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Positioned(left: 0, right: 0, child: Container(height: 2, color: c.border)),
+                      LayoutBuilder(
+                        builder: (context, box) => SingleChildScrollView(
+                          controller: _scroll,
+                          scrollDirection: Axis.horizontal,
+                          reverse: true,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minWidth: box.maxWidth),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                for (final w in items)
+                                  Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: w),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
         ),
       ],
