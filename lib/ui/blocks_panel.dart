@@ -434,8 +434,12 @@ class _Node extends StatelessWidget {
     final (Color bg, Widget child) = switch (status) {
       BlockStatus.done => (c.success, const Icon(Icons.check_rounded, size: 16, color: Colors.white)),
       BlockStatus.blocked => (c.danger, const Icon(Icons.priority_high_rounded, size: 15, color: Colors.white)),
-      BlockStatus.skipped => (c.muted.withValues(alpha: 0.18), Icon(Icons.redo_rounded, size: 14, color: c.muted)),
-      BlockStatus.pending => (c.muted.withValues(alpha: 0.28), number),
+      BlockStatus.skipped => (
+        Color.alphaBlend(c.muted.withValues(alpha: 0.18), c.surface),
+        Icon(Icons.redo_rounded, size: 14, color: c.muted),
+      ),
+      // Solid, so the line behind does not show through.
+      BlockStatus.pending => (Color.alphaBlend(c.muted.withValues(alpha: 0.28), c.surface), number),
     };
     return Container(
       width: size,

@@ -716,6 +716,9 @@ const _gutter = 28.0;
 const _timeWidth = 64.0;
 const _indent = 22.0;
 
+/// Width of the open/close arrow; line icons are centred on it.
+const _arrow = 22.0;
+
 /// Reassures that a quiet agent is still at work, and how long until the
 /// supervisor would restart it.
 class _WorkingLine extends StatelessWidget {
@@ -734,9 +737,14 @@ class _WorkingLine extends StatelessWidget {
             width: _gutter,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: SizedBox.square(
-                dimension: 13,
-                child: CircularProgressIndicator(strokeWidth: 2, color: c.primary.withValues(alpha: 0.7)),
+              child: SizedBox(
+                width: _arrow,
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 13,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: c.primary.withValues(alpha: 0.7)),
+                  ),
+                ),
               ),
             ),
           ),
@@ -834,7 +842,14 @@ class _LogLineState extends State<_LogLine> {
           width: _gutter,
           child: Padding(
             padding: EdgeInsets.only(top: e.kind == LogKind.tool ? 3 : 3.5),
-            child: Align(alignment: Alignment.topLeft, child: icon),
+            // Centred on the same axis as the headers' arrows.
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: _arrow,
+                child: Center(child: icon),
+              ),
+            ),
           ),
         ),
         Expanded(child: text),
@@ -879,8 +894,8 @@ class _Chevron extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 22,
-    height: 22,
+    width: _arrow,
+    height: _arrow,
     decoration: BoxDecoration(color: color.field, borderRadius: BorderRadius.circular(6)),
     child: Icon(Icons.expand_more_rounded, size: 18, color: color.muted),
   );
