@@ -209,6 +209,8 @@ class ActivityLog {
       LogKind.success: 'OK     ',
       LogKind.warning: 'AVVISO ',
       LogKind.error: 'ERRORE ',
+      LogKind.task: 'COMPITO',
+      LogKind.result: 'ESITO  ',
     };
     final b = StringBuffer('Attività di AutoLoop · $title\n\n');
     for (final e in entries) {

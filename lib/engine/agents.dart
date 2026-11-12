@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'settings.dart';
 
-enum LogKind { info, agent, tool, error, warning, success, system }
+/// [task] opens a block in the log (what to do), [result] closes it when it
+/// is completed (how it went, and the agent's summary).
+enum LogKind { info, agent, tool, error, warning, success, system, task, result }
 
 class LogEntry {
   LogEntry(this.kind, this.text, {DateTime? at}) : at = at ?? DateTime.now();

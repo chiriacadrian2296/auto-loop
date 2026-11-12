@@ -31,9 +31,8 @@ void main() {
     // No CLI configured in this test: Avvia explains why it is disabled.
     expect(find.text('Codex: CLI non trovata'), findsOneWidget);
 
-    await tester.tap(find.textContaining('Setup del progetto'));
-    await tester.pump();
-    expect(find.text('Segna completato'), findsOneWidget);
+    // Every pending block offers its actions as icon buttons on the tile.
+    expect(find.byTooltip('Segna completato'), findsWidgets);
 
     // Advanced sections start closed with a summary, and open on click.
     expect(find.text('Richiamo dopo'), findsNothing);

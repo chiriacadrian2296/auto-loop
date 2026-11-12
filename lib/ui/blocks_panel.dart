@@ -67,18 +67,12 @@ class _BlocksPanelState extends State<BlocksPanel> {
         side: BorderSide(color: c.border),
       ),
       items: [
-        PopupMenuItem(value: 'details', height: 40, child: _MenuRow(Icons.info_outline_rounded, 'Mostra dettagli')),
-        const PopupMenuDivider(height: 8),
         for (final (label, icon, target) in _actionsFor(status))
           PopupMenuItem(value: target, height: 40, enabled: !engine.isActive, child: _MenuRow(icon, label)),
       ],
     );
     if (!mounted || picked == null) return;
-    if (picked == 'details') {
-      setState(() => _selected = block.index);
-    } else if (picked is BlockStatus) {
-      engine.setBlockStatus(block, picked);
-    }
+    if (picked is BlockStatus) engine.setBlockStatus(block, picked);
   }
 
   @override
@@ -89,7 +83,6 @@ class _BlocksPanelState extends State<BlocksPanel> {
     final total = plan.blocks.length;
     final done = engine.doneCount;
     final ratio = total == 0 ? 0.0 : done / total;
-    final selected = _selected != null && _selected! < total ? plan.blocks[_selected!] : null;
     final finished = engine.phase == LoopPhase.finished;
 
     return Column(
@@ -152,27 +145,15 @@ class _BlocksPanelState extends State<BlocksPanel> {
                 isFirst: i == 0,
                 isLast: i == total - 1,
                 selected: _selected == i,
-                onTap: () => setState(() => _selected = _selected == i ? null : i),
+                // Selecting a block shows its invocations in the activity log.
+                onTap: () {
+                  setState(() => _selected = i);
+                  if (engine.blockState(b).attempts > 0) widget.onShowInLog?.call(b);
+                },
                 onContextMenu: (pos) => _contextMenu(pos, b),
               );
             },
           ),
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: selected == null
-              ? const SizedBox(width: double.infinity)
-              : SizedBox(
-                  height: 300,
-                  child: _BlockDetail(
-                    engine: engine,
-                    block: selected,
-                    onClose: () => setState(() => _selected = null),
-                    onShowInLog: widget.onShowInLog,
-                  ),
-                ),
         ),
       ],
     );
@@ -276,28 +257,24 @@ class _TimelineItem extends StatelessWidget {
     final done = state.status == BlockStatus.done;
     final lineColor = done ? c.primary.withValues(alpha: 0.45) : c.border;
     final seconds = _blockSeconds(engine, block);
-    final note = state.note.split('\n').first.trim();
+    final stats = [
+      _invocations(state.attempts),
+      _duration(seconds),
+      if (state.totalTokens > 0) '${_tokens(state.totalTokens)} token',
+    ];
 
-    // What is useful to know about the block at a glance, by state.
-    final (String? subtitle, Color subColor) = current
-        ? (
-            running
-                ? _join(['In corso', _duration(seconds), _invocations(state.attempts)])
-                : 'In attesa del richiamo · ${_invocations(state.attempts)}',
-            c.primary,
-          )
+    // What is useful to know about the block at a glance: always the same
+    // numbers, preceded by the state when the node alone does not say it.
+    final String? subtitle = current
+        ? (running ? _join(['In corso', ...stats]) : _join(['In attesa del richiamo', ...stats]))
         : switch (state.status) {
-            BlockStatus.pending => (
-              state.attempts > 0 ? _join(['Da riprendere', _invocations(state.attempts), _duration(seconds)]) : null,
-              c.muted,
-            ),
-            BlockStatus.done => (
-              state.attempts > 0 ? _join([_invocations(state.attempts), _duration(seconds)]) : 'Segnato a mano',
-              c.muted,
-            ),
-            BlockStatus.blocked => (note.isEmpty ? 'Bloccato' : note, c.danger),
-            BlockStatus.skipped => ('Saltato', c.muted),
+            BlockStatus.pending => state.attempts > 0 ? _join(['Da riprendere', ...stats]) : null,
+            BlockStatus.done => state.attempts > 0 ? _join(stats) : 'Segnato a mano',
+            BlockStatus.blocked => state.attempts > 0 ? _join(stats) : 'Bloccato',
+            BlockStatus.skipped => 'Saltato',
           };
+    final subColor = current ? c.primary : c.muted;
+    final actions = _actionsFor(state.status);
 
     return GestureDetector(
       onSecondaryTapUp: (d) => onContextMenu(d.globalPosition),
@@ -357,6 +334,22 @@ class _TimelineItem extends StatelessWidget {
                         ],
                       ],
                     ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final (label, icon, target) in actions) ...[
+                        const SizedBox(width: 4),
+                        _ActionButton(
+                          icon: icon,
+                          tooltip: label,
+                          onPressed: engine.isActive ? null : () => engine.setBlockStatus(block, target),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -437,169 +430,31 @@ class _Node extends StatelessWidget {
   }
 }
 
-/// The selected block: what came out of it, what it asks, and what can be
-/// done with it.
-class _BlockDetail extends StatelessWidget {
-  const _BlockDetail({required this.engine, required this.block, required this.onClose, this.onShowInLog});
-  final LoopEngine engine;
-  final PlanBlock block;
-  final VoidCallback onClose;
-  final ValueChanged<PlanBlock>? onShowInLog;
+/// Small square button with a tinted background, one per available action.
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({required this.icon, required this.tooltip, required this.onPressed});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final s = engine.blockState(block);
-    final locked = engine.isActive;
-    final (String status, Color statusColor) = switch (s.status) {
-      BlockStatus.done => ('Completato', c.success),
-      BlockStatus.blocked => ('Bloccato', c.danger),
-      BlockStatus.skipped => ('Saltato', c.muted),
-      BlockStatus.pending => (s.attempts > 0 ? 'Da riprendere' : 'Da fare', c.muted),
-    };
-    // The block's own heading repeats the title shown above: leave it out.
-    final lines = block.body.split('\n');
-    final task = (lines.isNotEmpty && lines.first.contains(block.title) ? lines.skip(1) : lines).join('\n').trim();
-
-    Widget label(String text) => Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text.toUpperCase(),
-        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: c.muted),
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      iconSize: 16,
+      style: IconButton.styleFrom(
+        fixedSize: const Size.square(30),
+        minimumSize: const Size.square(30),
+        padding: EdgeInsets.zero,
+        backgroundColor: c.field,
+        foregroundColor: c.muted,
+        disabledBackgroundColor: c.field.withValues(alpha: 0.5),
+        disabledForegroundColor: c.muted.withValues(alpha: 0.4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-    );
-
-    return Container(
-      decoration: BoxDecoration(
-        color: c.field,
-        border: Border(top: BorderSide(color: c.border)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 12, 8, 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Blocco ${block.index + 1} · ${block.title}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: c.text),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Text(
-                    status,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: statusColor),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Chiudi',
-                  onPressed: onClose,
-                  iconSize: 18,
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
-              children: [
-                if (s.attempts > 0) ...[
-                  Text(
-                    _join([
-                      _invocations(s.attempts),
-                      _duration(_blockSeconds(engine, block)),
-                      if (s.totalTokens > 0) '${_tokens(s.totalTokens)} token',
-                    ]),
-                    style: TextStyle(fontSize: 12, color: c.muted),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                label('Esito'),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: s.status == BlockStatus.blocked ? c.danger.withValues(alpha: 0.08) : c.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: c.border),
-                  ),
-                  child: SelectableText(
-                    s.note.isNotEmpty
-                        ? s.note
-                        : switch (s.status) {
-                            BlockStatus.done => 'Completato, senza un riepilogo dell\'agente.',
-                            BlockStatus.skipped => 'Saltato.',
-                            _ when s.attempts > 0 => 'L\'agente non ha ancora concluso questo blocco.',
-                            _ => 'Non ancora iniziato.',
-                          },
-                    style: TextStyle(fontSize: 12.5, height: 1.45, color: s.note.isEmpty ? c.muted : c.text),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                label('Compito'),
-                SelectableText(
-                  task.isEmpty ? block.title : task,
-                  style: TextStyle(fontSize: 12.5, height: 1.5, color: c.text),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: c.border),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                if (onShowInLog != null && s.attempts > 0)
-                  FilledButton.tonalIcon(
-                    onPressed: () => onShowInLog!(block),
-                    style: FilledButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      textStyle: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: uiFont,
-                        fontFamilyFallback: uiFallback,
-                      ),
-                    ),
-                    icon: const Icon(Icons.manage_search_rounded, size: 16),
-                    label: const Text('Mostra nel registro'),
-                  ),
-                for (final (text, icon, target) in _actionsFor(s.status))
-                  OutlinedButton.icon(
-                    onPressed: locked ? null : () => engine.setBlockStatus(block, target),
-                    style: OutlinedButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      side: BorderSide(color: c.border),
-                      textStyle: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: uiFont,
-                        fontFamilyFallback: uiFallback,
-                      ),
-                    ),
-                    icon: Icon(icon, size: 16),
-                    label: Text(text),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      icon: Icon(icon),
     );
   }
 }

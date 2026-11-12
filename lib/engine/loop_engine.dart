@@ -410,6 +410,13 @@ class LoopEngine extends ChangeNotifier {
       LogKind.info,
       '▶ Blocco ${block.index + 1}/${plan.blocks.length} «${block.title}» — invocazione ${bs.attempts}',
     );
+    if (bs.attempts == 1) {
+      // The block's own heading repeats the title shown in the header.
+      final lines = block.body.trim().split('\n');
+      final body = (lines.first.contains(block.title) ? lines.skip(1) : lines).join('\n').trim();
+      final task = body.isEmpty ? block.title : body;
+      _log(LogKind.task, task.length > 3000 ? '${task.substring(0, 3000)}…' : task);
+    }
     runStartedAt = DateTime.now();
     lastOutputAt = runStartedAt;
     _setPhase(LoopPhase.running, 'Blocco ${block.index + 1}: ${block.title}');
@@ -517,15 +524,20 @@ class LoopEngine extends ChangeNotifier {
         bs.note = summary;
         bs.feedback = '';
         state.save(dir);
-        _log(LogKind.success, 'Blocco ${block.index + 1} completato.');
+        final runs = bs.attempts == 1 ? '1 invocazione' : '${bs.attempts} invocazioni';
+        final facts = [
+          runs,
+          if (bs.activeSeconds > 0) _span(bs.activeSeconds),
+          if (bs.totalTokens > 0) '${_k(bs.totalTokens)} token',
+        ];
+        _log(LogKind.result, ['Completato in ${facts.join(' · ')}', if (summary.isNotEmpty) summary].join('\n\n'));
         return _RunResult.blockDone;
       case AgentVerdict.blocked:
         bs.status = BlockStatus.blocked;
         bs.note = reason.isEmpty ? summary : reason;
         state.save(dir);
-        // The reason continues the sentence: no capital letter mid-line.
-        final why = bs.note.isEmpty ? bs.note : bs.note[0].toLowerCase() + bs.note.substring(1);
-        _log(LogKind.error, 'Blocco ${block.index + 1} bloccato: $why');
+        // Just the reason: the red icon and the header already say the rest.
+        _log(LogKind.error, bs.note.isEmpty ? 'L\'agente non riesce a proseguire.' : bs.note);
         return _RunResult.blocked;
       case AgentVerdict.continueWork:
         bs.feedback = 'Nell\'invocazione precedente hai risposto CONTINUE. Tuo riepilogo:\n$summary';
@@ -542,6 +554,14 @@ class LoopEngine extends ChangeNotifier {
     return _RunResult.again;
   }
 
+  static String _span(int seconds) {
+    if (seconds < 60) return '$seconds s';
+    final m = seconds ~/ 60;
+    return m < 60 ? '$m min' : '${m ~/ 60} h ${m % 60} min';
+  }
+
+  static String _k(int n) => n >= 1000 ? '${(n / 1000).round()}k' : '$n';
+
   String _summary(String text) {
     final cleaned = text.replaceAll(RegExp(r'AUTOLOOP_STATUS:[^\n]*', caseSensitive: false), '').trim();
     return cleaned.length > 4000 ? '…${cleaned.substring(cleaned.length - 4000)}' : cleaned;
@@ -553,9 +573,13 @@ class LoopEngine extends ChangeNotifier {
     if (cmd.isEmpty) return null;
     _setPhase(LoopPhase.verifying, 'Verifica: $cmd');
     _log(LogKind.tool, 'Verifica: $cmd');
+    final watch = Stopwatch()..start();
     final (code, output) = await runShell(cmd, workDir!);
     if (code == 0) {
-      _log(LogKind.success, 'Verifica superata.');
+      // The last line of the output usually says it all ("All tests passed!").
+      final last = output.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).lastOrNull;
+      final tail = last == null ? '' : ' · ${last.length > 120 ? '${last.substring(0, 120)}…' : last}';
+      _log(LogKind.success, 'Verifica superata in ${_span(watch.elapsed.inSeconds)}$tail');
       return null;
     }
     _log(LogKind.warning, 'Verifica fallita (exit $code).');
@@ -594,7 +618,18 @@ class LoopEngine extends ChangeNotifier {
       ], dir);
       if (r.exitCode == 0) {
         state!.commits++;
-        _log(LogKind.success, 'Commit creato: autoloop: $title');
+        final stat = await git(['show', '--shortstat', '--format=%h', 'HEAD'], dir);
+        final out = stat.stdout.toString().trim().split('\n');
+        int n(String what) => int.tryParse(RegExp('(\\d+) $what').firstMatch(out.last)?.group(1) ?? '') ?? 0;
+        final files = n('file');
+        _log(
+          LogKind.success,
+          [
+            'Commit ${out.first.trim()}',
+            if (files > 0) files == 1 ? '1 file' : '$files file',
+            if (out.length > 1) '+${n('insertion')} −${n('deletion')}',
+          ].join(' · '),
+        );
       } else {
         _log(LogKind.warning, 'Commit non riuscito: ${r.stderr.toString().trim()}');
       }

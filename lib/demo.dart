@@ -94,10 +94,21 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
         at: at(66),
       ),
       LogEntry(LogKind.tool, 'Verifica: npx html-validate index.html', at: at(70)),
-      LogEntry(LogKind.success, 'Verifica superata.', at: at(78)),
-      LogEntry(LogKind.success, 'Commit creato: autoloop: Sezione progetti', at: at(79)),
-      LogEntry(LogKind.success, 'Blocco 3 completato.', at: at(79)),
+      LogEntry(LogKind.success, 'Verifica superata in 8 s · 0 errori in 3 file', at: at(78)),
+      LogEntry(LogKind.success, 'Commit 4f2a9c1 · 3 file · +142 −18', at: at(79)),
+      LogEntry(
+        LogKind.result,
+        'Completato in 3 invocazioni · 41 min · 362k token\n\n'
+        'Sezione progetti con sei card responsive, link ai repository e immagini ottimizzate.',
+        at: at(79),
+      ),
       LogEntry(LogKind.info, '▶ Blocco 4/6 «Modulo contatti» — invocazione 1', at: at(110)),
+      LogEntry(
+        LogKind.task,
+        'Aggiungi un modulo contatti con nome, email e messaggio, validazione lato client '
+        'e invio tramite il servizio email.',
+        at: at(111),
+      ),
       LogEntry(LogKind.tool, 'Write: contatti.js', at: at(160)),
       LogEntry(LogKind.warning, 'Agente terminato dal supervisore: nessun output per 10 minuti.', at: at(760)),
       LogEntry(LogKind.info, '▶ Blocco 4/6 «Modulo contatti» — invocazione 2', at: at(790)),
@@ -106,11 +117,7 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
         'Il modulo è pronto, ma per inviare le email serve una chiave del servizio esterno.',
         at: at(830),
       ),
-      LogEntry(
-        LogKind.error,
-        'Blocco 4 bloccato: serve la chiave del servizio di invio email: non posso crearla da solo.',
-        at: at(831),
-      ),
+      LogEntry(LogKind.error, 'Serve la chiave del servizio di invio email: non posso crearla da solo.', at: at(831)),
     ];
     final activity = ActivityLog(dir.path, planFile.path);
     logs.forEach(activity.append);

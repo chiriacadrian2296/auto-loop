@@ -54,7 +54,9 @@ class _Group {
 
   _Outcome outcome({required bool live}) {
     if (entries.any((e) => e.kind == LogKind.error)) return _Outcome.error;
-    if (entries.any((e) => e.kind == LogKind.success && e.text.contains('completato'))) return _Outcome.done;
+    if (entries.any((e) => e.kind == LogKind.result || (e.kind == LogKind.success && e.text.contains('completato')))) {
+      return _Outcome.done;
+    }
     if (live) return _Outcome.running;
     if (entries.any((e) => e.kind == LogKind.warning)) return _Outcome.warning;
     if (entries.any((e) => e.text.contains('continuare'))) return _Outcome.again;
@@ -451,7 +453,7 @@ class _GroupHeader extends StatelessWidget {
     final usage = [if (tokensIn + tokensOut > 0) '${k(tokensIn)} in / ${k(tokensOut)} out token', ?cost];
 
     return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 6),
+      padding: const EdgeInsets.only(top: 18, bottom: 6),
       child: Material(
         color: highlighted ? c.primarySoft : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
@@ -459,7 +461,7 @@ class _GroupHeader extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: _sidePad),
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
             child: Row(
               children: [
                 SizedBox(
@@ -469,16 +471,16 @@ class _GroupHeader extends StatelessWidget {
                     child: AnimatedRotation(
                       turns: open ? 0 : -0.25,
                       duration: const Duration(milliseconds: 160),
-                      child: Icon(Icons.expand_more_rounded, size: 18, color: c.muted),
+                      child: Icon(Icons.expand_more_rounded, size: 20, color: c.muted),
                     ),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(99)),
                   child: Text(
                     pill,
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: c.primary),
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: c.primary),
                   ),
                 ),
                 // Title, outcome and summary share the middle; the time
@@ -488,7 +490,7 @@ class _GroupHeader extends StatelessWidget {
                   // duration, instead of being cut mid-word.
                   child: LayoutBuilder(
                     builder: (context, box) {
-                      final style = TextStyle(fontSize: 11.5, color: c.muted);
+                      final style = TextStyle(fontSize: 12, color: c.muted);
                       double width(String text) => (TextPainter(
                         text: TextSpan(text: text, style: style),
                         textDirection: TextDirection.ltr,
@@ -513,7 +515,7 @@ class _GroupHeader extends StatelessWidget {
                                 title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text),
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
                               ),
                             ),
                           ],
@@ -611,44 +613,60 @@ class _LogLineState extends State<_LogLine> {
     final c = context.colors;
     final e = widget.entry;
 
-    // One icon per line, always in the same column and size.
+    // One icon per line, always in the same column and size. Only icons
+    // carry color; texts stay neutral.
+    const size = 15.0;
     final Widget icon = switch (e.kind) {
-      LogKind.agent => SvgPicture.asset(
-        AgentBadge.asset(widget.agent),
-        width: 15,
-        height: 15,
-        colorFilter: ColorFilter.mode(c.primary, BlendMode.srcIn),
+      LogKind.agent => Padding(
+        padding: const EdgeInsets.all(1),
+        child: SvgPicture.asset(
+          AgentBadge.asset(widget.agent),
+          width: size - 2,
+          height: size - 2,
+          colorFilter: ColorFilter.mode(c.primary, BlendMode.srcIn),
+        ),
       ),
-      LogKind.tool => Icon(Icons.terminal_rounded, size: 15, color: c.muted.withValues(alpha: 0.8)),
-      LogKind.success => Icon(Icons.check_circle_rounded, size: 15, color: c.success),
-      LogKind.warning => Icon(Icons.warning_amber_rounded, size: 15, color: c.warning),
-      LogKind.error => Icon(Icons.error_outline_rounded, size: 15, color: c.danger),
-      LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: 15, color: c.primary),
+      LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.muted.withValues(alpha: 0.5)),
+      LogKind.success => Icon(Icons.check_circle_rounded, size: size, color: c.success),
+      LogKind.result => Icon(Icons.task_alt_rounded, size: size, color: c.success),
+      LogKind.task => Icon(Icons.flag_rounded, size: size, color: c.primary),
+      LogKind.warning => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
+      LogKind.error => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
+      LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: size, color: c.primary),
     };
 
+    final body = TextStyle(fontSize: 13.5, height: 1.5, color: c.text);
     final Widget text = switch (e.kind) {
-      LogKind.agent => MarkdownText(e.text, style: TextStyle(fontSize: 13.5, height: 1.5, color: c.text)),
+      LogKind.agent => MarkdownText(e.text, style: body),
       LogKind.tool => Text(
         e.text,
         style: TextStyle(fontSize: 12, height: 1.6, color: c.muted, fontFamily: mono, fontFamilyFallback: monoFallback),
       ),
-      _ => Text(
-        e.text,
-        style: TextStyle(
-          fontSize: 13,
-          height: 1.5,
-          fontWeight: FontWeight.w600,
-          color: switch (e.kind) {
-            LogKind.success => c.success,
-            LogKind.warning => c.warning,
-            LogKind.error => c.danger,
-            _ => c.primary,
-          },
-        ),
+      LogKind.task => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Compito', style: body.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          MarkdownText(e.text, style: body.copyWith(fontSize: 13, color: c.muted)),
+        ],
       ),
+      LogKind.result => () {
+        final cut = e.text.indexOf('\n\n');
+        final head = cut < 0 ? e.text : e.text.substring(0, cut);
+        final rest = cut < 0 ? '' : e.text.substring(cut + 2).trim();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(head, style: body.copyWith(fontWeight: FontWeight.w600)),
+            if (rest.isNotEmpty) ...[const SizedBox(height: 2), MarkdownText(rest, style: body)],
+          ],
+        );
+      }(),
+      _ => Text(e.text, style: body.copyWith(fontSize: 13, color: c.text.withValues(alpha: 0.85))),
     };
 
-    final agent = e.kind == LogKind.agent;
+    // Paragraphs breathe a little more than one-line events.
+    final roomy = e.kind == LogKind.agent || e.kind == LogKind.task || e.kind == LogKind.result;
     final row = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -685,11 +703,8 @@ class _LogLineState extends State<_LogLine> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: Container(
-        margin: EdgeInsets.symmetric(vertical: agent ? 5 : 1),
-        padding: EdgeInsets.symmetric(horizontal: _sidePad, vertical: agent ? 8 : 2),
-        // The agent's words get a soft band; it does not move the text.
-        decoration: agent ? BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(10)) : null,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: _sidePad, vertical: roomy ? 7 : 3),
         child: row,
       ),
     );

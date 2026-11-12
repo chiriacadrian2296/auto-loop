@@ -33,7 +33,7 @@ void main() {
     expect(LogKind.values, contains(LogKind.warning));
   });
 
-  testWidgets('"Mostra nel registro" opens the block\'s invocations', (tester) async {
+  testWidgets('clicking a block opens its invocations in the log', (tester) async {
     final demo = (await tester.runAsync(DemoData.create))!;
     SharedPreferences.setMockInitialValues({'workDir': demo.workDir, 'planPath': demo.planPath});
     final prefs = await SharedPreferences.getInstance();
@@ -48,8 +48,6 @@ void main() {
     expect(find.textContaining(message, findRichText: true), findsNothing);
 
     await tester.tap(find.text('Sezione progetti').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mostra nel registro'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.textContaining(message, findRichText: true), findsOneWidget);
