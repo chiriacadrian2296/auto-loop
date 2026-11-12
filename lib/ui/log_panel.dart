@@ -352,7 +352,8 @@ class _LogPanelState extends State<LogPanel> {
             tokensOut: output,
             open: blockOpen,
             // Open blocks breathe; closed ones sit close together.
-            gap: rows.isEmpty ? 4 : (previousOpen || blockOpen ? 22 : 4),
+            gap: rows.isEmpty ? 0 : (previousOpen || blockOpen ? 22 : 4),
+            start: run.first.start,
             highlighted: identical(head, _flash),
             // How the block ended here: as its latest invocation did.
             outcome: run.last.outcome(live: lastRun && engine.isActive),
@@ -450,7 +451,7 @@ class _LogPanelState extends State<LogPanel> {
                     SelectionArea(
                       child: ListView.builder(
                         controller: _scroll,
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
                         itemCount: rows.length,
                         itemBuilder: (context, i) => rows[i],
                       ),
@@ -548,6 +549,7 @@ class _BlockHeading extends StatelessWidget {
     required this.tokensOut,
     required this.open,
     required this.gap,
+    required this.start,
     required this.onTap,
     required this.outcome,
     this.highlighted = false,
@@ -558,6 +560,7 @@ class _BlockHeading extends StatelessWidget {
   final int invocations, tokensIn, tokensOut;
   final Duration time;
   final double gap;
+  final DateTime? start;
   final bool open, highlighted;
   final VoidCallback onTap;
 
@@ -568,6 +571,7 @@ class _BlockHeading extends StatelessWidget {
       padding: EdgeInsets.only(top: gap, bottom: 2),
       child: SectionTitle(
         title: number == null ? title : '$number. $title',
+        time: start == null ? null : _clock(start!),
         open: open,
         onTap: onTap,
         highlighted: highlighted,
@@ -619,8 +623,6 @@ class _InvocationHeader extends StatefulWidget {
 }
 
 class _InvocationHeaderState extends State<_InvocationHeader> {
-  bool _hover = false;
-
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -640,69 +642,33 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
         ),
     ];
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 6, bottom: 2),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: widget.onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: _gutter,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: SectionChevron(open: widget.open),
-                    ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: widget.onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: _gutter,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: SectionChevron(open: widget.open),
                   ),
-                  Text(
-                    invocation == null ? 'Invocazione' : 'Invocazione $invocation',
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
-                  ),
-                  if (badge != null) ...[const SizedBox(width: 10), badge],
-                  Expanded(
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 120),
-                      opacity: _hover ? 1 : 0,
-                      // Right-aligned; on a narrow panel the left end is cut
-                      // instead of overflowing.
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        reverse: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 12),
-                            for (final (i, w) in stats.indexed) ...[if (i > 0) const SizedBox(width: 14), w],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: _timeWidth,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 120),
-                      opacity: _hover ? 1 : 0,
-                      child: Text(
-                        _clock(start),
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: c.muted.withValues(alpha: 0.8),
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                Text(
+                  invocation == null ? 'Invocazione' : 'Invocazione $invocation',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
+                ),
+                if (badge != null) ...[const SizedBox(width: 10), badge],
+                // Always shown, lined up on the right with the time.
+                RightStats(stats: stats),
+                SectionTime(_clock(start)),
+              ],
             ),
           ),
         ),

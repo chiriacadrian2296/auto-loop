@@ -123,7 +123,7 @@ class SettingsPanel extends StatelessWidget {
           ),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
             children: [
               if (locked) const _RunningBanner(),
               // Expand/collapse-all is hidden for now; the button is kept below.
@@ -676,17 +676,62 @@ class _CollapsibleState extends State<_Collapsible> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Same title as the groups of the progress panel and the blocks of
-        // the activity log; when closed, the summary follows the dash.
         Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: SectionTitle(
-            title: widget.title,
-            open: open,
-            onTap: _toggle,
-            titleColor: widget.warning ? c.danger : null,
-            badge: widget.warning ? Icon(Icons.error_rounded, size: 15, color: c.danger) : null,
-            summary: open ? null : widget.summary,
+          padding: EdgeInsets.only(top: widget.title == _Collapsible.all.first ? 0 : 14),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: _toggle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Spacer(),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, right: 6),
+                          child: Text(
+                            widget.title.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.4,
+                              color: widget.warning ? c.danger : c.muted,
+                            ),
+                          ),
+                        ),
+                        if (widget.warning)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Icon(Icons.error_rounded, size: 15, color: c.danger),
+                          ),
+                        SectionChevron(open: open),
+                        const SizedBox(width: 6),
+                        const Spacer(),
+                      ],
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      child: open
+                          ? const SizedBox(width: double.infinity)
+                          : Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                              child: Text(
+                                widget.summary,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 11.5, height: 1.4, color: c.muted),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
         AnimatedSize(

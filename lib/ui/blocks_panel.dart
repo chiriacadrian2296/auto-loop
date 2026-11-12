@@ -203,11 +203,10 @@ class _BlocksPanelState extends State<BlocksPanel> {
           color: finished ? c.success : null,
         ),
         if (finished) _Summary(engine: engine),
-        const SizedBox(height: 6),
         Expanded(
           flex: 3,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(10, 4, 10, 12),
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
             children: [
               for (final bucket in _Bucket.values)
                 if (plan.blocks.where((b) => _bucketOf(b) == bucket).toList() case final blocks
