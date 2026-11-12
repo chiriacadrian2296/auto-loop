@@ -538,8 +538,9 @@ class _Node extends StatelessWidget {
       textHeightBehavior: const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
     );
     final (Color bg, Widget child) = switch (status) {
-      BlockStatus.done => (c.success, const Icon(Icons.check_rounded, size: 16, color: Colors.white)),
-      BlockStatus.blocked => (c.danger, const Icon(Icons.priority_high_rounded, size: 15, color: Colors.white)),
+      // Icons in coloured discs take the background colour, like the others.
+      BlockStatus.done => (c.success, Icon(Icons.check_rounded, size: 16, color: c.background)),
+      BlockStatus.blocked => (c.danger, Icon(Icons.priority_high_rounded, size: 15, color: c.background)),
       BlockStatus.skipped => (
         Color.alphaBlend(c.muted.withValues(alpha: 0.18), c.surface),
         Icon(Icons.redo_rounded, size: 14, color: c.muted),

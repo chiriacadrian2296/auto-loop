@@ -17,11 +17,19 @@ import 'section_title.dart';
 class ActivitySelection extends ChangeNotifier {
   LogEntry? entry;
 
+  /// The block itself was chosen (its first invocation's start is [entry]),
+  /// not that invocation.
+  bool block = false;
+
   /// Who chose it, so that the other side follows (opens, scrolls).
   Object? source;
 
-  void select(LogEntry? e, Object source) {
+  /// One filter for the activity panel and the strip.
+  final _filter = ValueNotifier<_Filter>(_Filter.all);
+
+  void select(LogEntry? e, Object source, {bool block = false}) {
     entry = e;
+    this.block = block;
     this.source = source;
     notifyListeners();
   }
@@ -187,7 +195,13 @@ class LogPanel extends StatefulWidget {
 
 class _LogPanelState extends State<LogPanel> {
   final _scroll = ScrollController();
-  _Filter _filter = _Filter.all;
+  _Filter _ownFilter = _Filter.all;
+
+  /// Shared with the strip at the bottom when there is a selection object.
+  _Filter get _filter => widget.selection?._filter.value ?? _ownFilter;
+  set _filter(_Filter f) => widget.selection == null ? _ownFilter = f : widget.selection!._filter.value = f;
+
+  void _filterChanged() => setState(() {});
 
   /// Follow new lines while the view sits at the bottom; stop when the user
   /// scrolls up to read, and offer a way back.
@@ -208,7 +222,14 @@ class _LogPanelState extends State<LogPanel> {
   /// The chosen line or header, highlighted until something else is chosen.
   LogEntry? get _flash => widget.selection?.entry;
 
-  void _select(LogEntry? e) => widget.selection?.select(e, this);
+  void _select(LogEntry? e, {bool block = false}) => widget.selection?.select(e, this, block: block);
+
+  bool get _blockChosen => widget.selection?.block ?? false;
+
+  /// Keys and row positions of block headings, apart from those of lines
+  /// and invocations (a block shares its entry with its first invocation).
+  final _blockKeys = <LogEntry, GlobalKey>{};
+  final _blockRowIndex = <LogEntry, int>{};
 
   /// Chosen elsewhere (the strip, the progress panel): open what holds it
   /// and scroll to it. Chosen here: just redraw the highlight.
@@ -231,7 +252,7 @@ class _LogPanelState extends State<LogPanel> {
       _atBottom = false;
       _unseen = false;
     });
-    _scrollTo(target);
+    _scrollTo(target, block: widget.selection?.block ?? false);
   }
 
   /// Where the header to reveal sits among the rows (for lazy lists).
@@ -269,24 +290,24 @@ class _LogPanelState extends State<LogPanel> {
       _unseen = false;
       _toggled.removeAll(headers);
     });
-    widget.selection?.select(headers.first, #progress);
+    widget.selection?.select(headers.first, #progress, block: true);
   }
 
   /// Brings [header] into view; rows are built lazily, so jump close first.
-  void _scrollTo(LogEntry header, [int attempt = 0]) {
+  void _scrollTo(LogEntry header, {bool block = false, int attempt = 0}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
-      final ctx = _headerKeys[header]?.currentContext;
+      final ctx = (block ? _blockKeys : _headerKeys)[header]?.currentContext;
       if (ctx != null) {
-        Scrollable.ensureVisible(ctx, alignment: 0.05, duration: const Duration(milliseconds: 250));
+        Scrollable.ensureVisible(ctx, alignment: 0, duration: const Duration(milliseconds: 250));
         return;
       }
       if (attempt > 4) return;
-      final i = _rowIndex[header];
+      final i = (block ? _blockRowIndex : _rowIndex)[header];
       if (i != null && _rowCount > 0) {
         _scroll.jumpTo(_scroll.position.maxScrollExtent * (i / _rowCount));
       }
-      _scrollTo(header, attempt + 1);
+      _scrollTo(header, block: block, attempt: attempt + 1);
     });
   }
 
@@ -295,6 +316,7 @@ class _LogPanelState extends State<LogPanel> {
     super.initState();
     widget.reveal?.addListener(_onReveal);
     widget.selection?.addListener(_onSelection);
+    widget.selection?._filter.addListener(_filterChanged);
     _scroll.addListener(() {
       if (!_scroll.hasClients) return;
       final bottom = _scroll.position.pixels >= _scroll.position.maxScrollExtent - 40;
@@ -311,6 +333,7 @@ class _LogPanelState extends State<LogPanel> {
   void dispose() {
     widget.reveal?.removeListener(_onReveal);
     widget.selection?.removeListener(_onSelection);
+    widget.selection?._filter.removeListener(_filterChanged);
     _scroll.dispose();
     super.dispose();
   }
@@ -395,10 +418,10 @@ class _LogPanelState extends State<LogPanel> {
           output += o;
           time += g.duration(live: lastRun && identical(g, run.last) && engine.isActive);
         }
-        _rowIndex[head] = rows.length;
+        _blockRowIndex[head] = rows.length;
         rows.add(
           _BlockHeading(
-            key: _headerKeys.putIfAbsent(head, GlobalKey.new),
+            key: _blockKeys.putIfAbsent(head, GlobalKey.new),
             number: RegExp(r'\d+').firstMatch(block)?.group(0),
             title: title ?? block,
             invocations: run.length,
@@ -409,12 +432,12 @@ class _LogPanelState extends State<LogPanel> {
             // Open blocks breathe; closed ones sit close together.
             gap: rows.isEmpty ? 0 : (previousOpen || blockOpen ? 22 : 4),
             start: run.first.start,
-            highlighted: identical(head, _flash),
+            highlighted: identical(head, _flash) && _blockChosen,
             // How the block ended here: as its latest invocation did.
             outcome: run.last.outcome(live: lastRun && engine.isActive),
             onTap: () {
               setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head));
-              _select(head);
+              _select(head, block: true);
             },
           ),
         );
@@ -434,15 +457,13 @@ class _LogPanelState extends State<LogPanel> {
         final header = g.header;
         final open = header == null || !_toggled.contains(header);
         if (header != null) {
-          if (identical(header, _flash) && !identical(header, run.first.header)) _rowIndex[header] = rows.length;
+          final chosen = identical(header, _flash) && !_blockChosen;
+          if (chosen) _rowIndex[header] = rows.length;
           rows.add(
             tab(
               _InvocationHeader(
-                // The block's heading already carries the key of its first invocation.
-                key: identical(header, _flash) && !identical(header, run.first.header)
-                    ? _headerKeys.putIfAbsent(header, GlobalKey.new)
-                    : null,
-                highlighted: identical(header, _flash),
+                key: chosen ? _headerKeys.putIfAbsent(header, GlobalKey.new) : null,
+                highlighted: chosen,
                 group: g,
                 open: open,
                 live: last && engine.isActive,
@@ -670,7 +691,6 @@ class _BlockHeading extends StatelessWidget {
       child: SectionTitle(
         title: number == null ? title : '$number. $title',
         icon: Icon(Icons.layers_outlined, size: 15, color: c.text),
-        iconIndent: sectionGutter,
         time: start == null ? null : _clock(start!),
         open: open,
         onTap: onTap,
@@ -1064,8 +1084,25 @@ class ActivityStrip extends StatefulWidget {
   State<ActivityStrip> createState() => _ActivityStripState();
 }
 
+/// One invocation in the strip: its start and its lines.
+class _StripRun {
+  _StripRun(this.header, this.number);
+  final LogEntry header;
+  final String number;
+  final items = <LogEntry>[];
+}
+
+/// One block in the strip: its consecutive invocations.
+class _StripBlock {
+  _StripBlock(this.header, this.number, this.title);
+  final LogEntry header;
+  final String number, title;
+  final runs = <_StripRun>[];
+}
+
 class _ActivityStripState extends State<ActivityStrip> {
-  _Filter _filter = _Filter.all;
+  final _Filter _ownFilter = _Filter.all;
+  _Filter get _filter => widget.selection?._filter.value ?? _ownFilter;
 
   static String _short(String text) {
     final t = text.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -1073,49 +1110,57 @@ class _ActivityStripState extends State<ActivityStrip> {
   }
 
   final _keys = <LogEntry, GlobalKey>{};
+  final _blockKeys = <LogEntry, GlobalKey>{};
   final _scroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
     widget.selection?.addListener(_onSelection);
+    widget.selection?._filter.addListener(_redraw);
   }
 
   @override
   void dispose() {
     widget.selection?.removeListener(_onSelection);
+    widget.selection?._filter.removeListener(_redraw);
     _scroll.dispose();
     super.dispose();
   }
 
+  void _redraw() {
+    if (mounted) setState(() {});
+  }
+
   /// Chosen in the activity panel: bring it into view here too.
   void _onSelection() {
-    if (!mounted) return;
-    setState(() {});
-    final e = widget.selection?.entry;
-    if (e == null || identical(widget.selection?.source, this)) return;
+    _redraw();
+    final sel = widget.selection;
+    final e = sel?.entry;
+    if (e == null || identical(sel?.source, this)) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _keys[e]?.currentContext;
+      final ctx = (sel!.block ? _blockKeys : _keys)[e]?.currentContext;
       if (ctx != null) Scrollable.ensureVisible(ctx, alignment: 0.5, duration: const Duration(milliseconds: 250));
     });
   }
 
-  /// Makes an item clickable and marks it when chosen: it is shown in the
-  /// activity panel too.
-  Widget _clickable(LogEntry e, Widget child, {bool keyed = true}) {
+  /// Makes an item clickable and marks it when chosen, the way the other
+  /// panels mark what is selected.
+  Widget _clickable(LogEntry e, Widget child, {bool block = false}) {
     final c = context.colors;
-    final chosen = identical(widget.selection?.entry, e);
+    final sel = widget.selection;
+    final chosen = identical(sel?.entry, e) && (sel?.block ?? false) == block;
     return MouseRegion(
-      key: keyed ? _keys.putIfAbsent(e, GlobalKey.new) : null,
+      key: (block ? _blockKeys : _keys).putIfAbsent(e, GlobalKey.new),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => widget.selection?.select(e, this),
-        child: Container(
+        onTap: () => sel?.select(e, this, block: block),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
           padding: const EdgeInsets.all(2),
           decoration: BoxDecoration(
             color: chosen ? c.primarySoft : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: chosen ? c.primary : Colors.transparent, width: 1.5),
+            borderRadius: BorderRadius.circular(7),
           ),
           child: child,
         ),
@@ -1123,24 +1168,22 @@ class _ActivityStripState extends State<ActivityStrip> {
     );
   }
 
+  /// The icon (and number) in the middle of a bracket.
   Widget _marker(IconData icon, String value, String tooltip) {
     final c = context.colors;
     return Tooltip(
       message: tooltip,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(
-          color: Color.alphaBlend(c.field, c.background),
-          borderRadius: BorderRadius.circular(6),
-        ),
+        color: c.background,
+        padding: const EdgeInsets.symmetric(horizontal: 3),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 13, color: c.text),
-            const SizedBox(width: 3),
+            const SizedBox(width: 2),
             Text(
               value,
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.muted, height: 1),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.text, height: 1),
             ),
           ],
         ),
@@ -1148,88 +1191,180 @@ class _ActivityStripState extends State<ActivityStrip> {
     );
   }
 
+  /// A bracket as wide as what it groups, with its marker in the middle:
+  /// above the icons for an invocation, below them for a block.
+  Widget _bracket({required bool above, required Widget marker}) {
+    final c = context.colors;
+    return SizedBox(
+      height: _bracketHeight,
+      child: CustomPaint(
+        painter: _BracketPainter(above: above, color: c.muted.withValues(alpha: 0.6)),
+        child: Center(child: marker),
+      ),
+    );
+  }
+
+  static const _bracketHeight = 18.0;
+  static const _iconRow = 26.0;
+
+  Widget _item(LogEntry e) {
+    final c = context.colors;
+    return _clickable(
+      e,
+      Tooltip(
+        message: '${_clock(e.at)}  ${_short(e.text)}',
+        constraints: const BoxConstraints(maxWidth: 420),
+        waitDuration: const Duration(milliseconds: 150),
+        // On the window's background, so the line runs behind the icon.
+        child: Container(
+          padding: const EdgeInsets.all(1),
+          decoration: BoxDecoration(color: c.background, shape: BoxShape.circle),
+          child: _lineIcon(e, widget.engine.settings.agent, c, size: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _icons(List<LogEntry> items) => SizedBox(
+    height: _iconRow,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [for (final e in items) Padding(padding: const EdgeInsets.symmetric(horizontal: 1), child: _item(e))],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final engine = widget.engine;
-    final items = <Widget>[];
-    String? lastBlock;
+
+    // Lines grouped by invocation, invocations by block, as in the log.
+    final loose = <LogEntry>[];
+    final blocks = <_StripBlock>[];
     for (final e in engine.logs) {
       if (e.kind == LogKind.info && e.text.startsWith('▶')) {
         final m = RegExp(r'Blocco (\d+)/\d+ «(.*)» — invocazione (\d+)').firstMatch(e.text);
         if (m == null) continue;
-        if (m.group(1) != lastBlock) {
-          items.add(
-            _clickable(
-              e,
-              _marker(Icons.layers_outlined, m.group(1)!, 'Blocco ${m.group(1)}: ${m.group(2)}'),
-              keyed: false,
-            ),
-          );
-        }
-        lastBlock = m.group(1);
-        items.add(
-          _clickable(e, _marker(Icons.replay_rounded, m.group(3)!, 'Invocazione ${m.group(3)} · ${_clock(e.at)}')),
-        );
+        if (blocks.isEmpty || blocks.last.number != m.group(1)) blocks.add(_StripBlock(e, m.group(1)!, m.group(2)!));
+        blocks.last.runs.add(_StripRun(e, m.group(3)!));
         continue;
       }
       if (!_shown(e) || !_filter.accepts(e)) continue;
-      items.add(
-        _clickable(
-          e,
-          Tooltip(
-            message: '${_clock(e.at)}  ${_short(e.text)}',
-            constraints: const BoxConstraints(maxWidth: 420),
-            waitDuration: const Duration(milliseconds: 150),
-            // On the window's background, so the line runs behind the icon.
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(color: c.background, shape: BoxShape.circle),
-              child: _lineIcon(e, engine.settings.agent, c, size: 16),
+      if (blocks.isEmpty) {
+        loose.add(e);
+      } else {
+        blocks.last.runs.last.items.add(e);
+      }
+    }
+
+    Widget run(_StripRun r) => IntrinsicWidth(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _bracket(
+            above: true,
+            marker: _clickable(
+              r.header,
+              _marker(Icons.replay_rounded, r.number, 'Invocazione ${r.number} · ${_clock(r.header.at)}'),
             ),
           ),
+          Center(child: _icons(r.items)),
+        ],
+      ),
+    );
+
+    Widget block(_StripBlock b) => IntrinsicWidth(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              for (final (i, r) in b.runs.indexed) ...[if (i > 0) const SizedBox(width: 10), run(r)],
+            ],
+          ),
+          _bracket(
+            above: false,
+            marker: _clickable(
+              b.header,
+              _marker(Icons.layers_outlined, b.number, 'Blocco ${b.number}: ${b.title}'),
+              block: true,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final groups = [
+      if (loose.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: _bracketHeight, bottom: _bracketHeight),
+          child: _icons(loose),
         ),
-      );
-    }
-    return Row(
-      children: [
-        _FilterBar(value: _filter, onChanged: (f) => setState(() => _filter = f)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: items.isEmpty
-              ? Text('Nessuna attività', style: TextStyle(fontSize: 12.5, color: c.muted))
-              // Spread over the whole width while they fit; once they do not,
-              // the newest stay on the right and older ones scroll away. The
-              // icons are strung on a line, like the progress timeline.
-              : GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () => widget.selection?.select(null, this),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Positioned(left: 0, right: 0, child: Container(height: 2, color: c.border)),
-                      LayoutBuilder(
-                        builder: (context, box) => SingleChildScrollView(
-                          controller: _scroll,
-                          scrollDirection: Axis.horizontal,
-                          reverse: true,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(minWidth: box.maxWidth),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                for (final w in items)
-                                  Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: w),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+      for (final b in blocks) block(b),
+    ];
+    if (groups.isEmpty) return Text('Nessuna attività', style: TextStyle(fontSize: 12.5, color: c.muted));
+
+    // Spread over the whole width while it fits; once it does not, the
+    // newest stays on the right and the oldest scrolls away. The icons are
+    // strung on a line, like the progress timeline.
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => widget.selection?.select(null, this),
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: _bracketHeight + _iconRow / 2 - 1,
+            child: Container(height: 2, color: c.border),
+          ),
+          LayoutBuilder(
+            builder: (context, box) => SingleChildScrollView(
+              controller: _scroll,
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: box.maxWidth),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    for (final g in groups) Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: g),
+                  ],
                 ),
-        ),
-      ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
+
+/// A square bracket: a line across, with short ends turned toward the icons
+/// (down when it sits above them, up when it sits below).
+class _BracketPainter extends CustomPainter {
+  _BracketPainter({required this.above, required this.color});
+  final bool above;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+    final y = size.height / 2;
+    final end = above ? size.height - 2 : 2.0;
+    final path = Path()
+      ..moveTo(3, end)
+      ..lineTo(3, y)
+      ..lineTo(size.width - 3, y)
+      ..lineTo(size.width - 3, end);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_BracketPainter old) => old.above != above || old.color != color;
 }

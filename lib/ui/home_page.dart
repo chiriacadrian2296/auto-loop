@@ -699,7 +699,6 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     final state = engine.state;
     final active = engine.isActive;
     final paused = engine.phase == LoopPhase.paused;
@@ -718,9 +717,6 @@ class _BottomBar extends StatelessWidget {
         ? (Icons.play_arrow_rounded, 'Riprendi', 'Riprendi (Spazio)', onStart)
         : (Icons.play_arrow_rounded, 'Avvia', 'Avvia (Spazio)', onStart);
 
-    Widget divider() =>
-        Container(width: 1, height: 22, margin: const EdgeInsets.symmetric(horizontal: 16), color: c.border);
-
     final plan = engine.plan;
     final stats = state == null
         ? <_Stat>[]
@@ -736,7 +732,8 @@ class _BottomBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
         child: SizedBox(
-          height: 36,
+          // Room for the strip: invocation brackets above, block ones below.
+          height: 64,
           // Controls and totals under the first two panels, the strip under
           // the activity panel.
           child: Row(
@@ -762,11 +759,11 @@ class _BottomBar extends StatelessWidget {
                       // Its text is capped in width, so it never squeezes the totals.
                       _BlockerChip(reason: reason, onTap: fix),
                     ],
-                    // The totals that fit.
+                    // The totals that fit, on the right of the two panels above.
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, box) {
-                          var room = box.maxWidth - 33;
+                          var room = box.maxWidth - 16;
                           final shown = <_Stat>[];
                           for (final st in stats) {
                             final w = st.width(context);
@@ -774,11 +771,7 @@ class _BottomBar extends StatelessWidget {
                             room -= w;
                             shown.add(st);
                           }
-                          return Row(
-                            children: [
-                              if (shown.isNotEmpty) ...[divider(), ...shown],
-                            ],
-                          );
+                          return Row(mainAxisAlignment: MainAxisAlignment.end, children: shown);
                         },
                       ),
                     ),
