@@ -212,9 +212,14 @@ class SectionLabel extends StatelessWidget {
 /// The same header for every panel: title on the left, actions on the
 /// right, a hairline below.
 class PanelHeader extends StatelessWidget {
-  const PanelHeader(this.title, {super.key, this.actions = const []});
+  const PanelHeader(this.title, {super.key, this.actions = const [], this.titleActions = const []});
   final String title;
+
+  /// Buttons at the right edge.
   final List<Widget> actions;
+
+  /// Buttons right after the title (e.g. expand/collapse all).
+  final List<Widget> titleActions;
 
   @override
   Widget build(BuildContext context) {
@@ -228,12 +233,26 @@ class PanelHeader extends StatelessWidget {
             padding: EdgeInsets.only(left: 20, right: actions.isEmpty ? 20 : 10),
             child: Row(
               children: [
+                // The title and its buttons take what the other buttons leave;
+                // the title is cut only when there is really no room.
                 Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: -0.1, color: c.text),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.1,
+                            color: c.text,
+                          ),
+                        ),
+                      ),
+                      if (titleActions.isNotEmpty) ...[const SizedBox(width: 4), ...titleActions],
+                    ],
                   ),
                 ),
                 ...actions,

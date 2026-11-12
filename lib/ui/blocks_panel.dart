@@ -64,7 +64,7 @@ class BlocksPanel extends StatefulWidget {
 /// The groups the blocks are shown in, in this order.
 enum _Bucket {
   done('Completati'),
-  active('In corso e bloccati'),
+  active('In corso'),
   todo('Da fare'),
   skipped('Saltati');
 
@@ -118,7 +118,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
     }
     final running = blocks.any((b) => engine.currentBlock == b.index && engine.isActive);
     final blocked = blocks.any((b) => engine.blockState(b).status == BlockStatus.blocked);
-    final Widget? badge = switch (bucket) {
+    final Widget badge = switch (bucket) {
       _Bucket.done => Tooltip(
         message: 'Completati',
         child: Icon(Icons.check_circle_rounded, size: 15, color: c.success),
@@ -131,7 +131,13 @@ class _BlocksPanelState extends State<BlocksPanel> {
         message: 'C\'è un blocco fermo',
         child: Icon(Icons.error_rounded, size: 15, color: c.danger),
       ),
-      _ => null,
+      _Bucket.active => Tooltip(
+        message: 'Da riprendere',
+        child: Icon(Icons.play_circle_rounded, size: 15, color: c.primary),
+      ),
+      // On the same grey disc as the progress nodes still to do.
+      _Bucket.todo => Tooltip(message: 'Da fare', child: _greyDisc(c, Icons.more_horiz_rounded)),
+      _Bucket.skipped => Tooltip(message: 'Saltati', child: _greyDisc(c, Icons.redo_rounded)),
     };
     final open = !_closed.contains(bucket.label);
     return Padding(
@@ -581,3 +587,14 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
+
+/// A small solid grey disc with an icon, like the nodes of blocks to do.
+Widget _greyDisc(AppColors c, IconData icon) => Container(
+  width: 15,
+  height: 15,
+  decoration: BoxDecoration(
+    color: Color.alphaBlend(c.muted.withValues(alpha: 0.45), c.surface),
+    shape: BoxShape.circle,
+  ),
+  child: Icon(icon, size: 11, color: c.text),
+);

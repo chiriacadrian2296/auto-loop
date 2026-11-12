@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/accounts.dart';
+import '../engine/agents.dart';
 import '../engine/cli_locator.dart';
 import '../engine/loop_engine.dart';
 import '../engine/loop_state.dart';
@@ -337,6 +338,9 @@ class _HomePageState extends State<HomePage> {
   /// same block still notifies.
   final _revealInLog = ValueNotifier<(int, int)?>(null);
 
+  /// A line clicked in the strip at the bottom, to show in the activity panel.
+  final _revealEntry = ValueNotifier<LogEntry?>(null);
+
   // The control panel no longer closes (the rail is kept for now).
   late bool _sidebarOpen = true;
 
@@ -471,7 +475,7 @@ class _HomePageState extends State<HomePage> {
                                       children: [
                                         PanelHeader(
                                           'Pannello di controllo',
-                                          actions: [SettingsPanel.expandAllButton()],
+                                          titleActions: [SettingsPanel.expandAllButton()],
                                         ),
                                         Expanded(
                                           child: SettingsPanel(
@@ -512,8 +516,8 @@ class _HomePageState extends State<HomePage> {
                               children: [
                                 PanelHeader(
                                   'Avanzamento',
+                                  titleActions: [if (engine.plan != null) BlocksPanel.expandAllButton()],
                                   actions: [
-                                    if (engine.plan != null) BlocksPanel.expandAllButton(),
                                     IconButton(
                                       tooltip: 'Apri il piano nell\'editor',
                                       onPressed: _planPath == null ? null : _openPlanInEditor,
@@ -559,6 +563,7 @@ class _HomePageState extends State<HomePage> {
                             child: LogPanel(
                               engine: engine,
                               reveal: _revealInLog,
+                              revealEntry: _revealEntry,
                               onOpenLogs: engine.plan == null ? null : _openLogs,
                               onOpenProgress: _workDir == null ? null : _openProgress,
                             ),
@@ -574,6 +579,11 @@ class _HomePageState extends State<HomePage> {
                   blocker: blocker == null ? null : (blocker.$2, blocker.$3),
                   onPause: active && !engine.pauseRequested ? engine.requestPause : null,
                   onStop: active && engine.phase != LoopPhase.stopping ? _confirmStop : null,
+                  onReveal: (e) {
+                    // Cleared first, so clicking the same icon again still works.
+                    _revealEntry.value = null;
+                    _revealEntry.value = e;
+                  },
                 ),
               ],
             ),
@@ -628,9 +638,15 @@ class _TopBar extends StatelessWidget {
 /// what it does where the app's name is, then the plan's totals and the
 /// whole activity as a strip of icons.
 class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.engine, this.blocker, this.onStart, this.onPause, this.onStop});
+  const _BottomBar({required this.engine, this.blocker, this.onStart, this.onPause, this.onStop, this.onReveal});
 
   final LoopEngine engine;
+
+  /// Shows a line of the strip in the activity panel.
+  final ValueChanged<LogEntry>? onReveal;
+
+  /// Control panel, gap, progress panel: what the controls sit under.
+  static const _leftPanelsWidth = 330.0 + 16 + 360;
 
   /// Why the start button is disabled, and how to fix it.
   final (String, VoidCallback)? blocker;
@@ -676,83 +692,99 @@ class _BottomBar extends StatelessWidget {
         ? <_Stat>[]
         : [
             _Stat(value: _fmt(engine.totalTime), label: 'tempo'),
-            _Stat(value: _compact(state.inputTokens), label: 'token in'),
-            _Stat(value: _compact(state.outputTokens), label: 'token out'),
+            _Stat(value: _compact(state.totalTokens), label: 'token'),
+            if (plan != null) _Stat(value: '${engine.doneCount}/${plan.blocks.length}', label: 'blocchi'),
             _Stat(value: '${state.runs}', label: state.runs == 1 ? 'invocazione' : 'invocazioni'),
             _Stat(value: '${state.commits}', label: 'commit'),
-            if (plan != null) _Stat(value: '${engine.doneCount}/${plan.blocks.length}', label: 'blocchi'),
           ];
 
     return WindowDragArea(
       child: Padding(
-        // Lined up with the logo and the name in the title bar.
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 14),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
         child: SizedBox(
           height: 36,
+          // Controls and totals under the first two panels, the strip under
+          // the activity panel.
           child: Row(
             children: [
-              Tooltip(
-                message: tooltip,
-                child: Material(
-                  color: action == null ? c.border : c.primary,
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: action,
-                    child: SizedBox.square(
-                      dimension: 28,
-                      // The icon takes the colour of the background around it.
-                      child: Icon(icon, size: 18, color: c.background),
+              SizedBox(
+                width: _leftPanelsWidth,
+                child: Row(
+                  children: [
+                    // Lined up with the logo and the name in the title bar.
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: tooltip,
+                      child: Material(
+                        color: action == null ? c.border : c.primary,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: action,
+                          child: SizedBox.square(
+                            dimension: 28,
+                            // The icon takes the colour of the background around it.
+                            child: Icon(icon, size: 18, color: c.background),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    MouseRegion(
+                      cursor: action == null ? MouseCursor.defer : SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: action,
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                            color: c.text,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (active) ...[
+                      const SizedBox(width: 12),
+                      _RoundAction(
+                        icon: Icons.stop_rounded,
+                        tooltip: 'Ferma ora (Maiusc+Spazio)',
+                        onPressed: onStop,
+                        danger: true,
+                      ),
+                    ],
+                    if (blocker case (final reason, final fix)) ...[
+                      const SizedBox(width: 12),
+                      // Its text is capped in width, so it never squeezes the totals.
+                      _BlockerChip(reason: reason, onTap: fix),
+                    ],
+                    // The totals that fit.
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, box) {
+                          var room = box.maxWidth - 33;
+                          final shown = <_Stat>[];
+                          for (final st in stats) {
+                            final w = st.width(context);
+                            if (w > room) break;
+                            room -= w;
+                            shown.add(st);
+                          }
+                          return Row(
+                            children: [
+                              if (shown.isNotEmpty) ...[divider(), ...shown],
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              MouseRegion(
-                cursor: action == null ? MouseCursor.defer : SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: action,
-                  child: Text(
-                    label,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
-                  ),
-                ),
-              ),
-              if (active) ...[
-                const SizedBox(width: 12),
-                _RoundAction(
-                  icon: Icons.stop_rounded,
-                  tooltip: 'Ferma ora (Maiusc+Spazio)',
-                  onPressed: onStop,
-                  danger: true,
-                ),
-              ],
-              if (blocker case (final reason, final fix)) ...[
-                const SizedBox(width: 12),
-                // Its text is capped in width, so it never squeezes the totals.
-                _BlockerChip(reason: reason, onTap: fix),
-              ],
-              // Totals that fit, then the strip if there is room left for it.
+              const SizedBox(width: 16),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, box) {
-                    var room = box.maxWidth - 33;
-                    final shown = <_Stat>[];
-                    for (final st in stats) {
-                      final w = st.width(context);
-                      if (w > room) break;
-                      room -= w;
-                      shown.add(st);
-                    }
-                    final strip = engine.logs.isNotEmpty && room >= 240;
-                    return Row(
-                      children: [
-                        if (shown.isNotEmpty) ...[divider(), ...shown],
-                        if (strip) ...[divider(), Expanded(child: ActivityStrip(engine: engine))],
-                      ],
-                    );
-                  },
-                ),
+                child: engine.logs.isEmpty ? const SizedBox() : ActivityStrip(engine: engine, onReveal: onReveal),
               ),
             ],
           ),

@@ -57,6 +57,22 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.textContaining(message, findRichText: true), findsOneWidget);
 
+    // The strip at the bottom: clicking an icon opens its line in the log.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.tap(find.descendant(of: find.byType(LogPanel), matching: find.byTooltip('Espandi tutto')));
+    await tester.pump();
+    await tester.tap(find.descendant(of: find.byType(LogPanel), matching: find.byTooltip('Comprimi tutto')));
+    await tester.pump();
+    expect(find.textContaining(message, findRichText: true), findsNothing);
+    final icon = find.descendant(
+      of: find.byType(ActivityStrip),
+      matching: find.byWidgetPredicate((w) => w is Tooltip && (w.message ?? '').contains(message)),
+    );
+    await tester.tap(icon);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.textContaining(message, findRichText: true), findsOneWidget);
+
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(minutes: 5));

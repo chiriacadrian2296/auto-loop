@@ -11,23 +11,46 @@ import 'app_theme.dart';
 import 'markdown_text.dart';
 import 'section_title.dart';
 
-enum _Filter {
-  all('Tutto', Icons.all_inclusive_rounded),
+/// The kinds of lines one can filter on.
+enum _Kind {
   messages('Messaggi', Icons.chat_bubble_outline_rounded),
   commands('Comandi', Icons.terminal_rounded),
+  // Everything AutoLoop itself reports: checks, commits, warnings, errors.
   events('Eventi', Icons.flag_outlined);
 
-  const _Filter(this.label, this.icon);
-  final IconData icon;
+  const _Kind(this.label, this.icon);
   final String label;
+  final IconData icon;
 
-  bool accepts(LogEntry e) => switch (this) {
-    _Filter.all => true,
-    _Filter.messages => e.kind == LogKind.agent,
-    _Filter.commands => e.kind == LogKind.tool,
-    // Everything AutoLoop itself reports: checks, commits, warnings, errors.
-    _Filter.events => e.kind != LogKind.agent && e.kind != LogKind.tool,
+  bool has(LogEntry e) => switch (this) {
+    _Kind.messages => e.kind == LogKind.agent,
+    _Kind.commands => e.kind == LogKind.tool,
+    _Kind.events => e.kind != LogKind.agent && e.kind != LogKind.tool,
   };
+}
+
+/// Which kinds of lines are shown; several can be chosen at once.
+class _Filter {
+  const _Filter(this.kinds);
+  final Set<_Kind> kinds;
+
+  static const all = _Filter({_Kind.messages, _Kind.commands, _Kind.events});
+
+  bool get isAll => kinds.length == _Kind.values.length;
+  bool accepts(LogEntry e) => kinds.any((k) => k.has(e));
+
+  /// Adds or removes [k]; removing the last one shows everything again.
+  _Filter toggle(_Kind k) {
+    final next = kinds.contains(k) ? ({...kinds}..remove(k)) : {...kinds, k};
+    return next.isEmpty ? all : _Filter(next);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _Filter && other.kinds.length == kinds.length && other.kinds.containsAll(kinds);
+
+  @override
+  int get hashCode => Object.hashAll(kinds.map((k) => k.index).toList()..sort());
 }
 
 enum _Outcome { done, again, blocked, interrupted, failed, running, none }
@@ -132,12 +155,23 @@ String _span(Duration d) => d.inSeconds < 60
     : '${d.inHours} h ${d.inMinutes % 60} min';
 
 class LogPanel extends StatefulWidget {
-  const LogPanel({super.key, required this.engine, this.onOpenLogs, this.onOpenProgress, this.reveal});
+  const LogPanel({
+    super.key,
+    required this.engine,
+    this.onOpenLogs,
+    this.onOpenProgress,
+    this.reveal,
+    this.revealEntry,
+  });
   final LoopEngine engine;
   final VoidCallback? onOpenLogs, onOpenProgress;
 
   /// Requests to show a block's invocations: (block index, request number).
   final ValueNotifier<(int, int)?>? reveal;
+
+  /// Requests to show one line (or an invocation's start), e.g. clicked in
+  /// the strip at the bottom of the window.
+  final ValueNotifier<LogEntry?>? revealEntry;
 
   @override
   State<LogPanel> createState() => _LogPanelState();
@@ -165,6 +199,30 @@ class _LogPanelState extends State<LogPanel> {
 
   /// Header briefly highlighted after "Mostra nel registro".
   LogEntry? _flash;
+
+  /// Opens what holds [target] and scrolls to it, briefly highlighted.
+  void _onRevealEntry() {
+    final target = widget.revealEntry?.value;
+    if (target == null) return;
+    final groups = _groupLogs(widget.engine.logs);
+    final group = groups
+        .where((g) => identical(g.header, target) || g.entries.any((e) => identical(e, target)))
+        .firstOrNull;
+    if (group == null) return;
+    final run = _runs(groups).where((r) => r.contains(group)).firstOrNull;
+    setState(() {
+      if (run?.first.header case final head?) _toggledBlocks.remove(head);
+      if (group.header case final header?) _toggled.remove(header);
+      if (!identical(group.header, target) && !_filter.accepts(target)) _filter = _Filter.all;
+      _atBottom = false;
+      _unseen = false;
+      _flash = target;
+    });
+    _scrollTo(target);
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted && identical(_flash, target)) setState(() => _flash = null);
+    });
+  }
 
   /// Where the header to reveal sits among the rows (for lazy lists).
   final _rowIndex = <LogEntry, int>{};
@@ -230,6 +288,7 @@ class _LogPanelState extends State<LogPanel> {
   void initState() {
     super.initState();
     widget.reveal?.addListener(_onReveal);
+    widget.revealEntry?.addListener(_onRevealEntry);
     _scroll.addListener(() {
       if (!_scroll.hasClients) return;
       final bottom = _scroll.position.pixels >= _scroll.position.maxScrollExtent - 40;
@@ -245,6 +304,7 @@ class _LogPanelState extends State<LogPanel> {
   @override
   void dispose() {
     widget.reveal?.removeListener(_onReveal);
+    widget.revealEntry?.removeListener(_onRevealEntry);
     _scroll.dispose();
     super.dispose();
   }
@@ -368,9 +428,15 @@ class _LogPanelState extends State<LogPanel> {
         final header = g.header;
         final open = header == null || !_toggled.contains(header);
         if (header != null) {
+          if (identical(header, _flash) && !identical(header, run.first.header)) _rowIndex[header] = rows.length;
           rows.add(
             tab(
               _InvocationHeader(
+                // The block's heading already carries the key of its first invocation.
+                key: identical(header, _flash) && !identical(header, run.first.header)
+                    ? _headerKeys.putIfAbsent(header, GlobalKey.new)
+                    : null,
+                highlighted: identical(header, _flash),
                 group: g,
                 open: open,
                 live: last && engine.isActive,
@@ -379,7 +445,22 @@ class _LogPanelState extends State<LogPanel> {
             ),
           );
         }
-        if (open) rows.addAll(visible.map((e) => tab(_LogLine(e, agent: engine.settings.agent))));
+        if (open) {
+          for (final e in visible) {
+            final target = identical(e, _flash);
+            if (target) _rowIndex[e] = rows.length;
+            rows.add(
+              tab(
+                _LogLine(
+                  e,
+                  key: target ? _headerKeys.putIfAbsent(e, GlobalKey.new) : null,
+                  agent: engine.settings.agent,
+                  highlighted: target,
+                ),
+              ),
+            );
+          }
+        }
       }
     }
     _rowCount = rows.length;
@@ -395,10 +476,9 @@ class _LogPanelState extends State<LogPanel> {
       children: [
         PanelHeader(
           'Attività',
+          titleActions: [ExpandAllButton(allOpen: allOpen, onPressed: heads.isEmpty ? null : () => setAll(!allOpen))],
           actions: [
             _FilterBar(value: _filter, onChanged: (f) => setState(() => _filter = f)),
-            const SizedBox(width: 6),
-            ExpandAllButton(allOpen: allOpen, onPressed: heads.isEmpty ? null : () => setAll(!allOpen)),
             IconButton(
               tooltip: 'Vedi progresso',
               onPressed: widget.onOpenProgress,
@@ -473,60 +553,62 @@ class _LogPanelState extends State<LogPanel> {
 }
 
 /// A compact pill showing the current filter; the choices open in a menu.
+/// An icon button like the others of the title bar: the icon of the one
+/// kind chosen, or the filter icon; the menu lets one pick several kinds.
 class _FilterBar extends StatelessWidget {
-  const _FilterBar({required this.value, required this.onChanged, this.compact = false});
+  const _FilterBar({required this.value, required this.onChanged});
   final _Filter value;
-
-  /// Only the icon of the chosen filter, for narrow places.
-  final bool compact;
   final ValueChanged<_Filter> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final active = value != _Filter.all;
-    return PopupMenuButton<_Filter>(
-      tooltip: 'Filtra le attività',
-      position: PopupMenuPosition.under,
-      color: c.surface,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: c.border),
+    final active = !value.isAll;
+    Widget item({required IconData icon, required String label, required bool on, required VoidCallback onTap}) =>
+        MenuItemButton(
+          closeOnActivate: false,
+          onPressed: onTap,
+          style: MenuItemButton.styleFrom(
+            backgroundColor: on ? c.primarySoft : Colors.transparent,
+            foregroundColor: on ? c.primary : c.text,
+            iconColor: on ? c.primary : c.muted,
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            textStyle: const TextStyle(fontSize: 13.5, fontFamily: uiFont, fontFamilyFallback: uiFallback),
+          ),
+          leadingIcon: Icon(icon, size: 16),
+          child: Text(label),
+        );
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(c.surface),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: c.border),
+          ),
+        ),
       ),
-      onSelected: onChanged,
-      itemBuilder: (context) => [
-        for (final f in _Filter.values)
-          PopupMenuItem(
-            value: f,
-            height: 38,
-            child: Row(
-              children: [
-                SizedBox(width: 24, child: f == value ? Icon(Icons.check_rounded, size: 16, color: c.primary) : null),
-                Icon(f.icon, size: 16, color: f == value ? c.primary : c.muted),
-                const SizedBox(width: 10),
-                Text(f.label, style: TextStyle(fontSize: 13.5, color: f == value ? c.primary : c.text)),
-              ],
-            ),
+      menuChildren: [
+        item(icon: Icons.filter_list_rounded, label: 'Tutto', on: value.isAll, onTap: () => onChanged(_Filter.all)),
+        for (final k in _Kind.values)
+          item(
+            icon: k.icon,
+            label: k.label,
+            on: !value.isAll && value.kinds.contains(k),
+            // From "everything", a click picks just that kind.
+            onTap: () => onChanged(value.isAll ? _Filter({k}) : value.toggle(k)),
           ),
       ],
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
-        decoration: BoxDecoration(color: active ? c.primarySoft : c.field, borderRadius: BorderRadius.circular(99)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(compact ? value.icon : Icons.filter_list_rounded, size: 15, color: active ? c.primary : c.muted),
-            if (!compact) ...[
-              const SizedBox(width: 6),
-              Text(
-                value.label,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? c.primary : c.muted),
-              ),
-            ],
-            Icon(Icons.expand_more_rounded, size: 16, color: active ? c.primary : c.muted),
-          ],
-        ),
+      builder: (context, menu, _) => IconButton(
+        tooltip: active ? 'Filtro: ${value.kinds.map((k) => k.label).join(', ')}' : 'Filtra le attività',
+        onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+        iconSize: 19,
+        color: active ? c.primary : null,
+        icon: Icon(value.kinds.length == 1 ? value.kinds.single.icon : Icons.filter_list_rounded),
       ),
     );
   }
@@ -609,7 +691,15 @@ String _k(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(n >= 100000 ? 0 : 
 /// One invocation: its name and how it ended; how long it took, what it
 /// cost and when it started show on hover, like the times of the lines.
 class _InvocationHeader extends StatefulWidget {
-  const _InvocationHeader({required this.group, required this.open, required this.live, required this.onTap});
+  const _InvocationHeader({
+    super.key,
+    required this.group,
+    required this.open,
+    required this.live,
+    required this.onTap,
+    this.highlighted = false,
+  });
+  final bool highlighted;
   final _Group group;
   final bool open, live;
   final VoidCallback onTap;
@@ -646,7 +736,8 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
       child: Padding(
         padding: const EdgeInsets.only(top: 6, bottom: 2),
         child: Material(
-          color: Colors.transparent,
+          color: widget.highlighted ? c.primarySoft : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
           child: InkWell(
             borderRadius: BorderRadius.circular(10),
             onTap: widget.onTap,
@@ -739,8 +830,9 @@ class _WorkingLine extends StatelessWidget {
 }
 
 class _LogLine extends StatefulWidget {
-  const _LogLine(this.entry, {required this.agent});
+  const _LogLine(this.entry, {super.key, required this.agent, this.highlighted = false});
   final LogEntry entry;
+  final bool highlighted;
   final AgentKind agent;
 
   @override
@@ -824,7 +916,12 @@ class _LogLineState extends State<_LogLine> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: Padding(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: widget.highlighted ? c.primarySoft : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
         padding: EdgeInsets.symmetric(horizontal: _sidePad, vertical: roomy ? 7 : 3),
         child: row,
       ),
@@ -921,8 +1018,11 @@ Widget _lineIcon(LogEntry e, AgentKind agent, AppColors c, {double size = 15}) {
 /// tooltip tells the line; block and invocation numbers mark where each
 /// invocation starts. Filtered like the activity log.
 class ActivityStrip extends StatefulWidget {
-  const ActivityStrip({super.key, required this.engine});
+  const ActivityStrip({super.key, required this.engine, this.onReveal});
   final LoopEngine engine;
+
+  /// A click on an icon shows that line in the activity panel.
+  final ValueChanged<LogEntry>? onReveal;
 
   @override
   State<ActivityStrip> createState() => _ActivityStripState();
@@ -936,13 +1036,22 @@ class _ActivityStripState extends State<ActivityStrip> {
     return t.length > 280 ? '${t.substring(0, 280)}…' : t;
   }
 
+  /// Makes an item clickable: it shows [e] in the activity panel.
+  Widget _clickable(LogEntry e, Widget child) => MouseRegion(
+    cursor: widget.onReveal == null ? MouseCursor.defer : SystemMouseCursors.click,
+    child: GestureDetector(onTap: () => widget.onReveal?.call(e), child: child),
+  );
+
   Widget _marker(IconData icon, String value, String tooltip) {
     final c = context.colors;
     return Tooltip(
       message: tooltip,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(6)),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(c.field, c.background),
+          borderRadius: BorderRadius.circular(6),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -969,39 +1078,53 @@ class _ActivityStripState extends State<ActivityStrip> {
         final m = RegExp(r'Blocco (\d+)/\d+ «(.*)» — invocazione (\d+)').firstMatch(e.text);
         if (m == null) continue;
         if (m.group(1) != lastBlock) {
-          items.add(_marker(Icons.layers_outlined, m.group(1)!, 'Blocco ${m.group(1)}: ${m.group(2)}'));
+          items.add(_clickable(e, _marker(Icons.layers_outlined, m.group(1)!, 'Blocco ${m.group(1)}: ${m.group(2)}')));
         }
         lastBlock = m.group(1);
-        items.add(_marker(Icons.replay_rounded, m.group(3)!, 'Invocazione ${m.group(3)} · ${_clock(e.at)}'));
+        items.add(
+          _clickable(e, _marker(Icons.replay_rounded, m.group(3)!, 'Invocazione ${m.group(3)} · ${_clock(e.at)}')),
+        );
         continue;
       }
       if (!_shown(e) || !_filter.accepts(e)) continue;
       items.add(
-        Tooltip(
-          message: '${_clock(e.at)}  ${_short(e.text)}',
-          constraints: const BoxConstraints(maxWidth: 420),
-          waitDuration: const Duration(milliseconds: 150),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1),
-            child: _lineIcon(e, engine.settings.agent, c, size: 16),
+        _clickable(
+          e,
+          Tooltip(
+            message: '${_clock(e.at)}  ${_short(e.text)}',
+            constraints: const BoxConstraints(maxWidth: 420),
+            waitDuration: const Duration(milliseconds: 150),
+            // On the window's background, so the line runs behind the icon.
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(color: c.background, shape: BoxShape.circle),
+              child: _lineIcon(e, engine.settings.agent, c, size: 16),
+            ),
           ),
         ),
       );
     }
     return Row(
       children: [
-        _FilterBar(value: _filter, onChanged: (f) => setState(() => _filter = f), compact: true),
+        _FilterBar(value: _filter, onChanged: (f) => setState(() => _filter = f)),
         const SizedBox(width: 12),
         Expanded(
           child: items.isEmpty
               ? Text('Nessuna attività', style: TextStyle(fontSize: 12.5, color: c.muted))
-              // Newest on the right; older ones scroll away to the left.
-              : ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  reverse: true,
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 7),
-                  itemBuilder: (context, i) => Center(child: items[items.length - 1 - i]),
+              // Newest on the right; older ones scroll away to the left. The
+              // icons are strung on a line, like the progress timeline.
+              : Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned(left: 0, right: 0, child: Container(height: 2, color: c.border)),
+                    ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      itemCount: items.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 6),
+                      itemBuilder: (context, i) => Center(child: items[items.length - 1 - i]),
+                    ),
+                  ],
                 ),
         ),
       ],
