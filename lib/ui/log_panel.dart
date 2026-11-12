@@ -38,6 +38,8 @@ class _Group {
   DateTime? get start => header?.at ?? (entries.isEmpty ? null : entries.first.at);
   DateTime? get end => entries.isEmpty ? header?.at : entries.last.at;
 
+  Duration duration({required bool live}) => (live ? DateTime.now() : end!).difference(start!);
+
   /// Tokens in, tokens out and cost, from the invocation's (hidden)
   /// "Token: X in / Y out · $c" line.
   (int, int, String?) get usage {
@@ -87,6 +89,22 @@ class _Group {
 /// CLI's echoed output) and the loop-start notice are not shown as lines.
 bool _shown(LogEntry e) => e.kind != LogKind.system && !e.text.startsWith('Avvio del loop con');
 
+/// Consecutive invocations of the same block, shown under one heading.
+List<List<_Group>> _runs(List<_Group> groups) {
+  final runs = <List<_Group>>[];
+  String? previous;
+  for (final g in groups) {
+    final block = g.header == null ? null : g.parts.$1;
+    if (runs.isEmpty || block == null || block != previous) {
+      runs.add([g]);
+    } else {
+      runs.last.add(g);
+    }
+    previous = block;
+  }
+  return runs;
+}
+
 List<_Group> _groupLogs(List<LogEntry> logs) {
   final groups = <_Group>[_Group(null)];
   for (final e in logs) {
@@ -135,6 +153,10 @@ class _LogPanelState extends State<LogPanel> {
   /// the default is: only the latest invocation open.
   final _toggled = <LogEntry>{};
 
+  /// Blocks whose open/closed state the user changed (by their first
+  /// invocation's header); the default is: only the latest block open.
+  final _toggledBlocks = <LogEntry>{};
+
   final _headerKeys = <LogEntry, GlobalKey>{};
 
   /// Header briefly highlighted after "Mostra nel registro".
@@ -164,7 +186,15 @@ class _LogPanelState extends State<LogPanel> {
       return;
     }
     final lastHeader = widget.engine.logs.lastWhere((e) => e.kind == LogKind.info && e.text.startsWith('▶'));
+    final runs = _runs(_groupLogs(widget.engine.logs)).where((r) => r.first.header != null).toList();
+    final mine = runs.where((r) => _isHeaderOf(r.first.header!, block)).map((r) => r.first.header!).toSet();
+    final lastRun = runs.last.first.header!;
     setState(() {
+      // Open this block wherever it appears (the latest block is open by default).
+      _toggledBlocks
+        ..clear()
+        ..addAll(mine.where((h) => !identical(h, lastRun)));
+      if (!mine.contains(lastRun)) _toggledBlocks.add(lastRun);
       _filter = _Filter.all;
       _atBottom = false;
       _unseen = false;
@@ -268,43 +298,64 @@ class _LogPanelState extends State<LogPanel> {
     }
 
     final groups = _groupLogs(logs);
+    final runs = _runs(groups);
     final rows = <Widget>[];
-    String? lastBlock;
-    for (var i = 0; i < groups.length; i++) {
-      final g = groups[i];
-      final last = i == groups.length - 1;
-      final visible = g.entries.where((e) => _shown(e) && _filter.accepts(e)).toList();
-      if (_filter != _Filter.all && visible.isEmpty) continue;
-      final header = g.header;
-      final open = header == null || (last != _toggled.contains(header));
-      if (header != null) {
-        // The block is named once; its consecutive invocations follow.
-        final (block, title, _) = g.parts;
-        if (block != lastBlock) {
-          _rowIndex[header] = rows.length;
+    for (var r = 0; r < runs.length; r++) {
+      final run = runs[r];
+      final lastRun = r == runs.length - 1;
+      final shown = {for (final g in run) g: g.entries.where((e) => _shown(e) && _filter.accepts(e)).toList()};
+      if (_filter != _Filter.all && shown.values.every((v) => v.isEmpty)) continue;
+      final head = run.first.header;
+      var blockOpen = true;
+      if (head != null) {
+        // The block is named once, with the totals of its invocations.
+        blockOpen = lastRun != _toggledBlocks.contains(head);
+        final (block, title, _) = run.first.parts;
+        var input = 0, output = 0;
+        var time = Duration.zero;
+        for (final g in run) {
+          final (i, o, _) = g.usage;
+          input += i;
+          output += o;
+          time += g.duration(live: lastRun && identical(g, run.last) && engine.isActive);
+        }
+        _rowIndex[head] = rows.length;
+        rows.add(
+          _BlockHeading(
+            key: _headerKeys.putIfAbsent(head, GlobalKey.new),
+            number: RegExp(r'\d+').firstMatch(block)?.group(0),
+            title: title ?? block,
+            invocations: run.length,
+            time: time,
+            tokensIn: input,
+            tokensOut: output,
+            open: blockOpen,
+            first: rows.isEmpty,
+            highlighted: identical(head, _flash),
+            onTap: () =>
+                setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head)),
+          ),
+        );
+      }
+      if (!blockOpen) continue;
+      for (final g in run) {
+        final visible = shown[g]!;
+        if (_filter != _Filter.all && visible.isEmpty) continue;
+        final last = lastRun && identical(g, run.last);
+        final header = g.header;
+        final open = header == null || (last != _toggled.contains(header));
+        if (header != null) {
           rows.add(
-            _BlockHeading(
-              key: _headerKeys.putIfAbsent(header, GlobalKey.new),
-              block: block,
-              title: title,
-              first: rows.isEmpty,
-              highlighted: identical(header, _flash),
+            _InvocationHeader(
+              group: g,
+              open: open,
+              live: last && engine.isActive,
+              onTap: () => setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
             ),
           );
         }
-        lastBlock = block;
-        rows.add(
-          _InvocationHeader(
-            group: g,
-            open: open,
-            live: last && engine.isActive,
-            onTap: () => setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
-          ),
-        );
-      } else {
-        lastBlock = null;
+        if (open) rows.addAll(visible.map((e) => _LogLine(e, agent: engine.settings.agent)));
       }
-      if (open) rows.addAll(visible.map((e) => _LogLine(e, agent: engine.settings.agent)));
     }
     _rowCount = rows.length;
     final silent = engine.phase == LoopPhase.running && engine.lastOutputAt != null
@@ -447,54 +498,109 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
-/// Names a block once, above its invocations.
+/// Names a block once, above its invocations, with their totals; it opens
+/// and closes the whole block.
 class _BlockHeading extends StatelessWidget {
   const _BlockHeading({
     super.key,
-    required this.block,
+    required this.number,
     required this.title,
+    required this.invocations,
+    required this.time,
+    required this.tokensIn,
+    required this.tokensOut,
+    required this.open,
     required this.first,
+    required this.onTap,
     this.highlighted = false,
   });
-  final String block;
-  final String? title;
-  final bool first, highlighted;
+  final String? number;
+  final String title;
+  final int invocations, tokensIn, tokensOut;
+  final Duration time;
+  final bool open, first, highlighted;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final stats = [
+      IconStat(Icons.replay_rounded, '$invocations', invocations == 1 ? '1 invocazione' : '$invocations invocazioni'),
+      if (time.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(time), 'Durata totale'),
+      if (tokensIn + tokensOut > 0)
+        IconStat(Icons.toll_outlined, _k(tokensIn + tokensOut), 'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out'),
+    ];
     return Padding(
-      padding: EdgeInsets.only(top: first ? 4 : 26, bottom: 4),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
-        decoration: BoxDecoration(
-          color: highlighted ? c.primarySoft : Colors.transparent,
+      padding: EdgeInsets.only(top: first ? 4 : 22, bottom: 2),
+      child: Material(
+        color: highlighted ? c.primarySoft : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
           borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(99)),
-              child: Text(
-                block,
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: c.primary),
-              ),
-            ),
-            if (title != null) ...[
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: _sidePad),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: _gutter,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: AnimatedRotation(
+                      turns: open ? 0 : -0.25,
+                      duration: const Duration(milliseconds: 160),
+                      child: Icon(Icons.expand_more_rounded, size: 20, color: c.muted),
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ],
+                Flexible(
+                  child: Text(
+                    number == null ? title : '$number. $title',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
+                  ),
+                ),
+                _StatsAfterDash(stats: stats),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// "– icon value  icon value", leaving out the stats that do not fit.
+class _StatsAfterDash extends StatelessWidget {
+  const _StatsAfterDash({required this.stats});
+  final List<IconStat> stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Expanded(
+      child: LayoutBuilder(
+        builder: (context, box) {
+          var used = 36.0; // dash and its padding, with a little slack
+          final shown = <IconStat>[];
+          for (final s in stats) {
+            final w = s.width(context) + (shown.isEmpty ? 0 : 14);
+            if (used + w > box.maxWidth) break;
+            used += w;
+            shown.add(s);
+          }
+          if (shown.isEmpty) return const SizedBox.shrink();
+          return Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text('–', style: TextStyle(fontSize: 12.5, color: c.muted)),
+              ),
+              for (final (i, w) in shown.indexed) ...[if (i > 0) const SizedBox(width: 14), w],
+            ],
+          );
+        },
       ),
     );
   }
@@ -514,7 +620,7 @@ class _InvocationHeader extends StatelessWidget {
     final c = context.colors;
     final (_, _, invocation) = group.parts;
     final start = group.start!;
-    final duration = (live ? DateTime.now() : group.end!).difference(start);
+    final duration = group.duration(live: live);
     final (tokensIn, tokensOut, cost) = group.usage;
     final (Widget? badge, String? status) = switch (group.outcome(live: live)) {
       _Outcome.done => (Icon(Icons.check_circle_rounded, size: 15, color: c.success), 'completato'),
@@ -528,7 +634,7 @@ class _InvocationHeader extends StatelessWidget {
       ),
       _Outcome.none => (null, null),
     };
-    final stats = [
+    final stats = <IconStat>[
       if (duration.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(duration), 'Durata'),
       if (tokensIn + tokensOut > 0)
         IconStat(
@@ -567,25 +673,7 @@ class _InvocationHeader extends StatelessWidget {
                 ),
                 if (badge != null) ...[const SizedBox(width: 10), badge, const SizedBox(width: 6)],
                 if (status != null) Text(status, style: muted),
-                // On a narrow panel the numbers give way before the state does.
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, box) {
-                      final room = box.maxWidth;
-                      final shown = room >= 170 ? stats : (room >= 90 ? stats.take(1).toList() : const <Widget>[]);
-                      if (shown.isEmpty) return const SizedBox.shrink();
-                      return Row(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Text('–', style: muted),
-                          ),
-                          for (final (i, w) in shown.indexed) ...[if (i > 0) const SizedBox(width: 14), w],
-                        ],
-                      );
-                    },
-                  ),
-                ),
+                _StatsAfterDash(stats: stats),
                 SizedBox(
                   width: _timeWidth,
                   child: Text(
@@ -681,7 +769,12 @@ class _LogLineState extends State<_LogLine> {
       LogKind.success => Icon(Icons.check_circle_rounded, size: size, color: c.success),
       // The same flag: empty when the block starts, filled when it is done.
       LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: c.primary),
-      LogKind.result => Icon(Icons.flag_rounded, size: size, color: c.primary),
+      LogKind.result => switch (e.outcome) {
+        RunOutcome.done || null => Icon(Icons.flag_rounded, size: size, color: c.primary),
+        RunOutcome.again => Icon(Icons.info_outline_rounded, size: size, color: c.primary),
+        RunOutcome.interrupted => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
+        RunOutcome.blocked || RunOutcome.failed => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
+      },
       LogKind.warning => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
       LogKind.error => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
       LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: size, color: c.primary),

@@ -265,7 +265,7 @@ class IconStat extends StatelessWidget {
   )..layout()).width;
 
   /// Width this stat takes, to decide what fits in a row.
-  double width(BuildContext context) => 18 + textWidth(context, value, _style);
+  double width(BuildContext context) => 22 + textWidth(context, value, _style);
 
   @override
   Widget build(BuildContext context) {

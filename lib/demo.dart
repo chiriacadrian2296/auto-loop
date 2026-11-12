@@ -93,6 +93,7 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
         'Le card ora passano a una colonna sotto i 640 px; ho aggiunto i link mancanti.',
         at: at(66),
       ),
+      LogEntry(LogKind.system, 'Token: 118400 in / 6200 out · \$0.412', at: at(69)),
       LogEntry(LogKind.tool, 'Verifica: npx html-validate index.html', at: at(70)),
       LogEntry(LogKind.success, 'Verifica superata in 8 s · 0 errori in 3 file', at: at(78)),
       LogEntry(LogKind.success, 'Commit 4f2a9c1 · 3 file · +142 −18', at: at(79)),
@@ -105,6 +106,7 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
         at: at(111),
       ),
       LogEntry(LogKind.tool, 'Write: contatti.js', at: at(160)),
+      LogEntry(LogKind.system, 'Token: 64100 in / 2900 out · \$0.205', at: at(759)),
       LogEntry(
         LogKind.result,
         'Terminata dal supervisore: nessun output per 10 minuti.',
@@ -117,6 +119,7 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
         'Il modulo è pronto, ma per inviare le email serve una chiave del servizio esterno.',
         at: at(830),
       ),
+      LogEntry(LogKind.system, 'Token: 21800 in / 1400 out · \$0.081', at: at(830)),
       LogEntry(
         LogKind.result,
         'Serve la chiave del servizio di invio email: non posso crearla da solo.',

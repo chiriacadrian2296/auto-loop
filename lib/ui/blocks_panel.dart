@@ -435,10 +435,10 @@ class _Node extends StatelessWidget {
       BlockStatus.pending => (
         c.surface,
         c.muted,
-        c.border,
+        c.muted.withValues(alpha: 0.6),
         Text(
           '${index + 1}',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: c.muted),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.text.withValues(alpha: 0.8)),
         ),
       ),
     };
@@ -449,7 +449,7 @@ class _Node extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         shape: BoxShape.circle,
-        border: Border.all(color: border, width: 1.6),
+        border: Border.all(color: border, width: 2),
       ),
       child: DefaultTextStyle.merge(
         style: TextStyle(color: fg),
