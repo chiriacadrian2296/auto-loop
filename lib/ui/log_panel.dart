@@ -628,9 +628,9 @@ class _LogLineState extends State<_LogLine> {
       ),
       LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.muted.withValues(alpha: 0.5)),
       LogKind.success => Icon(Icons.check_circle_rounded, size: size, color: c.success),
-      // Start flag and finish flag.
+      // The same flag: empty when the block starts, filled when it is done.
       LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: c.primary),
-      LogKind.result => Icon(Icons.sports_score_rounded, size: size, color: c.primary),
+      LogKind.result => Icon(Icons.flag_rounded, size: size, color: c.primary),
       LogKind.warning => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
       LogKind.error => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
       LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: size, color: c.primary),
