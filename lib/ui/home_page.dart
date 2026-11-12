@@ -331,7 +331,8 @@ class _HomePageState extends State<HomePage> {
   /// same block still notifies.
   final _revealInLog = ValueNotifier<(int, int)?>(null);
 
-  late bool _sidebarOpen = widget.prefs.getBool('sidebarOpen') ?? true;
+  // The control panel no longer closes (the rail is kept for now).
+  late bool _sidebarOpen = true;
 
   /// True once the opening animation has finished: the content appears only
   /// then, so it is never laid out wider than the space it has.
@@ -472,15 +473,7 @@ class _HomePageState extends State<HomePage> {
                                       children: [
                                         PanelHeader(
                                           'Pannello di controllo',
-                                          actions: [
-                                            SettingsPanel.expandAllButton(),
-                                            IconButton(
-                                              tooltip: 'Chiudi il pannello',
-                                              onPressed: () => _setSidebar(false),
-                                              iconSize: 20,
-                                              icon: const Icon(Icons.keyboard_double_arrow_left_rounded),
-                                            ),
-                                          ],
+                                          actions: [SettingsPanel.expandAllButton()],
                                         ),
                                         Expanded(
                                           child: SettingsPanel(

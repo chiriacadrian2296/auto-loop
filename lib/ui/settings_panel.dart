@@ -725,39 +725,48 @@ class _CollapsibleState extends State<_Collapsible> {
                             child: SectionChevron(open: open),
                           ),
                         ),
-                        Flexible(
-                          child: Text(
-                            widget.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: widget.warning ? c.danger : c.text,
-                            ),
+                        // Section names are short: they keep their width and
+                        // the details on the right take what is left.
+                        Text(
+                          widget.title,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: widget.warning ? c.danger : c.text,
                           ),
                         ),
                         if (widget.warning) ...[
                           const SizedBox(width: 10),
                           Icon(Icons.error_rounded, size: 15, color: c.danger),
                         ],
-                      ],
-                    ),
-                    // Closed, the choices made inside show on a line below.
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOutCubic,
-                      child: open
-                          ? const SizedBox(width: double.infinity)
-                          : Padding(
-                              padding: const EdgeInsets.fromLTRB(sectionGutter, 4, 0, 0),
-                              child: Text(
-                                widget.summary,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, height: 1.4, color: c.muted),
+                        const SizedBox(width: 16),
+                        // Closed, the choices made inside show on the right,
+                        // like the numbers of the other panels: as much as
+                        // fits in part of the row, all of it in the tooltip.
+                        Expanded(
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 160),
+                            opacity: open ? 0 : 1,
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 170),
+                                child: Tooltip(
+                                  message: widget.summary,
+                                  child: Text(
+                                    open ? '' : widget.summary,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(fontSize: 12, color: c.muted),
+                                  ),
+                                ),
                               ),
                             ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

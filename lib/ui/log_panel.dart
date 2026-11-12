@@ -259,7 +259,7 @@ class _LogPanelState extends State<LogPanel> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Svuotare il registro attività?'),
+        title: const Text('Svuotare l\'attività?'),
         content: const Text(
           'Toglie le righe da questo pannello e cancella la loro copia salvata, quindi non '
           'ricompariranno alla riapertura.\n\n'
@@ -411,19 +411,19 @@ class _LogPanelState extends State<LogPanel> {
             const SizedBox(width: 6),
             ExpandAllButton(allOpen: allOpen, onPressed: heads.isEmpty ? null : () => setAll(!allOpen)),
             IconButton(
-              tooltip: 'Apri PROGRESS.md',
+              tooltip: 'Vedi progresso',
               onPressed: widget.onOpenProgress,
               iconSize: 19,
               icon: const Icon(Icons.sticky_note_2_outlined),
             ),
             IconButton(
-              tooltip: 'Apri cartella dei log',
+              tooltip: 'Vedi log completi',
               onPressed: widget.onOpenLogs,
               iconSize: 19,
-              icon: const Icon(Icons.folder_open_outlined),
+              icon: const Icon(Icons.receipt_long_outlined),
             ),
             IconButton(
-              tooltip: 'Svuota il registro',
+              tooltip: 'Svuota attività',
               onPressed: logs.isEmpty ? null : _confirmClear,
               iconSize: 19,
               icon: const Icon(Icons.delete_sweep_outlined),

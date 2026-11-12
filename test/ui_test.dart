@@ -70,14 +70,8 @@ void main() {
     await tester.tapAt(const Offset(5, 5)); // close the popup
     await tester.pumpAndSettle();
 
-    // The control panel closes to a rail and reopens from it.
-    await tester.tap(find.byTooltip('Chiudi il pannello'));
-    await tester.pumpAndSettle();
-    expect(find.byType(SettingsPanel), findsNothing);
-    expect(prefs.getBool('sidebarOpen'), isFalse);
-    await tester.tap(find.byTooltip('Apri il pannello di controllo'));
-    await tester.pumpAndSettle();
-    expect(find.byType(SettingsPanel), findsOneWidget);
+    // The control panel stays open: there is no button to hide it.
+    expect(find.byTooltip('Chiudi il pannello'), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
     // Let the background CLI detection time out inside the fake clock.
