@@ -104,6 +104,13 @@ testo
       expect(a.blocker, Blocker.authorization);
     });
 
+    test('stderr echoes are not shown, mojibake is repaired', () {
+      final s = CodexBackend().newStream();
+      expect(s.handle('        // This is the theme of your application.', stderr: true), isEmpty);
+      expect(fixMojibake('il prossimo blocco puÃ² implementare'), 'il prossimo blocco può implementare');
+      expect(fixMojibake('già pronto'), 'già pronto');
+    });
+
     test('task text mentioning quota is not an error', () {
       final s = CodexBackend().newStream();
       s.handle('{"type":"item.completed","item":{"type":"agent_message","text":"Implemento la quota utente"}}',
@@ -190,6 +197,19 @@ testo
       expect(again.logs.map((e) => e.text), engine.logs.map((e) => e.text));
       again.clearLogs();
       expect((LoopEngine(settings())..load(workDir: dir.path, planPath: plan.path)).logs, isEmpty);
+    });
+
+    test('a work folder inside another repository gets no commits', () async {
+      final sub = Directory(p.join(dir.path, 'progetto'))..createSync();
+      final plan = File(p.join(sub.path, 'plan.md'))..writeAsStringSync('## Uno\nfai uno\n');
+      final before = (await Process.run('git', ['rev-list', '--count', 'HEAD'], workingDirectory: dir.path)).stdout;
+      final engine = LoopEngine(LoopSettings(agent: AgentKind.claude, claudePath: fake, relaunchDelaySeconds: 0))
+        ..load(workDir: sub.path, planPath: plan.path);
+      await engine.start();
+      expect(engine.phase, LoopPhase.finished);
+      final after = (await Process.run('git', ['rev-list', '--count', 'HEAD'], workingDirectory: dir.path)).stdout;
+      expect(after, before);
+      expect(engine.logs.map((e) => e.text), contains(startsWith('Commit saltato')));
     });
 
     test('quota stop pauses without consuming an attempt, then resumes', () async {

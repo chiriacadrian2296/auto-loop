@@ -22,6 +22,18 @@ class LogEntry {
   }
 }
 
+/// Text that went through a Windows code page and back is shown as "puÃ²"
+/// instead of "può": undo that when it is clearly what happened.
+String fixMojibake(String text) {
+  if (!text.contains('Ã') && !text.contains('Â')) return text;
+  try {
+    final fixed = utf8.decode(latin1.encode(text));
+    return fixed.contains('\uFFFD') ? text : fixed;
+  } catch (_) {
+    return text;
+  }
+}
+
 /// Problems that are not the agent's fault and must not be retried blindly.
 enum Blocker { usageLimit, authorization }
 
@@ -80,6 +92,9 @@ abstract class AgentStream {
 
   /// The CLI reported a cleanly finished turn.
   bool get turnCompleted;
+
+  /// Estimated cost in USD, when the CLI reports one.
+  double? get costUsd;
 }
 
 abstract class AgentBackend {
@@ -153,6 +168,9 @@ class CodexBackend extends AgentBackend {
 
 class _CodexStream implements AgentStream {
   String _final = '';
+
+  @override
+  double? get costUsd => null;
   int _in = 0, _out = 0;
   Blocker? _blocker;
   String? _error;
@@ -182,17 +200,19 @@ class _CodexStream implements AgentStream {
     final e = _json(line);
     if (e == null) {
       // Startup errors (auth, sandbox) may be printed before any JSON event.
+      // Everything else on stderr is the echo of what commands read (file
+      // contents, PROGRESS.md...): it stays in the raw log, not on screen.
       final lower = line.toLowerCase();
       if (stderr && (lower.contains('error') || lower.contains('limit'))) {
         _fail(line);
-        return [LogEntry(LogKind.error, _short(line, 600))];
+        return [LogEntry(LogKind.error, _short(fixMojibake(line), 600))];
       }
-      return stderr ? [LogEntry(LogKind.system, _short(line))] : const [];
+      return const [];
     }
     final type = e['type'] as String? ?? '';
     switch (type) {
       case 'thread.started':
-        return [LogEntry(LogKind.system, 'Sessione Codex avviata')];
+        return const [];
       case 'turn.completed':
         _completed = true;
         final u = (e['usage'] as Map?)?.cast<String, Object?>() ?? const {};
@@ -222,7 +242,7 @@ class _CodexStream implements AgentStream {
         if (!completed) return const [];
         final text = item['text']?.toString() ?? '';
         if (text.trim().isNotEmpty) _final = text;
-        return [LogEntry(LogKind.agent, text.trim())];
+        return [LogEntry(LogKind.agent, fixMojibake(text.trim()))];
       case 'command_execution':
         final cmd = _short(item['command']?.toString() ?? '', 200);
         if (!completed) return [LogEntry(LogKind.tool, '\$ $cmd')];
@@ -276,6 +296,10 @@ class ClaudeBackend extends AgentBackend {
 
 class _ClaudeStream implements AgentStream {
   String _final = '';
+  double? _cost;
+
+  @override
+  double? get costUsd => _cost;
   String _lastLogged = '';
   int _in = 0, _out = 0;
   Blocker? _blocker;
@@ -305,17 +329,14 @@ class _ClaudeStream implements AgentStream {
         if (b != null) {
           _blocker ??= b;
           _error = line;
-          return [LogEntry(LogKind.error, _short(line, 600))];
+          return [LogEntry(LogKind.error, _short(fixMojibake(line), 600))];
         }
-        return [LogEntry(LogKind.system, _short(line))];
+        return const [];
       }
       return const [];
     }
     switch (e['type']) {
       case 'system':
-        if (e['subtype'] == 'init') {
-          return [LogEntry(LogKind.system, 'Sessione Claude avviata (${e['model'] ?? 'modello predefinito'})')];
-        }
         return const [];
       case 'assistant':
         final msg = (e['message'] as Map?)?.cast<String, Object?>() ?? const {};
@@ -328,7 +349,7 @@ class _ClaudeStream implements AgentStream {
               _lastLogged = t;
               final b = classifyError(t);
               // Auth/quota failures arrive as a synthetic assistant message.
-              out.add(LogEntry(b != null && t.length < 400 ? LogKind.error : LogKind.agent, t.trim()));
+              out.add(LogEntry(b != null && t.length < 400 ? LogKind.error : LogKind.agent, fixMojibake(t.trim())));
             }
           } else if (c['type'] == 'tool_use') {
             out.add(LogEntry(LogKind.tool, '${c['name']}: ${_toolSummary(c['input'])}'));
@@ -350,7 +371,8 @@ class _ClaudeStream implements AgentStream {
         _completed = true;
         if (result.trim().isNotEmpty) _final = result;
         final cost = e['total_cost_usd'];
-        return [if (cost is num) LogEntry(LogKind.system, 'Costo stimato: \$${cost.toStringAsFixed(3)}')];
+        if (cost is num) _cost = cost.toDouble();
+        return const [];
     }
     return const [];
   }

@@ -204,10 +204,6 @@ class LoopEngine extends ChangeNotifier {
     _stopRequested = false;
     _pauseRequested = false;
     sessionStartedAt = DateTime.now();
-    _log(
-      LogKind.info,
-      'Avvio del loop con ${settings.agent.label} (account: ${settings.profile.name}) su ${p.basename(planPath!)}.',
-    );
     try {
       await _loop();
     } catch (e, st) {
@@ -466,7 +462,13 @@ class LoopEngine extends ChangeNotifier {
     final (verdict, reason) = parseVerdict(finalText);
     final summary = _summary(finalText);
     if (stream.inputTokens + stream.outputTokens > 0) {
-      _log(LogKind.system, 'Token: ${stream.inputTokens} in / ${stream.outputTokens} out');
+      // Not shown as a line: the activity panel puts it in the invocation's header.
+      final cost = stream.costUsd;
+      _log(
+        LogKind.system,
+        'Token: ${stream.inputTokens} in / ${stream.outputTokens} out'
+        '${cost == null ? '' : ' · \$${cost.toStringAsFixed(3)}'}',
+      );
     }
 
     if (outcome.killReason == KillReason.stopped) {
@@ -564,8 +566,18 @@ class LoopEngine extends ChangeNotifier {
     if (!settings.gitCommit) return;
     final dir = workDir!;
     try {
-      final inside = await git(['rev-parse', '--is-inside-work-tree'], dir);
-      if (inside.exitCode != 0 || inside.stdout.toString().trim() != 'true') return;
+      final top = await git(['rev-parse', '--show-toplevel'], dir);
+      if (top.exitCode != 0) return; // not a repository: nothing to commit
+      // Only commit in the folder's own repository: a work folder inside
+      // another project (e.g. a subfolder of AutoLoop itself) must not
+      // write commits into that project.
+      if (!p.equals(p.normalize(top.stdout.toString().trim()), p.normalize(dir))) {
+        _log(
+          LogKind.warning,
+          'Commit saltato: la cartella di lavoro è dentro un altro repository (${top.stdout.toString().trim()}).',
+        );
+        return;
+      }
       await git(['add', '-A'], dir);
       final staged = await git(['diff', '--cached', '--quiet'], dir);
       if (staged.exitCode == 0) {
