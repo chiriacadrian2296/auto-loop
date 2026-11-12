@@ -334,6 +334,8 @@ class _LogPanelState extends State<LogPanel> {
             // Open blocks breathe; closed ones sit close together.
             gap: rows.isEmpty ? 4 : (previousOpen || blockOpen ? 22 : 4),
             highlighted: identical(head, _flash),
+            // How the block ended here: as its latest invocation did.
+            outcome: run.last.outcome(live: lastRun && engine.isActive),
             onTap: () =>
                 setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head)),
           ),
@@ -525,8 +527,10 @@ class _BlockHeading extends StatelessWidget {
     required this.open,
     required this.gap,
     required this.onTap,
+    required this.outcome,
     this.highlighted = false,
   });
+  final _Outcome outcome;
   final String? number;
   final String title;
   final int invocations, tokensIn, tokensOut;
@@ -575,6 +579,7 @@ class _BlockHeading extends StatelessWidget {
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
                   ),
                 ),
+                if (_badge(outcome, c) case final badge?) ...[const SizedBox(width: 10), badge],
                 _StatsAfterDash(stats: stats),
               ],
             ),
@@ -620,34 +625,49 @@ class _StatsAfterDash extends StatelessWidget {
   }
 }
 
+/// The outcome icon of a block or invocation; the word goes in the tooltip.
+Widget? _badge(_Outcome outcome, AppColors c) {
+  final (Widget? icon, String? label) = switch (outcome) {
+    _Outcome.done => (Icon(Icons.check_circle_rounded, size: 15, color: c.success), 'Completato'),
+    _Outcome.again => (Icon(Icons.replay_circle_filled_rounded, size: 15, color: c.muted), 'Continua'),
+    _Outcome.blocked => (Icon(Icons.error_rounded, size: 15, color: c.danger), 'Bloccato'),
+    _Outcome.interrupted => (Icon(Icons.warning_rounded, size: 15, color: c.warning), 'Interrotto'),
+    _Outcome.failed => (Icon(Icons.cancel_rounded, size: 15, color: c.danger), 'Problema'),
+    _Outcome.running => (
+      SizedBox.square(dimension: 12, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
+      'In corso',
+    ),
+    _Outcome.none => (null, null),
+  };
+  return icon == null ? null : Tooltip(message: label!, child: icon);
+}
+
 String _k(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(n >= 100000 ? 0 : 1)}k' : '$n';
 
-/// One invocation: how it ended, then how long it took and what it cost.
-class _InvocationHeader extends StatelessWidget {
+/// One invocation: its name and how it ended; how long it took, what it
+/// cost and when it started show on hover, like the times of the lines.
+class _InvocationHeader extends StatefulWidget {
   const _InvocationHeader({required this.group, required this.open, required this.live, required this.onTap});
   final _Group group;
   final bool open, live;
   final VoidCallback onTap;
 
   @override
+  State<_InvocationHeader> createState() => _InvocationHeaderState();
+}
+
+class _InvocationHeaderState extends State<_InvocationHeader> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final group = widget.group;
     final (_, _, invocation) = group.parts;
     final start = group.start!;
-    final duration = group.duration(live: live);
+    final duration = group.duration(live: widget.live);
     final (tokensIn, tokensOut, cost) = group.usage;
-    final (Widget? badge, String? status) = switch (group.outcome(live: live)) {
-      _Outcome.done => (Icon(Icons.check_circle_rounded, size: 15, color: c.success), 'completato'),
-      _Outcome.again => (Icon(Icons.replay_circle_filled_rounded, size: 15, color: c.muted), 'continua'),
-      _Outcome.blocked => (Icon(Icons.error_rounded, size: 15, color: c.danger), 'bloccato'),
-      _Outcome.interrupted => (Icon(Icons.warning_rounded, size: 15, color: c.warning), 'interrotto'),
-      _Outcome.failed => (Icon(Icons.cancel_rounded, size: 15, color: c.danger), 'problema'),
-      _Outcome.running => (
-        SizedBox.square(dimension: 12, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
-        'in corso',
-      ),
-      _Outcome.none => (null, null),
-    };
+    final badge = _badge(group.outcome(live: widget.live), c);
     final stats = <IconStat>[
       if (duration.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(duration), 'Durata'),
       if (tokensIn + tokensOut > 0)
@@ -657,50 +677,74 @@ class _InvocationHeader extends StatelessWidget {
           'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out${cost == null ? '' : ' · $cost'}',
         ),
     ];
-    final muted = TextStyle(fontSize: 12.5, color: c.muted);
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 6, bottom: 2),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: _gutter,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: AnimatedRotation(
-                      turns: open ? 0 : -0.25,
-                      duration: const Duration(milliseconds: 160),
-                      child: _Chevron(color: c),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 6, bottom: 2),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: _gutter,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: AnimatedRotation(
+                        turns: widget.open ? 0 : -0.25,
+                        duration: const Duration(milliseconds: 160),
+                        child: _Chevron(color: c),
+                      ),
                     ),
                   ),
-                ),
-                Text(
-                  invocation == null ? 'Invocazione' : 'Invocazione $invocation',
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
-                ),
-                if (badge != null) ...[const SizedBox(width: 10), badge, const SizedBox(width: 6)],
-                if (status != null) Text(status, style: muted),
-                _StatsAfterDash(stats: stats),
-                SizedBox(
-                  width: _timeWidth,
-                  child: Text(
-                    _clock(start),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: c.muted.withValues(alpha: 0.8),
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  Text(
+                    invocation == null ? 'Invocazione' : 'Invocazione $invocation',
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
+                  ),
+                  if (badge != null) ...[const SizedBox(width: 10), badge],
+                  Expanded(
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 120),
+                      opacity: _hover ? 1 : 0,
+                      // Right-aligned; on a narrow panel the left end is cut
+                      // instead of overflowing.
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        reverse: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 12),
+                            for (final (i, w) in stats.indexed) ...[if (i > 0) const SizedBox(width: 14), w],
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  SizedBox(
+                    width: _timeWidth,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 120),
+                      opacity: _hover ? 1 : 0,
+                      child: Text(
+                        _clock(start),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: c.muted.withValues(alpha: 0.8),
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

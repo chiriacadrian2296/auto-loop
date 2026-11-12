@@ -441,9 +441,11 @@ class _Node extends StatelessWidget {
       // Solid, so the line behind does not show through.
       BlockStatus.pending => (Color.alphaBlend(c.muted.withValues(alpha: 0.28), c.surface), number),
     };
+    // Grey discs look smaller than coloured ones of the same size.
+    final grey = status == BlockStatus.pending || status == BlockStatus.skipped;
     return Container(
-      width: size,
-      height: size,
+      width: grey ? size + 3 : size,
+      height: grey ? size + 3 : size,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
       child: child,
