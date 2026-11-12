@@ -12,12 +12,13 @@ import 'markdown_text.dart';
 import 'section_title.dart';
 
 enum _Filter {
-  all('Tutto'),
-  messages('Messaggi'),
-  commands('Comandi'),
-  events('Eventi');
+  all('Tutto', Icons.all_inclusive_rounded),
+  messages('Messaggi', Icons.chat_bubble_outline_rounded),
+  commands('Comandi', Icons.terminal_rounded),
+  events('Eventi', Icons.flag_outlined);
 
-  const _Filter(this.label);
+  const _Filter(this.label, this.icon);
+  final IconData icon;
   final String label;
 
   bool accepts(LogEntry e) => switch (this) {
@@ -188,24 +189,17 @@ class _LogPanelState extends State<LogPanel> {
       );
       return;
     }
-    final lastHeader = widget.engine.logs.lastWhere((e) => e.kind == LogKind.info && e.text.startsWith('▶'));
-    final runs = _runs(_groupLogs(widget.engine.logs)).where((r) => r.first.header != null).toList();
-    final mine = runs.where((r) => _isHeaderOf(r.first.header!, block)).map((r) => r.first.header!).toSet();
-    final lastRun = runs.last.first.header!;
+    final mine = _runs(_groupLogs(widget.engine.logs))
+        .where((r) => r.first.header != null && _isHeaderOf(r.first.header!, block))
+        .map((r) => r.first.header!)
+        .toSet();
     setState(() {
-      // Open this block wherever it appears (the latest block is open by default).
-      _toggledBlocks
-        ..clear()
-        ..addAll(mine.where((h) => !identical(h, lastRun)));
-      if (!mine.contains(lastRun)) _toggledBlocks.add(lastRun);
+      // Everything is open unless closed: open this block wherever it appears.
+      _toggledBlocks.removeAll(mine);
       _filter = _Filter.all;
       _atBottom = false;
       _unseen = false;
-      // Open exactly this block's invocations (the latest is open by default).
-      _toggled
-        ..clear()
-        ..addAll(headers.where((h) => !identical(h, lastHeader)));
-      if (!headers.any((h) => identical(h, lastHeader))) _toggled.add(lastHeader);
+      _toggled.removeAll(headers);
       _flash = headers.first;
     });
     _scrollTo(headers.first);
@@ -304,20 +298,15 @@ class _LogPanelState extends State<LogPanel> {
     final runs = _runs(groups);
     final heads = [for (final r in runs) ?r.first.header];
     final headers = [for (final g in groups) ?g.header];
-    final lastHead = runs.isEmpty ? null : runs.last.first.header;
-    final lastHeader = groups.isEmpty ? null : groups.last.header;
-    // The latest block and invocation are open by default; toggling flips that.
-    bool isOpen(LogEntry h, LogEntry? latest, Set<LogEntry> toggled) => identical(h, latest) != toggled.contains(h);
-    final allOpen =
-        heads.every((h) => isOpen(h, lastHead, _toggledBlocks)) &&
-        headers.every((h) => isOpen(h, lastHeader, _toggled));
+    // Everything starts open; the sets hold what the user closed.
+    final allOpen = _toggledBlocks.isEmpty && _toggled.isEmpty;
     void setAll(bool open) => setState(() {
       _toggledBlocks
         ..clear()
-        ..addAll(heads.where((h) => identical(h, lastHead) != open));
+        ..addAll(open ? const <LogEntry>[] : heads);
       _toggled
         ..clear()
-        ..addAll(headers.where((h) => identical(h, lastHeader) != open));
+        ..addAll(open ? const <LogEntry>[] : headers);
     });
     final rows = <Widget>[];
     var previousOpen = false;
@@ -330,7 +319,7 @@ class _LogPanelState extends State<LogPanel> {
       var blockOpen = true;
       if (head != null) {
         // The block is named once, with the totals of its invocations.
-        blockOpen = lastRun != _toggledBlocks.contains(head);
+        blockOpen = !_toggledBlocks.contains(head);
         final (block, title, _) = run.first.parts;
         var input = 0, output = 0;
         var time = Duration.zero;
@@ -377,7 +366,7 @@ class _LogPanelState extends State<LogPanel> {
         if (_filter != _Filter.all && visible.isEmpty) continue;
         final last = lastRun && identical(g, run.last);
         final header = g.header;
-        final open = header == null || (last != _toggled.contains(header));
+        final open = header == null || !_toggled.contains(header);
         if (header != null) {
           rows.add(
             tab(
@@ -485,8 +474,11 @@ class _LogPanelState extends State<LogPanel> {
 
 /// A compact pill showing the current filter; the choices open in a menu.
 class _FilterBar extends StatelessWidget {
-  const _FilterBar({required this.value, required this.onChanged});
+  const _FilterBar({required this.value, required this.onChanged, this.compact = false});
   final _Filter value;
+
+  /// Only the icon of the chosen filter, for narrow places.
+  final bool compact;
   final ValueChanged<_Filter> onChanged;
 
   @override
@@ -511,6 +503,8 @@ class _FilterBar extends StatelessWidget {
             child: Row(
               children: [
                 SizedBox(width: 24, child: f == value ? Icon(Icons.check_rounded, size: 16, color: c.primary) : null),
+                Icon(f.icon, size: 16, color: f == value ? c.primary : c.muted),
+                const SizedBox(width: 10),
                 Text(f.label, style: TextStyle(fontSize: 13.5, color: f == value ? c.primary : c.text)),
               ],
             ),
@@ -522,12 +516,14 @@ class _FilterBar extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.filter_list_rounded, size: 15, color: active ? c.primary : c.muted),
-            const SizedBox(width: 6),
-            Text(
-              value.label,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? c.primary : c.muted),
-            ),
+            Icon(compact ? value.icon : Icons.filter_list_rounded, size: 15, color: active ? c.primary : c.muted),
+            if (!compact) ...[
+              const SizedBox(width: 6),
+              Text(
+                value.label,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? c.primary : c.muted),
+              ),
+            ],
             Icon(Icons.expand_more_rounded, size: 16, color: active ? c.primary : c.muted),
           ],
         ),
@@ -761,41 +757,7 @@ class _LogLineState extends State<_LogLine> {
 
     // One icon per line, always in the same column and size. Only icons
     // carry color; texts stay neutral.
-    const size = 15.0;
-    final agentIcon = Padding(
-      padding: const EdgeInsets.all(1),
-      child: SvgPicture.asset(
-        AgentBadge.asset(widget.agent),
-        width: size - 2,
-        height: size - 2,
-        colorFilter: ColorFilter.mode(c.primary, BlendMode.srcIn),
-      ),
-    );
-    final Widget icon = switch (e.kind) {
-      LogKind.agent => Padding(
-        padding: const EdgeInsets.all(1),
-        child: SvgPicture.asset(
-          AgentBadge.asset(widget.agent),
-          width: size - 2,
-          height: size - 2,
-          colorFilter: ColorFilter.mode(c.primary, BlendMode.srcIn),
-        ),
-      ),
-      LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.muted),
-      LogKind.success => Icon(Icons.check_circle_rounded, size: size, color: c.success),
-      // The same flag: empty when the block starts, filled when it is done.
-      LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: c.text),
-      LogKind.result => switch (e.outcome) {
-        RunOutcome.done || null => Icon(Icons.flag_rounded, size: size, color: c.text),
-        // Going on with the block reads like a word from the agent.
-        RunOutcome.again => agentIcon,
-        RunOutcome.interrupted => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
-        RunOutcome.blocked || RunOutcome.failed => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
-      },
-      LogKind.warning => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
-      LogKind.error => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
-      LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: size, color: c.muted),
-    };
+    final icon = _lineIcon(e, widget.agent, c);
 
     // One grey for every text: the icon says what kind of line it is.
     final body = TextStyle(fontSize: 13.5, height: 1.5, color: Color.lerp(c.muted, c.text, 0.55));
@@ -920,6 +882,129 @@ class _BlockProgress extends StatelessWidget {
       tooltip: steps
           ? 'Passi segnalati dall\'agente'
           : 'L\'agente non ha ancora segnalato i passi: invocazioni usate sul massimo consentito',
+    );
+  }
+}
+
+/// The icon of a line, the same in the log and in the strip at the bottom:
+/// only icons carry color.
+Widget _lineIcon(LogEntry e, AgentKind agent, AppColors c, {double size = 15}) {
+  final agentIcon = Padding(
+    padding: const EdgeInsets.all(1),
+    child: SvgPicture.asset(
+      AgentBadge.asset(agent),
+      width: size - 2,
+      height: size - 2,
+      colorFilter: ColorFilter.mode(c.primary, BlendMode.srcIn),
+    ),
+  );
+  return switch (e.kind) {
+    LogKind.agent => agentIcon,
+    LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.muted),
+    LogKind.success => Icon(Icons.check_circle_rounded, size: size, color: c.success),
+    // The same flag: empty when the block starts, filled when it is done.
+    LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: c.text),
+    LogKind.result => switch (e.outcome) {
+      RunOutcome.done || null => Icon(Icons.flag_rounded, size: size, color: c.text),
+      // Going on with the block reads like a word from the agent.
+      RunOutcome.again => agentIcon,
+      RunOutcome.interrupted => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
+      RunOutcome.blocked || RunOutcome.failed => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
+    },
+    LogKind.warning => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
+    LogKind.error => Icon(Icons.error_outline_rounded, size: size, color: c.danger),
+    LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: size, color: c.muted),
+  };
+}
+
+/// The whole activity as a row of icons, newest on the right: each icon's
+/// tooltip tells the line; block and invocation numbers mark where each
+/// invocation starts. Filtered like the activity log.
+class ActivityStrip extends StatefulWidget {
+  const ActivityStrip({super.key, required this.engine});
+  final LoopEngine engine;
+
+  @override
+  State<ActivityStrip> createState() => _ActivityStripState();
+}
+
+class _ActivityStripState extends State<ActivityStrip> {
+  _Filter _filter = _Filter.all;
+
+  static String _short(String text) {
+    final t = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return t.length > 280 ? '${t.substring(0, 280)}…' : t;
+  }
+
+  Widget _marker(IconData icon, String value, String tooltip) {
+    final c = context.colors;
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(6)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: c.muted),
+            const SizedBox(width: 3),
+            Text(
+              value,
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.muted, height: 1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final engine = widget.engine;
+    final items = <Widget>[];
+    String? lastBlock;
+    for (final e in engine.logs) {
+      if (e.kind == LogKind.info && e.text.startsWith('▶')) {
+        final m = RegExp(r'Blocco (\d+)/\d+ «(.*)» — invocazione (\d+)').firstMatch(e.text);
+        if (m == null) continue;
+        if (m.group(1) != lastBlock) {
+          items.add(_marker(Icons.layers_outlined, m.group(1)!, 'Blocco ${m.group(1)}: ${m.group(2)}'));
+        }
+        lastBlock = m.group(1);
+        items.add(_marker(Icons.replay_rounded, m.group(3)!, 'Invocazione ${m.group(3)} · ${_clock(e.at)}'));
+        continue;
+      }
+      if (!_shown(e) || !_filter.accepts(e)) continue;
+      items.add(
+        Tooltip(
+          message: '${_clock(e.at)}  ${_short(e.text)}',
+          constraints: const BoxConstraints(maxWidth: 420),
+          waitDuration: const Duration(milliseconds: 150),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 1),
+            child: _lineIcon(e, engine.settings.agent, c, size: 16),
+          ),
+        ),
+      );
+    }
+    return Row(
+      children: [
+        _FilterBar(value: _filter, onChanged: (f) => setState(() => _filter = f), compact: true),
+        const SizedBox(width: 12),
+        Expanded(
+          child: items.isEmpty
+              ? Text('Nessuna attività', style: TextStyle(fontSize: 12.5, color: c.muted))
+              // Newest on the right; older ones scroll away to the left.
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 7),
+                  itemBuilder: (context, i) => Center(child: items[items.length - 1 - i]),
+                ),
+        ),
+      ],
     );
   }
 }

@@ -410,7 +410,8 @@ class _TimelineItem extends StatelessWidget {
               },
             ),
           );
-    final actions = _actionsFor(state.status);
+    // The actions show on the selected block only.
+    final actions = selected ? _actionsFor(state.status) : const <(String, IconData, BlockStatus)>[];
 
     return GestureDetector(
       onSecondaryTapUp: (d) => onContextMenu(d.globalPosition),

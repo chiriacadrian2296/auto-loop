@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:auto_loop/ui/app_theme.dart';
 import 'package:auto_loop/ui/markdown_text.dart';
 import 'package:flutter/material.dart';
+import 'package:auto_loop/ui/log_panel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -43,8 +44,12 @@ void main() {
     await tester.pumpWidget(AutoLoopApp(engine: LoopEngine(LoopSettings())..demo = true, prefs: prefs));
     await tester.pump();
 
-    // Block 3's invocation is collapsed: its message is not on screen.
+    // Everything starts open; collapse the log, then a click on the block
+    // opens its invocations again.
     const message = 'Le card ora passano a una colonna sotto i 640 px; ho aggiunto i link mancanti.';
+    expect(find.textContaining(message, findRichText: true), findsOneWidget);
+    await tester.tap(find.descendant(of: find.byType(LogPanel), matching: find.byTooltip('Comprimi tutto')));
+    await tester.pump();
     expect(find.textContaining(message, findRichText: true), findsNothing);
 
     await tester.tap(find.text('Sezione progetti').first);

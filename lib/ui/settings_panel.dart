@@ -170,6 +170,7 @@ class SettingsPanel extends StatelessWidget {
                                 for (final v in SplitStrategy.values)
                                   Choice(
                                     value: v,
+                                    icon: _strategyIcon[v],
                                     dividerAfter: v == SplitStrategy.auto,
                                     label: v.label,
                                     description: _strategyInfo[v]!.$2,
@@ -235,6 +236,7 @@ class SettingsPanel extends StatelessWidget {
                               choices: [
                                 Choice(
                                   value: Autonomy.sandboxed,
+                                  icon: Icons.shield_outlined,
                                   label: 'Protetta',
                                   short: s.agent == AgentKind.codex
                                       ? 'Sandbox sulla cartella del progetto'
@@ -245,6 +247,7 @@ class SettingsPanel extends StatelessWidget {
                                 ),
                                 const Choice(
                                   value: Autonomy.full,
+                                  icon: Icons.lock_open_rounded,
                                   label: 'Accesso completo',
                                   short: 'Nessuna sandbox né conferma',
                                   description:
@@ -357,6 +360,7 @@ class SettingsPanel extends StatelessWidget {
                             choices: [
                               Choice(
                                 value: QuotaBehavior.wait,
+                                icon: Icons.update_rounded,
                                 label: QuotaBehavior.wait.label,
                                 short: 'Riprova ogni ${s.quotaWaitMinutes} min',
                                 description:
@@ -364,6 +368,7 @@ class SettingsPanel extends StatelessWidget {
                               ),
                               Choice(
                                 value: QuotaBehavior.stop,
+                                icon: Icons.pause_circle_outline_rounded,
                                 label: QuotaBehavior.stop.label,
                                 short: 'Il loop va in pausa',
                                 description: 'Mette il loop in pausa: lo riprendi tu quando vuoi.',
@@ -664,9 +669,9 @@ class _Collapsible extends StatefulWidget {
   static const all = ['Piano', 'Agente', 'Account', 'Richiamo', 'Quota e budget', 'Fine blocco', 'Istruzioni'];
 
   // Shared by every section (and the expand/collapse-all button); survives
-  // the list recycling sections that scroll out of view. The main sections
-  // start open, the advanced ones closed.
-  static final open = ValueNotifier<Set<String>>({'Piano', 'Agente'});
+  // the list recycling sections that scroll out of view. Every section
+  // starts open.
+  static final open = ValueNotifier<Set<String>>({...all});
 
   @override
   State<_Collapsible> createState() => _CollapsibleState();
@@ -1035,6 +1040,15 @@ class _ChoiceCard<T> extends StatelessWidget {
   }
 }
 
+const _strategyIcon = {
+  SplitStrategy.auto: Icons.auto_awesome_outlined,
+  SplitStrategy.headings: Icons.title_rounded,
+  SplitStrategy.numbered: Icons.format_list_numbered_rounded,
+  SplitStrategy.checkboxes: Icons.checklist_rounded,
+  SplitStrategy.bullets: Icons.format_list_bulleted_rounded,
+  SplitStrategy.whole: Icons.article_outlined,
+};
+
 const _strategyInfo = <SplitStrategy, (String, String)>{
   SplitStrategy.auto: (
     'Riconosce la struttura del file',
@@ -1245,6 +1259,7 @@ class _ModelPicker extends StatelessWidget {
       choices: [
         const Choice(
           value: '',
+          icon: Icons.tune_rounded,
           label: 'Predefinito della CLI',
           description: 'Il modello configurato nella CLI.',
           dividerAfter: true,
@@ -1252,12 +1267,14 @@ class _ModelPicker extends StatelessWidget {
         for (final m in catalog.models)
           Choice(
             value: m.id,
+            icon: Icons.auto_awesome_outlined,
             label: m.label,
             tag: m.label.toLowerCase() == m.id ? '' : m.id,
             description: m.description,
           ),
         // A model set earlier by hand stays selectable until changed.
-        if (value.isNotEmpty && catalog.find(value) == null) Choice(value: value, label: value, tag: 'personalizzato'),
+        if (value.isNotEmpty && catalog.find(value) == null)
+          Choice(value: value, icon: Icons.edit_outlined, label: value, tag: 'personalizzato'),
       ],
     );
     if (picked != null) onChanged(picked);
@@ -1318,6 +1335,7 @@ class _EffortPicker extends StatelessWidget {
       choices: [
         Choice(
           value: '',
+          icon: Icons.tune_rounded,
           label: 'Predefinito',
           dividerAfter: true,
           tag: defaultLevel ?? '',
@@ -1325,7 +1343,9 @@ class _EffortPicker extends StatelessWidget {
               ? 'Il livello configurato nella CLI.'
               : 'Il livello consigliato per questo modello: ${_effortName(defaultLevel!).toLowerCase()}.',
         ),
-        for (final e in efforts) Choice(value: e, label: _effortName(e), tag: e, description: _effortInfo[e]?.$2 ?? ''),
+        // Levels go from least to most reasoning: numbered in that order.
+        for (final (i, e) in efforts.indexed)
+          Choice(value: e, iconText: '${i + 1}', label: _effortName(e), tag: e, description: _effortInfo[e]?.$2 ?? ''),
       ],
     );
     if (picked != null) onChanged(picked);

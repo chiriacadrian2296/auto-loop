@@ -257,9 +257,15 @@ class _HomePageState extends State<HomePage> {
       selected: '${recent.indexWhere((r) => _planPath != null && p.equals(r.$1, _planPath!))}',
       choices: [
         for (final (i, r) in recent.indexed)
-          Choice(value: '$i', label: p.basename(r.$1), description: 'Cartella di lavoro: ${short(r.$2)}'),
+          Choice(
+            value: '$i',
+            icon: Icons.description_outlined,
+            label: p.basename(r.$1),
+            description: 'Cartella di lavoro: ${short(r.$2)}',
+          ),
         const Choice(
           value: _browse,
+          icon: Icons.folder_open_outlined,
           label: 'Sfoglia…',
           description: 'Scegli un file .md o .txt dal computer.',
           accent: true,
@@ -440,18 +446,10 @@ class _HomePageState extends State<HomePage> {
           children: [
             Column(
               children: [
-                _TopBar(
-                  engine: engine,
-                  themeMode: widget.themeMode.value,
-                  onThemeChanged: (m) => widget.themeMode.value = m,
-                  onStart: blocker != null || active || engine.phase == LoopPhase.finished ? null : engine.start,
-                  blocker: blocker == null ? null : (blocker.$2, blocker.$3),
-                  onPause: active && !engine.pauseRequested ? engine.requestPause : null,
-                  onStop: active && engine.phase != LoopPhase.stopping ? _confirmStop : null,
-                ),
+                _TopBar(themeMode: widget.themeMode.value, onThemeChanged: (m) => widget.themeMode.value = m),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -570,6 +568,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
+                _BottomBar(
+                  engine: engine,
+                  onStart: blocker != null || active || engine.phase == LoopPhase.finished ? null : engine.start,
+                  blocker: blocker == null ? null : (blocker.$2, blocker.$3),
+                  onPause: active && !engine.pauseRequested ? engine.requestPause : null,
+                  onStop: active && engine.phase != LoopPhase.stopping ? _confirmStop : null,
+                ),
               ],
             ),
             if (_dragging) const Positioned.fill(child: _DropOverlay()),
@@ -580,20 +585,52 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+/// The window's title bar: the app's name, and the window buttons.
 class _TopBar extends StatelessWidget {
-  const _TopBar({
-    required this.engine,
-    required this.themeMode,
-    required this.onThemeChanged,
-    this.blocker,
-    this.onStart,
-    this.onPause,
-    this.onStop,
-  });
-
-  final LoopEngine engine;
+  const _TopBar({required this.themeMode, required this.onThemeChanged});
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: WindowDragArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 16, 12, 16),
+              child: Row(
+                children: [
+                  const LogoMark(size: 28),
+                  const SizedBox(width: 10),
+                  Text(
+                    'AutoLoop',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
+                  ),
+                  const Spacer(),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Window frame: the theme switch sits with the window buttons.
+        WindowButtons(
+          leading: [ThemeCaptionButton(mode: themeMode, onChanged: onThemeChanged)],
+        ),
+      ],
+    );
+  }
+}
+
+/// The bar under the panels: the main control lined up with the logo above,
+/// what it does where the app's name is, then the plan's totals and the
+/// whole activity as a strip of icons.
+class _BottomBar extends StatelessWidget {
+  const _BottomBar({required this.engine, this.blocker, this.onStart, this.onPause, this.onStop});
+
+  final LoopEngine engine;
 
   /// Why the start button is disabled, and how to fix it.
   final (String, VoidCallback)? blocker;
@@ -616,120 +653,111 @@ class _TopBar extends StatelessWidget {
     final state = engine.state;
     final active = engine.isActive;
     final paused = engine.phase == LoopPhase.paused;
+    final finished = engine.phase == LoopPhase.finished;
 
-    // Only the controls that make sense right now.
-    final controls = active
-        ? [
-            _RoundAction(
-              icon: Icons.pause_rounded,
-              tooltip: engine.pauseRequested
-                  ? 'Pausa richiesta: si ferma alla fine del passo'
-                  : 'Pausa alla fine del passo (Spazio)',
-              onPressed: onPause,
-            ),
-            const SizedBox(width: 8),
-            _RoundAction(
-              icon: Icons.stop_rounded,
-              tooltip: 'Ferma ora (Maiusc+Spazio)',
-              onPressed: onStop,
-              danger: true,
-            ),
-          ]
+    final (IconData icon, String label, String tooltip, VoidCallback? action) = active
+        ? (
+            Icons.pause_rounded,
+            engine.pauseRequested ? 'Pausa richiesta' : 'Pausa',
+            engine.pauseRequested ? 'Si ferma alla fine del passo' : 'Pausa alla fine del passo (Spazio)',
+            onPause,
+          )
+        : finished
+        ? (Icons.check_rounded, 'Piano completato', 'Tutti i blocchi sono completati', null)
+        : paused
+        ? (Icons.play_arrow_rounded, 'Riprendi', 'Riprendi (Spazio)', onStart)
+        : (Icons.play_arrow_rounded, 'Avvia', 'Avvia (Spazio)', onStart);
+
+    Widget divider() =>
+        Container(width: 1, height: 22, margin: const EdgeInsets.symmetric(horizontal: 16), color: c.border);
+
+    final plan = engine.plan;
+    final stats = state == null
+        ? <_Stat>[]
         : [
-            _RoundAction(
-              icon: Icons.play_arrow_rounded,
-              tooltip: engine.phase == LoopPhase.finished
-                  ? 'Piano completato'
-                  : paused
-                  ? 'Riprendi (Spazio)'
-                  : 'Avvia (Spazio)',
-              onPressed: onStart,
-              primary: true,
-            ),
+            _Stat(value: _fmt(engine.totalTime), label: 'tempo'),
+            _Stat(value: _compact(state.inputTokens), label: 'token in'),
+            _Stat(value: _compact(state.outputTokens), label: 'token out'),
+            _Stat(value: '${state.runs}', label: state.runs == 1 ? 'invocazione' : 'invocazioni'),
+            _Stat(value: '${state.commits}', label: 'commit'),
+            if (plan != null) _Stat(value: '${engine.doneCount}/${plan.blocks.length}', label: 'blocchi'),
           ];
 
-    // The name alone on the left; the controls in the middle, between the
-    // time spent and the tokens used; the window buttons on the right.
-    return Row(
-      children: [
-        Expanded(
-          child: WindowDragArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 16, 12, 16),
-              child: Row(
-                children: [
-                  const LogoMark(size: 28),
-                  const SizedBox(width: 10),
-                  Text(
-                    'AutoLoop',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
-                  ),
-                  const Spacer(),
-                ],
-              ),
-            ),
-          ),
-        ),
-        WindowDragArea(
+    return WindowDragArea(
+      child: Padding(
+        // Lined up with the logo and the name in the title bar.
+        padding: const EdgeInsets.fromLTRB(22, 12, 22, 14),
+        child: SizedBox(
+          height: 36,
           child: Row(
             children: [
-              SizedBox(
-                width: 150,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: state == null
-                      ? null
-                      : FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: _Stat(value: _fmt(engine.totalTime), label: 'tempo'),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 18),
-              ...controls,
-              const SizedBox(width: 18),
-              SizedBox(
-                width: 150,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: state == null
-                      ? null
-                      : FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: _Stat(value: _compact(state.totalTokens), label: 'token'),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                child: WindowDragArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: blocker == null
-                          ? const SizedBox(height: 36)
-                          : _BlockerChip(reason: blocker!.$1, onTap: blocker!.$2),
+              Tooltip(
+                message: tooltip,
+                child: Material(
+                  color: action == null ? c.border : c.primary,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: action,
+                    child: SizedBox.square(
+                      dimension: 28,
+                      // The icon takes the colour of the background around it.
+                      child: Icon(icon, size: 18, color: c.background),
                     ),
                   ),
                 ),
               ),
-              // Window frame: the theme switch sits with the window buttons.
-              Align(
-                alignment: Alignment.topCenter,
-                child: WindowButtons(
-                  leading: [ThemeCaptionButton(mode: themeMode, onChanged: onThemeChanged)],
+              const SizedBox(width: 10),
+              MouseRegion(
+                cursor: action == null ? MouseCursor.defer : SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: action,
+                  child: Text(
+                    label,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
+                  ),
+                ),
+              ),
+              if (active) ...[
+                const SizedBox(width: 12),
+                _RoundAction(
+                  icon: Icons.stop_rounded,
+                  tooltip: 'Ferma ora (Maiusc+Spazio)',
+                  onPressed: onStop,
+                  danger: true,
+                ),
+              ],
+              if (blocker case (final reason, final fix)) ...[
+                const SizedBox(width: 12),
+                // Its text is capped in width, so it never squeezes the totals.
+                _BlockerChip(reason: reason, onTap: fix),
+              ],
+              // Totals that fit, then the strip if there is room left for it.
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, box) {
+                    var room = box.maxWidth - 33;
+                    final shown = <_Stat>[];
+                    for (final st in stats) {
+                      final w = st.width(context);
+                      if (w > room) break;
+                      room -= w;
+                      shown.add(st);
+                    }
+                    final strip = engine.logs.isNotEmpty && room >= 240;
+                    return Row(
+                      children: [
+                        if (shown.isNotEmpty) ...[divider(), ...shown],
+                        if (strip) ...[divider(), Expanded(child: ActivityStrip(engine: engine))],
+                      ],
+                    );
+                  },
                 ),
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -906,6 +934,19 @@ class _Stat extends StatelessWidget {
   const _Stat({required this.value, required this.label});
   final String value, label;
 
+  /// Width this total takes, padding included (a little generous).
+  double width(BuildContext context) {
+    double w(String t, TextStyle st) => (TextPainter(
+      text: TextSpan(text: t, style: DefaultTextStyle.of(context).style.merge(st)),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout()).width;
+    return 32 +
+        w(value, const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)) +
+        w(label, const TextStyle(fontSize: 12));
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -934,20 +975,11 @@ class _Stat extends StatelessWidget {
 }
 
 class _RoundAction extends StatelessWidget {
-  const _RoundAction({
-    required this.icon,
-    required this.tooltip,
-    this.onPressed,
-    this.danger = false,
-    this.primary = false,
-  });
+  const _RoundAction({required this.icon, required this.tooltip, this.onPressed, this.danger = false});
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
   final bool danger;
-
-  /// Filled blue: the main action (start / resume).
-  final bool primary;
 
   @override
   Widget build(BuildContext context) {
@@ -956,14 +988,14 @@ class _RoundAction extends StatelessWidget {
       tooltip: tooltip,
       onPressed: onPressed,
       style: IconButton.styleFrom(
-        backgroundColor: primary ? c.primary : c.surface,
-        foregroundColor: primary ? Colors.white : (danger ? c.danger : c.text),
-        disabledBackgroundColor: primary ? c.border : c.surface,
+        backgroundColor: c.surface,
+        foregroundColor: danger ? c.danger : c.text,
+        disabledBackgroundColor: c.surface,
         disabledForegroundColor: c.muted.withValues(alpha: 0.5),
-        side: primary ? null : BorderSide(color: c.border),
+        side: BorderSide(color: c.border),
         fixedSize: const Size(40, 40),
       ),
-      icon: Icon(icon, size: primary ? 22 : 19),
+      icon: Icon(icon, size: 19),
     );
   }
 }

@@ -31,14 +31,22 @@ void main() {
     // No CLI configured in this test: Avvia explains why it is disabled.
     expect(find.text('Codex: CLI non trovata'), findsOneWidget);
 
-    // Every pending block offers its actions as icon buttons on the tile.
-    expect(find.byTooltip('Segna completato'), findsWidgets);
+    // Block actions show on the selected tile only.
+    expect(find.byTooltip('Segna completato'), findsNothing);
+    await tester.tap(find.textContaining('Setup del progetto'));
+    await tester.pump();
+    expect(find.byTooltip('Segna completato'), findsOneWidget);
 
-    // Advanced sections start closed with a summary, and open on click.
-    expect(find.text('Richiamo dopo'), findsNothing);
+    // Every section starts open; closed, it shows a summary of its choices.
     final sidebar = find.descendant(of: find.byType(SettingsPanel), matching: find.byType(Scrollable)).first;
-    await tester.scrollUntilVisible(find.textContaining('10 tentativi'), 200, scrollable: sidebar);
+    await tester.scrollUntilVisible(find.text('Richiamo dopo'), 200, scrollable: sidebar);
+    expect(find.text('Richiamo dopo'), findsOneWidget);
+    await tester.tap(find.text('Richiamo'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Richiamo dopo'), findsNothing);
     expect(find.textContaining('10 tentativi'), findsOneWidget);
+    await tester.ensureVisible(find.text('Richiamo'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Richiamo'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Richiamo dopo'), findsOneWidget);

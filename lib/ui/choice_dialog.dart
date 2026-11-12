@@ -12,7 +12,14 @@ class Choice<T> {
     this.short,
     this.dividerAfter = false,
     this.leading,
+    this.icon,
+    this.iconText,
   });
+
+  /// Drawn in a tile before the label, like the agents' logos: an icon or,
+  /// for ordered levels, a short text such as a number.
+  final IconData? icon;
+  final String? iconText;
 
   /// Shown before the label (e.g. the agent's logo).
   final Widget? leading;
@@ -141,7 +148,13 @@ class _ChoiceRow<T> extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: Row(
               children: [
-                if (choice.leading != null) ...[choice.leading!, const SizedBox(width: 12)],
+                if (choice.leading != null) ...[
+                  choice.leading!,
+                  const SizedBox(width: 12),
+                ] else if (choice.icon != null || choice.iconText != null) ...[
+                  ChoiceIcon(icon: choice.icon, text: choice.iconText, selected: selected),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,6 +205,37 @@ class _ChoiceRow<T> extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A tile with an icon (or a short text), inverted when selected: the same
+/// look as the agents' logos in their popup.
+class ChoiceIcon extends StatelessWidget {
+  const ChoiceIcon({super.key, this.icon, this.text, this.selected = false, this.size = 32});
+  final IconData? icon;
+  final String? text;
+  final bool selected;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final fg = selected ? Colors.white : c.primary;
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: selected ? c.primary : c.field,
+        borderRadius: BorderRadius.circular(size * 0.28),
+      ),
+      child: icon != null
+          ? Icon(icon, size: size * 0.55, color: fg)
+          : Text(
+              text ?? '',
+              style: TextStyle(fontSize: size * 0.42, fontWeight: FontWeight.w700, color: fg, height: 1),
+            ),
     );
   }
 }
