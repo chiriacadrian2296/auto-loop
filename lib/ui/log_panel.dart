@@ -445,13 +445,10 @@ class _GroupHeader extends StatelessWidget {
       ),
       _Outcome.none => (null, null),
     };
-    final summary = [
-      if (invocation != null) 'invocazione $invocation',
-      ?outcomeText,
-      if (duration.inSeconds > 0) _span(duration),
-      if (tokensIn + tokensOut > 0) '${k(tokensIn)} in / ${k(tokensOut)} out token',
-      ?cost,
-    ].join(' · ');
+    // Most important first: what happened, then how long, then the cost.
+    final essential = [if (invocation != null) 'invocazione $invocation', ?outcomeText];
+    final timing = [if (duration.inSeconds > 0) _span(duration)];
+    final usage = [if (tokensIn + tokensOut > 0) '${k(tokensIn)} in / ${k(tokensOut)} out token', ?cost];
 
     return Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 6),
@@ -487,33 +484,51 @@ class _GroupHeader extends StatelessWidget {
                 // Title, outcome and summary share the middle; the time
                 // always sits at the right edge.
                 Expanded(
-                  child: Row(
-                    children: [
-                      if (title != null) ...[
-                        const SizedBox(width: 8),
-                        Flexible(
-                          flex: 3,
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(width: 10),
-                      ?badge,
-                      if (badge != null) const SizedBox(width: 6),
-                      Flexible(
-                        flex: 2,
-                        child: Text(
-                          summary,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11.5, color: c.muted),
-                        ),
-                      ),
-                    ],
+                  // On a narrow panel the summary drops the cost, then the
+                  // duration, instead of being cut mid-word.
+                  child: LayoutBuilder(
+                    builder: (context, box) {
+                      final style = TextStyle(fontSize: 11.5, color: c.muted);
+                      double width(String text) => (TextPainter(
+                        text: TextSpan(text: text, style: style),
+                        textDirection: TextDirection.ltr,
+                        textScaler: MediaQuery.textScalerOf(context),
+                        maxLines: 1,
+                      )..layout()).width;
+                      // Leave room for the title and the outcome icon.
+                      final room = box.maxWidth - 140;
+                      final options = [
+                        [...essential, ...timing, ...usage],
+                        [...essential, ...timing],
+                        essential,
+                      ].map((p) => p.join(' · '));
+                      final summary = options.firstWhere((t) => width(t) <= room, orElse: () => options.last);
+                      final fits = width(summary) <= room;
+                      return Row(
+                        children: [
+                          if (title != null) ...[
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(width: 10),
+                          ?badge,
+                          if (badge != null) const SizedBox(width: 6),
+                          if (fits)
+                            Text(summary, maxLines: 1, style: style)
+                          else
+                            Flexible(
+                              child: Text(summary, maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 SizedBox(
