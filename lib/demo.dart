@@ -96,11 +96,7 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
       LogEntry(LogKind.tool, 'Verifica: npx html-validate index.html', at: at(70)),
       LogEntry(LogKind.success, 'Verifica superata in 8 s · 0 errori in 3 file', at: at(78)),
       LogEntry(LogKind.success, 'Commit 4f2a9c1 · 3 file · +142 −18', at: at(79)),
-      LogEntry(
-        LogKind.result,
-        'Sezione progetti con sei card responsive, link ai repository e immagini ottimizzate.',
-        at: at(79),
-      ),
+      LogEntry(LogKind.result, 'Blocco completato.', at: at(79), outcome: RunOutcome.done),
       LogEntry(LogKind.info, '▶ Blocco 4/6 «Modulo contatti» — invocazione 1', at: at(110)),
       LogEntry(
         LogKind.task,
@@ -109,14 +105,24 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
         at: at(111),
       ),
       LogEntry(LogKind.tool, 'Write: contatti.js', at: at(160)),
-      LogEntry(LogKind.warning, 'Agente terminato dal supervisore: nessun output per 10 minuti.', at: at(760)),
+      LogEntry(
+        LogKind.result,
+        'Terminata dal supervisore: nessun output per 10 minuti.',
+        at: at(760),
+        outcome: RunOutcome.interrupted,
+      ),
       LogEntry(LogKind.info, '▶ Blocco 4/6 «Modulo contatti» — invocazione 2', at: at(790)),
       LogEntry(
         LogKind.agent,
         'Il modulo è pronto, ma per inviare le email serve una chiave del servizio esterno.',
         at: at(830),
       ),
-      LogEntry(LogKind.error, 'Serve la chiave del servizio di invio email: non posso crearla da solo.', at: at(831)),
+      LogEntry(
+        LogKind.result,
+        'Serve la chiave del servizio di invio email: non posso crearla da solo.',
+        at: at(831),
+        outcome: RunOutcome.blocked,
+      ),
     ];
     final activity = ActivityLog(dir.path, planFile.path);
     logs.forEach(activity.append);

@@ -5,9 +5,6 @@ import '../engine/loop_state.dart';
 import '../engine/plan_parser.dart';
 import 'app_theme.dart';
 
-/// Joins the non-empty parts with a middle dot.
-String _join(List<String> parts) => parts.where((p) => p.isNotEmpty).join(' · ');
-
 String _invocations(int n) => n == 1 ? '1 invocazione' : '$n invocazioni';
 
 String _duration(int seconds) {
@@ -21,7 +18,7 @@ String _duration(int seconds) {
 String _tokens(int n) => n >= 1000000
     ? '${(n / 1000000).toStringAsFixed(1)}M'
     : n >= 1000
-    ? '${(n / 1000).toStringAsFixed(1)}k'
+    ? '${(n / 1000).toStringAsFixed(n >= 100000 ? 0 : 1)}k'
     : '$n';
 
 /// Seconds spent on [b] so far, including the invocation running right now.
@@ -257,23 +254,63 @@ class _TimelineItem extends StatelessWidget {
     final done = state.status == BlockStatus.done;
     final lineColor = done ? c.primary.withValues(alpha: 0.45) : c.border;
     final seconds = _blockSeconds(engine, block);
-    final stats = [
-      _invocations(state.attempts),
-      _duration(seconds),
-      if (state.totalTokens > 0) '${_tokens(state.totalTokens)} token',
+    // The same numbers for every block, as icons; the state in words only
+    // when the node alone does not say it.
+    final stats = <IconStat>[
+      if (state.attempts > 0) IconStat(Icons.replay_rounded, '${state.attempts}', _invocations(state.attempts)),
+      if (seconds > 0) IconStat(Icons.schedule_rounded, _duration(seconds), 'Durata'),
+      if (state.totalTokens > 0)
+        IconStat(
+          Icons.toll_outlined,
+          _tokens(state.totalTokens),
+          'Token: ${_tokens(state.inputTokens)} in / ${_tokens(state.outputTokens)} out',
+        ),
     ];
-
-    // What is useful to know about the block at a glance: always the same
-    // numbers, preceded by the state when the node alone does not say it.
-    final String? subtitle = current
-        ? (running ? _join(['In corso', ...stats]) : _join(['In attesa del richiamo', ...stats]))
+    final String? status = current
+        ? (running ? 'In corso' : 'In attesa del richiamo')
         : switch (state.status) {
-            BlockStatus.pending => state.attempts > 0 ? _join(['Da riprendere', ...stats]) : null,
-            BlockStatus.done => state.attempts > 0 ? _join(stats) : 'Segnato a mano',
-            BlockStatus.blocked => state.attempts > 0 ? _join(stats) : 'Bloccato',
+            BlockStatus.pending => state.attempts > 0 ? 'Da riprendere' : null,
+            BlockStatus.done => state.attempts > 0 ? null : 'Segnato a mano',
+            BlockStatus.blocked => state.attempts > 0 ? null : 'Bloccato',
             BlockStatus.skipped => 'Saltato',
           };
     final subColor = current ? c.primary : c.muted;
+    final Widget? subtitle = status == null && stats.isEmpty
+        ? null
+        // Fixed height: the tile measures its rows, and a LayoutBuilder
+        // cannot be measured in advance.
+        : SizedBox(
+            height: 18,
+            child: LayoutBuilder(
+              builder: (context, box) {
+                // The state comes first; numbers that do not fit are left out,
+                // last first, instead of overflowing.
+                final style = TextStyle(fontSize: 11.5, color: subColor);
+                var used = status == null ? 0.0 : IconStat.textWidth(context, '$status –', style) + 16;
+                final shown = <IconStat>[];
+                for (final s in stats) {
+                  final w = s.width(context) + (shown.isEmpty ? 0 : 12);
+                  if (used + w > box.maxWidth) break;
+                  used += w;
+                  shown.add(s);
+                }
+                return Row(
+                  children: [
+                    if (status != null)
+                      Flexible(
+                        child: Text(status, maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
+                      ),
+                    if (status != null && shown.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text('–', style: style),
+                      ),
+                    for (final (i, w) in shown.indexed) ...[if (i > 0) const SizedBox(width: 12), w],
+                  ],
+                );
+              },
+            ),
+          );
     final actions = _actionsFor(state.status);
 
     return GestureDetector(
@@ -323,15 +360,7 @@ class _TimelineItem extends StatelessWidget {
                             decoration: state.status == BlockStatus.skipped ? TextDecoration.lineThrough : null,
                           ),
                         ),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 11.5, color: subColor),
-                          ),
-                        ],
+                        if (subtitle != null) ...[const SizedBox(height: 3), subtitle],
                       ],
                     ),
                   ),

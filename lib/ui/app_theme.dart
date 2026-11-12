@@ -246,3 +246,41 @@ class PanelHeader extends StatelessWidget {
     );
   }
 }
+
+/// A number with its icon; the tooltip says what it is.
+class IconStat extends StatelessWidget {
+  const IconStat(this.icon, this.value, this.tooltip, {super.key, this.color});
+  final IconData icon;
+  final String value, tooltip;
+  final Color? color;
+
+  static const _style = TextStyle(fontSize: 12, fontFeatures: [FontFeature.tabularFigures()]);
+
+  /// Width of [text] in [style], as it will be laid out here.
+  static double textWidth(BuildContext context, String text, TextStyle style) => (TextPainter(
+    text: TextSpan(text: text, style: DefaultTextStyle.of(context).style.merge(style)),
+    textDirection: TextDirection.ltr,
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout()).width;
+
+  /// Width this stat takes, to decide what fits in a row.
+  double width(BuildContext context) => 18 + textWidth(context, value, _style);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final tint = color ?? c.muted;
+    return Tooltip(
+      message: tooltip,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: tint),
+          const SizedBox(width: 4),
+          Text(value, style: _style.copyWith(color: tint)),
+        ],
+      ),
+    );
+  }
+}

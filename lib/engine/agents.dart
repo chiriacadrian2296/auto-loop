@@ -7,20 +7,25 @@ import 'settings.dart';
 /// is completed (how it went, and the agent's summary).
 enum LogKind { info, agent, tool, error, warning, success, system, task, result }
 
+/// How an invocation ended, carried by its closing [LogKind.result] line.
+enum RunOutcome { done, again, blocked, interrupted, failed }
+
 class LogEntry {
-  LogEntry(this.kind, this.text, {DateTime? at}) : at = at ?? DateTime.now();
+  LogEntry(this.kind, this.text, {DateTime? at, this.outcome}) : at = at ?? DateTime.now();
   final LogKind kind;
   final String text;
   final DateTime at;
+  final RunOutcome? outcome;
 
-  Map<String, Object?> toJson() => {'k': kind.name, 't': text, 'at': at.toIso8601String()};
+  Map<String, Object?> toJson() => {'k': kind.name, 't': text, 'at': at.toIso8601String(), 'o': ?outcome?.name};
 
   static LogEntry? fromJson(Object? j) {
     if (j is! Map) return null;
     final kind = LogKind.values.where((k) => k.name == j['k']).firstOrNull;
     final text = j['t'], at = DateTime.tryParse('${j['at']}');
     if (kind == null || text is! String || at == null) return null;
-    return LogEntry(kind, text, at: at);
+    final outcome = RunOutcome.values.where((o) => o.name == j['o']).firstOrNull;
+    return LogEntry(kind, text, at: at, outcome: outcome);
   }
 }
 

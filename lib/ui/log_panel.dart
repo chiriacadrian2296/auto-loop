@@ -26,7 +26,7 @@ enum _Filter {
   };
 }
 
-enum _Outcome { done, error, warning, again, running, none }
+enum _Outcome { done, again, blocked, interrupted, failed, running, none }
 
 /// One invocation of the agent: its header line and what followed it. The
 /// lines before the first invocation form a group without header.
@@ -53,14 +53,33 @@ class _Group {
   }
 
   _Outcome outcome({required bool live}) {
-    if (entries.any((e) => e.kind == LogKind.error)) return _Outcome.error;
+    // Every invocation closes with a result line that says how it ended.
+    final result = entries.where((e) => e.kind == LogKind.result && e.outcome != null).lastOrNull;
+    if (result != null) {
+      return switch (result.outcome!) {
+        RunOutcome.done => _Outcome.done,
+        RunOutcome.again => _Outcome.again,
+        RunOutcome.blocked => _Outcome.blocked,
+        RunOutcome.interrupted => _Outcome.interrupted,
+        RunOutcome.failed => _Outcome.failed,
+      };
+    }
+    if (live) return _Outcome.running;
+    // Logs written before result lines existed.
     if (entries.any((e) => e.kind == LogKind.result || (e.kind == LogKind.success && e.text.contains('completato')))) {
       return _Outcome.done;
     }
-    if (live) return _Outcome.running;
-    if (entries.any((e) => e.kind == LogKind.warning)) return _Outcome.warning;
+    if (entries.any((e) => e.kind == LogKind.error)) return _Outcome.failed;
+    if (entries.any((e) => e.kind == LogKind.warning)) return _Outcome.interrupted;
     if (entries.any((e) => e.text.contains('continuare'))) return _Outcome.again;
     return _Outcome.none;
+  }
+
+  /// "Blocco 3/6", the block title and the invocation number, from the header.
+  (String, String?, String?) get parts {
+    final raw = header!.text.substring(1).trim();
+    final m = RegExp(r'^(Blocco \d+/\d+) «(.*)» — invocazione (\d+)$').firstMatch(raw);
+    return m == null ? (raw, null, null) : (m.group(1)!, m.group(2), m.group(3));
   }
 }
 
@@ -84,7 +103,11 @@ List<_Group> _groupLogs(List<LogEntry> logs) {
 String _clock(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
 
-String _span(Duration d) => d.inSeconds < 60 ? '${d.inSeconds} s' : '${d.inMinutes} min';
+String _span(Duration d) => d.inSeconds < 60
+    ? '${d.inSeconds} s'
+    : d.inMinutes < 60
+    ? '${d.inMinutes} min'
+    : '${d.inHours} h ${d.inMinutes % 60} min';
 
 class LogPanel extends StatefulWidget {
   const LogPanel({super.key, required this.engine, this.onOpenLogs, this.onOpenProgress, this.reveal});
@@ -246,6 +269,7 @@ class _LogPanelState extends State<LogPanel> {
 
     final groups = _groupLogs(logs);
     final rows = <Widget>[];
+    String? lastBlock;
     for (var i = 0; i < groups.length; i++) {
       final g = groups[i];
       final last = i == groups.length - 1;
@@ -254,17 +278,31 @@ class _LogPanelState extends State<LogPanel> {
       final header = g.header;
       final open = header == null || (last != _toggled.contains(header));
       if (header != null) {
-        _rowIndex[header] = rows.length;
+        // The block is named once; its consecutive invocations follow.
+        final (block, title, _) = g.parts;
+        if (block != lastBlock) {
+          _rowIndex[header] = rows.length;
+          rows.add(
+            _BlockHeading(
+              key: _headerKeys.putIfAbsent(header, GlobalKey.new),
+              block: block,
+              title: title,
+              first: rows.isEmpty,
+              highlighted: identical(header, _flash),
+            ),
+          );
+        }
+        lastBlock = block;
         rows.add(
-          _GroupHeader(
-            key: _headerKeys.putIfAbsent(header, GlobalKey.new),
-            highlighted: identical(header, _flash),
+          _InvocationHeader(
             group: g,
             open: open,
             live: last && engine.isActive,
             onTap: () => setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
           ),
         );
+      } else {
+        lastBlock = null;
       }
       if (open) rows.addAll(visible.map((e) => _LogLine(e, agent: engine.settings.agent)));
     }
@@ -409,16 +447,64 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
-class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({
+/// Names a block once, above its invocations.
+class _BlockHeading extends StatelessWidget {
+  const _BlockHeading({
     super.key,
-    required this.group,
-    required this.open,
-    required this.live,
-    required this.onTap,
+    required this.block,
+    required this.title,
+    required this.first,
     this.highlighted = false,
   });
-  final bool highlighted;
+  final String block;
+  final String? title;
+  final bool first, highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Padding(
+      padding: EdgeInsets.only(top: first ? 4 : 26, bottom: 4),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
+        decoration: BoxDecoration(
+          color: highlighted ? c.primarySoft : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(99)),
+              child: Text(
+                block,
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: c.primary),
+              ),
+            ),
+            if (title != null) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _k(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(n >= 100000 ? 0 : 1)}k' : '$n';
+
+/// One invocation: how it ended, then how long it took and what it cost.
+class _InvocationHeader extends StatelessWidget {
+  const _InvocationHeader({required this.group, required this.open, required this.live, required this.onTap});
   final _Group group;
   final bool open, live;
   final VoidCallback onTap;
@@ -426,37 +512,37 @@ class _GroupHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final raw = group.header!.text.substring(1).trim();
-    // "Blocco 3/6 «Titolo» — invocazione 2" → pill, title and invocation.
-    final m = RegExp(r'^(Blocco \d+/\d+) «(.*)» — invocazione (\d+)$').firstMatch(raw);
-    final pill = m?.group(1) ?? raw;
-    final title = m?.group(2);
-    final invocation = m?.group(3);
+    final (_, _, invocation) = group.parts;
     final start = group.start!;
     final duration = (live ? DateTime.now() : group.end!).difference(start);
     final (tokensIn, tokensOut, cost) = group.usage;
-    String k(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : '$n';
-    final (Widget? badge, String? outcomeText) = switch (group.outcome(live: live)) {
+    final (Widget? badge, String? status) = switch (group.outcome(live: live)) {
       _Outcome.done => (Icon(Icons.check_circle_rounded, size: 15, color: c.success), 'completato'),
-      _Outcome.error => (Icon(Icons.error_rounded, size: 15, color: c.danger), 'problema'),
-      _Outcome.warning => (Icon(Icons.warning_amber_rounded, size: 15, color: c.warning), 'interrotto'),
-      _Outcome.again => (Icon(Icons.replay_rounded, size: 15, color: c.muted), 'da continuare'),
+      _Outcome.again => (Icon(Icons.replay_circle_filled_rounded, size: 15, color: c.primary), 'continua'),
+      _Outcome.blocked => (Icon(Icons.error_rounded, size: 15, color: c.danger), 'bloccato'),
+      _Outcome.interrupted => (Icon(Icons.warning_rounded, size: 15, color: c.warning), 'interrotto'),
+      _Outcome.failed => (Icon(Icons.cancel_rounded, size: 15, color: c.danger), 'problema'),
       _Outcome.running => (
         SizedBox.square(dimension: 12, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
         'in corso',
       ),
       _Outcome.none => (null, null),
     };
-    // Most important first: what happened, then how long, then the cost.
-    final essential = [if (invocation != null) 'invocazione $invocation', ?outcomeText];
-    final timing = [if (duration.inSeconds > 0) _span(duration)];
-    final usage = [if (tokensIn + tokensOut > 0) '${k(tokensIn)} in / ${k(tokensOut)} out token', ?cost];
+    final stats = [
+      if (duration.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(duration), 'Durata'),
+      if (tokensIn + tokensOut > 0)
+        IconStat(
+          Icons.toll_outlined,
+          _k(tokensIn + tokensOut),
+          'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out${cost == null ? '' : ' · $cost'}',
+        ),
+    ];
+    final muted = TextStyle(fontSize: 12.5, color: c.muted);
 
     return Padding(
-      padding: const EdgeInsets.only(top: 18, bottom: 6),
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
       child: Material(
-        color: highlighted ? c.primarySoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
@@ -475,59 +561,26 @@ class _GroupHeader extends StatelessWidget {
                     ),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(99)),
-                  child: Text(
-                    pill,
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: c.primary),
-                  ),
+                Text(
+                  invocation == null ? 'Invocazione' : 'Invocazione $invocation',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
                 ),
-                // Title, outcome and summary share the middle; the time
-                // always sits at the right edge.
+                if (badge != null) ...[const SizedBox(width: 10), badge, const SizedBox(width: 6)],
+                if (status != null) Text(status, style: muted),
+                // On a narrow panel the numbers give way before the state does.
                 Expanded(
-                  // On a narrow panel the summary drops the cost, then the
-                  // duration, instead of being cut mid-word.
                   child: LayoutBuilder(
                     builder: (context, box) {
-                      final style = TextStyle(fontSize: 12, color: c.muted);
-                      double width(String text) => (TextPainter(
-                        text: TextSpan(text: text, style: style),
-                        textDirection: TextDirection.ltr,
-                        textScaler: MediaQuery.textScalerOf(context),
-                        maxLines: 1,
-                      )..layout()).width;
-                      // Leave room for the title and the outcome icon.
-                      final room = box.maxWidth - 140;
-                      final options = [
-                        [...essential, ...timing, ...usage],
-                        [...essential, ...timing],
-                        essential,
-                      ].map((p) => p.join(' · '));
-                      final summary = options.firstWhere((t) => width(t) <= room, orElse: () => options.last);
-                      final fits = width(summary) <= room;
+                      final room = box.maxWidth;
+                      final shown = room >= 170 ? stats : (room >= 90 ? stats.take(1).toList() : const <Widget>[]);
+                      if (shown.isEmpty) return const SizedBox.shrink();
                       return Row(
                         children: [
-                          if (title != null) ...[
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(width: 10),
-                          ?badge,
-                          if (badge != null) const SizedBox(width: 6),
-                          if (fits)
-                            Text(summary, maxLines: 1, style: style)
-                          else
-                            Flexible(
-                              child: Text(summary, maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
-                            ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Text('–', style: muted),
+                          ),
+                          for (final (i, w) in shown.indexed) ...[if (i > 0) const SizedBox(width: 14), w],
                         ],
                       );
                     },
@@ -554,8 +607,6 @@ class _GroupHeader extends StatelessWidget {
   }
 }
 
-/// Reassures that a quiet agent is still at work, and how long until the
-/// supervisor would restart it.
 /// Every line uses the same grid: [icon column] [text] [time], so texts of
 /// all kinds start at the same place and times line up on the right.
 const _sidePad = 8.0;
@@ -626,7 +677,7 @@ class _LogLineState extends State<_LogLine> {
           colorFilter: ColorFilter.mode(c.primary, BlendMode.srcIn),
         ),
       ),
-      LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.muted.withValues(alpha: 0.5)),
+      LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.text),
       LogKind.success => Icon(Icons.check_circle_rounded, size: size, color: c.success),
       // The same flag: empty when the block starts, filled when it is done.
       LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: c.primary),
@@ -636,12 +687,13 @@ class _LogLineState extends State<_LogLine> {
       LogKind.info || LogKind.system => Icon(Icons.info_outline_rounded, size: size, color: c.primary),
     };
 
-    final body = TextStyle(fontSize: 13.5, height: 1.5, color: c.text);
+    // One grey for every text: the icon says what kind of line it is.
+    final body = TextStyle(fontSize: 13.5, height: 1.5, color: Color.lerp(c.muted, c.text, 0.55));
     final Widget text = switch (e.kind) {
       LogKind.agent => MarkdownText(e.text, style: body),
       LogKind.tool => Text(
         e.text,
-        style: TextStyle(fontSize: 12, height: 1.6, color: c.muted, fontFamily: mono, fontFamilyFallback: monoFallback),
+        style: body.copyWith(fontSize: 12, height: 1.6, fontFamily: mono, fontFamilyFallback: monoFallback),
       ),
       // Task and result mirror each other: the icon says which is which.
       LogKind.task || LogKind.result => MarkdownText(
@@ -650,9 +702,9 @@ class _LogLineState extends State<_LogLine> {
         e.text.startsWith('Completato in ') && e.text.contains('\n\n')
             ? e.text.substring(e.text.indexOf('\n\n') + 2).trim()
             : e.text,
-        style: body.copyWith(color: c.muted),
+        style: body,
       ),
-      _ => Text(e.text, style: body.copyWith(fontSize: 13, color: c.text.withValues(alpha: 0.85))),
+      _ => Text(e.text, style: body),
     };
 
     // Paragraphs breathe a little more than one-line events.

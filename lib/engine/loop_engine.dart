@@ -160,6 +160,12 @@ class LoopEngine extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The line that closes every invocation: how it ended, in a few words.
+  void _result(RunOutcome outcome, String text) {
+    _addLog(LogEntry(LogKind.result, text, outcome: outcome));
+    notifyListeners();
+  }
+
   /// Called when something needs the user: the plan is done, the quota ran
   /// out, or the loop stopped on a problem (not when the user paused it).
   void Function(String title, String body)? onAttention;
@@ -447,7 +453,7 @@ class LoopEngine extends ChangeNotifier {
       outcome = await done;
     } on ProcessException catch (e) {
       await raw.close();
-      _log(LogKind.error, 'Avvio fallito: ${e.message}');
+      _result(RunOutcome.failed, 'Avvio fallito: ${e.message}');
       bs.attempts--;
       state.runs--;
       state.save(dir);
@@ -480,17 +486,18 @@ class LoopEngine extends ChangeNotifier {
 
     if (outcome.killReason == KillReason.stopped) {
       bs.feedback = 'L\'invocazione precedente è stata interrotta dall\'utente. Riprendi dal lavoro su disco.';
+      _result(RunOutcome.interrupted, 'Fermata da te: alla ripresa continuerà dal lavoro su disco.');
       state.save(dir);
       return _RunResult.again;
     }
 
     if (stream.blocker == Blocker.usageLimit) {
-      _log(LogKind.warning, 'Limite di utilizzo raggiunto: ${stream.errorMessage ?? ''}');
+      _result(RunOutcome.interrupted, 'Limite di utilizzo raggiunto: ${stream.errorMessage ?? ''}'.trim());
       state.save(dir);
       return _RunResult.quota;
     }
     if (stream.blocker == Blocker.authorization) {
-      _log(LogKind.error, 'Autenticazione richiesta: ${stream.errorMessage ?? ''}');
+      _result(RunOutcome.failed, 'Autenticazione richiesta: ${stream.errorMessage ?? ''}'.trim());
       bs.attempts--;
       state.save(dir);
       return _RunResult.auth;
@@ -500,7 +507,7 @@ class LoopEngine extends ChangeNotifier {
       final why = outcome.killReason == KillReason.idleTimeout
           ? 'nessun output per ${settings.idleTimeoutMinutes} minuti'
           : 'superato il limite di ${settings.runTimeoutMinutes} minuti';
-      _log(LogKind.warning, 'Agente terminato dal supervisore: $why.');
+      _result(RunOutcome.interrupted, 'Terminata dal supervisore: $why.');
       bs.feedback =
           'L\'invocazione precedente è stata terminata dal supervisore ($why). '
           'Il lavoro parziale è su disco: controllalo e procedi a passi più brevi, '
@@ -516,6 +523,7 @@ class LoopEngine extends ChangeNotifier {
           bs.feedback =
               'Hai dichiarato DONE ma la verifica `${settings.verifyCommand}` è fallita. '
               'Correggi il problema. Output (ultima parte):\n$verifyError';
+          _result(RunOutcome.again, 'La verifica non è passata: l\'agente la correggerà nella prossima invocazione.');
           state.save(dir);
           return _RunResult.again;
         }
@@ -524,26 +532,28 @@ class LoopEngine extends ChangeNotifier {
         bs.note = summary;
         bs.feedback = '';
         state.save(dir);
-        // Numbers are in the invocation header: the result is the summary.
-        _log(LogKind.result, summary.isEmpty ? 'Blocco completato.' : summary);
+        _result(RunOutcome.done, 'Blocco completato.');
         return _RunResult.blockDone;
       case AgentVerdict.blocked:
         bs.status = BlockStatus.blocked;
         bs.note = reason.isEmpty ? summary : reason;
         state.save(dir);
-        // Just the reason: the red icon and the header already say the rest.
-        _log(LogKind.error, bs.note.isEmpty ? 'L\'agente non riesce a proseguire.' : bs.note);
+        // Just the reason: the header already says it is blocked.
+        _result(RunOutcome.blocked, bs.note.isEmpty ? 'L\'agente non riesce a proseguire.' : bs.note);
         return _RunResult.blocked;
       case AgentVerdict.continueWork:
         bs.feedback = 'Nell\'invocazione precedente hai risposto CONTINUE. Tuo riepilogo:\n$summary';
-        _log(LogKind.info, 'L\'agente chiede di continuare il blocco.');
+        _result(RunOutcome.again, 'Il blocco continua nella prossima invocazione.');
       case AgentVerdict.missing:
         final err = stream.errorMessage;
         bs.feedback = err != null
             ? 'L\'invocazione precedente è terminata con un errore: $err'
             : 'L\'invocazione precedente è terminata senza la riga AUTOLOOP_STATUS '
                   '(exit ${outcome.exitCode}). Ultimo messaggio:\n$summary';
-        _log(LogKind.warning, 'L\'agente si è fermato senza esito (exit ${outcome.exitCode}): verrà richiamato.');
+        _result(
+          err != null ? RunOutcome.failed : RunOutcome.interrupted,
+          'Fermata senza esito (exit ${outcome.exitCode}): verrà richiamata.',
+        );
     }
     state.save(dir);
     return _RunResult.again;

@@ -180,6 +180,10 @@ testo
         expect(engine.blockState(b).totalTokens, 220); // two invocations of 110 tokens
       }
       expect(engine.state!.commits, 2);
+      // Every invocation closes with one result line that says how it ended.
+      final results = engine.logs.where((e) => e.kind == LogKind.result).toList();
+      expect(results, hasLength(4));
+      expect(results.map((e) => e.outcome).toSet(), {RunOutcome.again, RunOutcome.done});
       // The readable export used by "Apri i log".
       final text = engine.exportActivity()!.readAsStringSync();
       expect(text, allOf(contains('── Blocco 1/2'), contains('AGENTE'), contains('OK')));
