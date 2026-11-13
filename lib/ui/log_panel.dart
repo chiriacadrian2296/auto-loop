@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -1121,12 +1123,31 @@ class _ActivityMapState extends State<ActivityMap> {
   void dispose() {
     widget.selection.removeListener(_onSelection);
     widget.selection._filter.removeListener(_redraw);
+    _barTimer?.cancel();
     _scroll.dispose();
     super.dispose();
   }
 
   void _redraw() {
     if (mounted) setState(() {});
+  }
+
+  /// The scrollbar shows while the pointer moves over the map, and hides
+  /// again when it rests for a moment.
+  bool _barShown = false;
+  Timer? _barTimer;
+
+  void _pointerMoved() {
+    _barTimer?.cancel();
+    if (!_barShown) setState(() => _barShown = true);
+    _barTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _barShown = false);
+    });
+  }
+
+  void _pointerLeft() {
+    _barTimer?.cancel();
+    if (_barShown) setState(() => _barShown = false);
   }
 
   void _onSelection() {
@@ -1306,135 +1327,141 @@ class _ActivityMapState extends State<ActivityMap> {
               final chosen = sel.entry;
               // Where the map goes on beyond an edge, that edge fades out
               // instead of cutting the icons off.
-              return Scrollbar(
-                controller: _scroll,
-                thumbVisibility: true,
-                child: ListenableBuilder(
-                  listenable: _scroll,
-                  builder: (context, child) {
-                    final pos = _scroll.hasClients ? _scroll.position : null;
-                    final fadeLeft = pos != null && pos.hasContentDimensions && pos.pixels > 1;
-                    final fadeRight = pos != null && pos.hasContentDimensions && pos.pixels < pos.maxScrollExtent - 1;
-                    if (!fadeLeft && !fadeRight) return child!;
-                    final f = 28 / box.maxWidth;
-                    return ShaderMask(
-                      blendMode: BlendMode.dstIn,
-                      shaderCallback: (rect) => LinearGradient(
-                        colors: [
-                          fadeLeft ? Colors.transparent : Colors.black,
-                          Colors.black,
-                          Colors.black,
-                          fadeRight ? Colors.transparent : Colors.black,
-                        ],
-                        stops: [0, f, 1 - f, 1],
-                      ).createShader(rect),
-                      child: child,
-                    );
-                  },
-                  child: SingleChildScrollView(
-                    controller: _scroll,
-                    scrollDirection: Axis.horizontal,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapUp: (d) => pick(d.localPosition.dx),
-                      onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
-                      child: SizedBox(
-                        width: width,
-                        height: box.maxHeight,
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Positioned.fill(
-                              child: CustomPaint(
-                                painter: _MapPainter(
-                                  bands: [for (final b in bands) (b.$1, b.$2, b.$3, b.$4)],
-                                  band: c.muted,
-                                  line: c.muted.withValues(alpha: 0.45),
-                                  from: lineFrom,
-                                  to: lineTo,
-                                  chosenBand: c.text,
-                                  mid: mid,
+              return MouseRegion(
+                onHover: (_) => _pointerMoved(),
+                onExit: (_) => _pointerLeft(),
+                child: Scrollbar(
+                  controller: _scroll,
+                  thumbVisibility: _barShown,
+                  child: ListenableBuilder(
+                    listenable: _scroll,
+                    builder: (context, child) {
+                      final pos = _scroll.hasClients ? _scroll.position : null;
+                      final fadeLeft = pos != null && pos.hasContentDimensions && pos.pixels > 1;
+                      final fadeRight = pos != null && pos.hasContentDimensions && pos.pixels < pos.maxScrollExtent - 1;
+                      if (!fadeLeft && !fadeRight) return child!;
+                      final hidden = 10 / box.maxWidth, f = 40 / box.maxWidth;
+                      return ShaderMask(
+                        blendMode: BlendMode.dstIn,
+                        shaderCallback: (rect) => LinearGradient(
+                          colors: [
+                            fadeLeft ? Colors.transparent : Colors.black,
+                            fadeLeft ? Colors.transparent : Colors.black,
+                            Colors.black,
+                            Colors.black,
+                            fadeRight ? Colors.transparent : Colors.black,
+                            fadeRight ? Colors.transparent : Colors.black,
+                          ],
+                          stops: [0, hidden, f, 1 - f, 1 - hidden, 1],
+                        ).createShader(rect),
+                        child: child,
+                      );
+                    },
+                    child: SingleChildScrollView(
+                      controller: _scroll,
+                      scrollDirection: Axis.horizontal,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapUp: (d) => pick(d.localPosition.dx),
+                        onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
+                        child: SizedBox(
+                          width: width,
+                          height: box.maxHeight,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned.fill(
+                                child: CustomPaint(
+                                  painter: _MapPainter(
+                                    bands: [for (final b in bands) (b.$1, b.$2, b.$3, b.$4)],
+                                    band: c.muted,
+                                    line: c.muted.withValues(alpha: 0.45),
+                                    from: lineFrom,
+                                    to: lineTo,
+                                    chosenBand: c.text,
+                                    mid: mid,
+                                  ),
                                 ),
                               ),
-                            ),
-                            // Block names on hover.
-                            for (final b in bands)
-                              Positioned(
-                                left: b.$1,
-                                width: b.$2 - b.$1,
-                                top: mid - 10,
-                                height: 20,
-                                child: Tooltip(message: b.$5, child: const SizedBox.expand()),
-                              ),
-                            for (final e in items)
-                              if (!isHeader(e))
-                                () {
-                                  // Commands sit on a smaller disc.
-                                  final size = e.kind == LogKind.tool ? 12.0 : _icon;
-                                  final head = starts[e];
-                                  final isChosen = head == null
-                                      ? identical(chosen, e)
-                                      : identical(chosen, head) && sel.block;
-                                  return Positioned(
-                                    left: xs[e]! - size / 2,
-                                    top: mid - size / 2,
-                                    width: size,
-                                    height: size,
-                                    child: Tooltip(
-                                      // Keyed by its line, so a test can find it.
-                                      key: ValueKey<LogEntry>(e),
-                                      richMessage: WidgetSpan(
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(maxWidth: 400),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                e.text.replaceAll(RegExp(r'\s+'), ' ').trim(),
-                                                style: const TextStyle(fontSize: 12.5, color: Colors.white),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                _clock(e.at),
-                                                textAlign: TextAlign.center,
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.white.withValues(alpha: 0.7),
-                                                  fontFeatures: const [FontFeature.tabularFigures()],
+                              // Block names on hover.
+                              for (final b in bands)
+                                Positioned(
+                                  left: b.$1,
+                                  width: b.$2 - b.$1,
+                                  top: mid - 10,
+                                  height: 20,
+                                  child: Tooltip(message: b.$5, child: const SizedBox.expand()),
+                                ),
+                              for (final e in items)
+                                if (!isHeader(e))
+                                  () {
+                                    // Commands sit on a smaller disc.
+                                    final size = e.kind == LogKind.tool ? 12.0 : _icon;
+                                    final head = starts[e];
+                                    final isChosen = head == null
+                                        ? identical(chosen, e)
+                                        : identical(chosen, head) && sel.block;
+                                    return Positioned(
+                                      left: xs[e]! - size / 2,
+                                      top: mid - size / 2,
+                                      width: size,
+                                      height: size,
+                                      child: Tooltip(
+                                        // Keyed by its line, so a test can find it.
+                                        key: ValueKey<LogEntry>(e),
+                                        richMessage: WidgetSpan(
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(maxWidth: 400),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  e.text.replaceAll(RegExp(r'\s+'), ' ').trim(),
+                                                  style: TextStyle(fontSize: 12.5, color: c.surface),
                                                 ),
-                                              ),
-                                            ],
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  _clock(e.at),
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: c.surface.withValues(alpha: 0.7),
+                                                    fontFeatures: const [FontFeature.tabularFigures()],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      child: GestureDetector(
-                                        // Only lines are chosen; the stand-in task flag is not one.
-                                        onTap: head == null ? () => sel.select(e, this) : null,
-                                        // The chosen one is shown inverted: a light
-                                        // disc behind the icon.
-                                        child: Container(
-                                          alignment: Alignment.center,
-                                          decoration: BoxDecoration(
-                                            color: isChosen ? c.text : c.surface,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          // Triangles look low in their box: lift them a little.
-                                          child: Transform.translate(
-                                            offset: Offset(0, _isWarning(e) ? -1 : 0),
-                                            child: _lineIcon(
-                                              e,
-                                              engine.settings.agent,
-                                              c,
-                                              size: e.kind == LogKind.tool ? 10 : 15,
-                                              inverted: isChosen,
+                                        child: GestureDetector(
+                                          // Only lines are chosen; the stand-in task flag is not one.
+                                          onTap: head == null ? () => sel.select(e, this) : null,
+                                          // The chosen one is shown inverted: a light
+                                          // disc behind the icon.
+                                          child: Container(
+                                            alignment: Alignment.center,
+                                            decoration: BoxDecoration(
+                                              color: isChosen ? c.text : c.surface,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            // Triangles look low in their box: lift them a little.
+                                            child: Transform.translate(
+                                              offset: Offset(0, _isWarning(e) ? -1 : 0),
+                                              child: _lineIcon(
+                                                e,
+                                                engine.settings.agent,
+                                                c,
+                                                size: e.kind == LogKind.tool ? 10 : 15,
+                                                inverted: isChosen,
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  );
-                                }(),
-                          ],
+                                    );
+                                  }(),
+                            ],
+                          ),
                         ),
                       ),
                     ),
