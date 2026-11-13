@@ -31,6 +31,20 @@ void main() {
     expect(find.textContaining('**'), findsNothing);
   });
 
+  test('a click on the chosen line drops it, also after the click-anywhere clear', () {
+    final sel = ActivitySelection();
+    final a = LogEntry(LogKind.agent, 'a'), b = LogEntry(LogKind.agent, 'b');
+    sel.toggle(a, #log);
+    expect(sel.entry, same(a));
+    // Every click first clears the choice, then reaches the line clicked.
+    sel.clearForClick();
+    sel.toggle(a, #map);
+    expect(sel.entry, isNull);
+    sel.clearForClick();
+    sel.toggle(b, #map);
+    expect(sel.entry, same(b));
+  });
+
   test('log kinds stay distinct for the filters', () {
     expect(LogKind.values, contains(LogKind.warning));
   });

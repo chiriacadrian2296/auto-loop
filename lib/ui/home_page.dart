@@ -478,7 +478,7 @@ class _HomePageState extends State<HomePage> {
       body: Listener(
         behavior: HitTestBehavior.translucent,
         onPointerDown: (_) {
-          if (_selection.entry != null) _selection.select(null, #elsewhere);
+          _selection.clearForClick();
         },
         child: DropTarget(
           onDragEntered: (_) => setState(() => _dragging = true),

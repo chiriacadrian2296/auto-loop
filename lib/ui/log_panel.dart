@@ -31,10 +31,32 @@ class ActivitySelection extends ChangeNotifier {
   final _filter = ValueNotifier<_Filter>(_Filter.all);
 
   void select(LogEntry? e, Object source, {bool block = false}) {
+    _cleared = null;
     entry = e;
     this.block = block;
     this.source = source;
     notifyListeners();
+  }
+
+  /// What a click elsewhere just dropped: a click that lands on that same
+  /// line must not choose it again.
+  LogEntry? _cleared;
+
+  /// A click somewhere in the window: the choice goes.
+  void clearForClick() {
+    if (entry == null) return;
+    final was = entry;
+    select(null, #elsewhere);
+    _cleared = was;
+  }
+
+  /// A click on a line: chooses it, or drops it when it was the chosen one.
+  void toggle(LogEntry e, Object source) {
+    if (identical(e, entry) || identical(e, _cleared)) {
+      select(null, source);
+    } else {
+      select(e, source);
+    }
   }
 }
 
@@ -525,7 +547,7 @@ class _LogPanelState extends State<LogPanel> {
                 key: target ? _headerKeys.putIfAbsent(e, GlobalKey.new) : null,
                 agent: engine.settings.agent,
                 highlighted: target,
-                onTap: () => _select(e),
+                onTap: () => widget.selection?.toggle(e, this),
                 indent: _indent * 2,
               ),
             );
@@ -1362,7 +1384,7 @@ class _ActivityMapState extends State<ActivityMap> {
                     best = e;
                   }
                 }
-                if (best != null) sel.select(best, this);
+                if (best != null) sel.toggle(best, this);
               }
 
               final icons = [
@@ -1494,24 +1516,32 @@ class _ActivityMapState extends State<ActivityMap> {
                                           ),
                                           child: GestureDetector(
                                             // Only lines are chosen; the stand-in task flag is not one.
-                                            onTap: head == null ? () => sel.select(e, this) : null,
+                                            onTap: head == null ? () => sel.toggle(e, this) : null,
                                             // The chosen one is shown inverted: a light
                                             // disc behind the icon.
                                             child: Container(
                                               alignment: Alignment.center,
-                                              decoration: BoxDecoration(
-                                                color: isChosen ? c.text : c.surface,
-                                                shape: BoxShape.circle,
-                                              ),
-                                              // Triangles look low in their box: lift them a little.
-                                              child: Transform.translate(
-                                                offset: Offset(0, _isWarning(e) ? -1 : 0),
-                                                child: _lineIcon(
-                                                  e,
-                                                  engine.settings.agent,
-                                                  c,
-                                                  size: e.kind == LogKind.tool ? 10 : 15,
-                                                  inverted: isChosen,
+                                              decoration: BoxDecoration(color: c.surface, shape: BoxShape.circle),
+                                              // The light disc sits inside the dark one, so the
+                                              // chosen icon takes no more room than the others.
+                                              child: Container(
+                                                width: e.kind == LogKind.tool ? 10 : 18,
+                                                height: e.kind == LogKind.tool ? 10 : 18,
+                                                alignment: Alignment.center,
+                                                decoration: BoxDecoration(
+                                                  color: isChosen ? c.text : Colors.transparent,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                // Triangles look low in their box: lift them a little.
+                                                child: Transform.translate(
+                                                  offset: Offset(0, _isWarning(e) ? -1 : 0),
+                                                  child: _lineIcon(
+                                                    e,
+                                                    engine.settings.agent,
+                                                    c,
+                                                    size: e.kind == LogKind.tool ? 10 : 15,
+                                                    inverted: isChosen,
+                                                  ),
                                                 ),
                                               ),
                                             ),
