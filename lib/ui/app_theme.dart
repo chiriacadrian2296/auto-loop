@@ -268,10 +268,13 @@ class PanelHeader extends StatelessWidget {
 
 /// A number with its icon; the tooltip says what it is.
 class IconStat extends StatelessWidget {
-  const IconStat(this.icon, this.value, this.tooltip, {super.key, this.color});
+  const IconStat(this.icon, this.value, this.tooltip, {super.key, this.color, this.iconColor});
   final IconData icon;
   final String value, tooltip;
   final Color? color;
+
+  /// The icon's own colour, when it differs from the number's.
+  final Color? iconColor;
 
   static const _style = TextStyle(fontSize: 12, fontFeatures: [FontFeature.tabularFigures()]);
 
@@ -295,7 +298,7 @@ class IconStat extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: tint),
+          Icon(icon, size: 14, color: iconColor ?? tint),
           const SizedBox(width: 4),
           Text(value, style: _style.copyWith(color: tint)),
         ],

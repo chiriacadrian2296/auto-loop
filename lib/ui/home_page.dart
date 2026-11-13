@@ -473,157 +473,165 @@ class _HomePageState extends State<HomePage> {
     final active = engine.isActive;
     final blocker = active ? null : _blocker();
     return Scaffold(
-      body: DropTarget(
-        onDragEntered: (_) => setState(() => _dragging = true),
-        onDragExited: (_) => setState(() => _dragging = false),
-        onDragDone: _onDrop,
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                _TopBar(themeMode: widget.themeMode.value, onThemeChanged: (m) => widget.themeMode.value = m),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // The control panel slides closed to a thin rail once set up.
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 240),
-                          curve: Curves.easeOutCubic,
-                          width: _sidebarOpen ? 330 : 56,
-                          onEnd: () => setState(() => _sidebarShown = _sidebarOpen),
-                          child: Panel(
-                            child: _sidebarOpen && _sidebarShown
-                                // Shown once the panel has reached full width.
-                                ? OverflowBox(
-                                    alignment: Alignment.topLeft,
-                                    minWidth: 330,
-                                    maxWidth: 330,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: [
-                                        PanelHeader(
-                                          'Pannello di controllo',
-                                          titleActions: [SettingsPanel.expandAllButton()],
-                                          actions: [
-                                            IconButton(
-                                              tooltip: 'Ripristina predefiniti',
-                                              onPressed: active ? null : _resetDefaults,
-                                              iconSize: 19,
-                                              icon: const Icon(Icons.settings_backup_restore_rounded),
+      // A click anywhere drops the chosen line; a click on a line (or on
+      // the map) then chooses it again.
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) {
+          if (_selection.entry != null) _selection.select(null, #elsewhere);
+        },
+        child: DropTarget(
+          onDragEntered: (_) => setState(() => _dragging = true),
+          onDragExited: (_) => setState(() => _dragging = false),
+          onDragDone: _onDrop,
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  _TopBar(themeMode: widget.themeMode.value, onThemeChanged: (m) => widget.themeMode.value = m),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // The control panel slides closed to a thin rail once set up.
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 240),
+                            curve: Curves.easeOutCubic,
+                            width: _sidebarOpen ? 330 : 56,
+                            onEnd: () => setState(() => _sidebarShown = _sidebarOpen),
+                            child: Panel(
+                              child: _sidebarOpen && _sidebarShown
+                                  // Shown once the panel has reached full width.
+                                  ? OverflowBox(
+                                      alignment: Alignment.topLeft,
+                                      minWidth: 330,
+                                      maxWidth: 330,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          PanelHeader(
+                                            'Pannello di controllo',
+                                            titleActions: [SettingsPanel.expandAllButton()],
+                                            actions: [
+                                              IconButton(
+                                                tooltip: 'Ripristina predefiniti',
+                                                onPressed: active ? null : _resetDefaults,
+                                                iconSize: 19,
+                                                icon: const Icon(Icons.settings_backup_restore_rounded),
+                                              ),
+                                            ],
+                                          ),
+                                          Expanded(
+                                            child: SettingsPanel(
+                                              settings: engine.settings,
+                                              locked: active,
+                                              workDir: _workDir,
+                                              planPath: _planPath,
+                                              versions: _versions,
+                                              catalogs: _catalogs,
+                                              accounts: _accounts,
+                                              onOpenAccounts: _openAccounts,
+                                              issues: {?blocker?.$1},
+                                              requirements: _requirements(),
+                                              projectDir: _projectDir,
+                                              onPickPlan: _pickPlan,
+                                              onPickWorkDir: _pickWorkDir,
+                                              onReloadPlan: _planPath == null || active ? null : _reload,
+                                              onDetect: () => _detectClis(force: true),
+                                              onChanged: _saveSettings,
+                                              onStrategyChanged: () {
+                                                _saveSettings();
+                                                _reload();
+                                              },
                                             ),
-                                          ],
-                                        ),
-                                        Expanded(
-                                          child: SettingsPanel(
-                                            settings: engine.settings,
-                                            locked: active,
-                                            workDir: _workDir,
-                                            planPath: _planPath,
-                                            versions: _versions,
-                                            catalogs: _catalogs,
-                                            accounts: _accounts,
-                                            onOpenAccounts: _openAccounts,
-                                            issues: {?blocker?.$1},
-                                            requirements: _requirements(),
-                                            projectDir: _projectDir,
-                                            onPickPlan: _pickPlan,
-                                            onPickWorkDir: _pickWorkDir,
-                                            onReloadPlan: _planPath == null || active ? null : _reload,
-                                            onDetect: () => _detectClis(force: true),
-                                            onChanged: _saveSettings,
-                                            onStrategyChanged: () {
-                                              _saveSettings();
-                                              _reload();
-                                            },
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : _SidebarRail(onOpen: () => _setSidebar(true)),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        SizedBox(
-                          width: 360,
-                          child: Panel(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                PanelHeader(
-                                  'Avanzamento',
-                                  titleActions: [if (engine.plan != null) BlocksPanel.expandAllButton()],
-                                  actions: [
-                                    IconButton(
-                                      tooltip: 'Apri il piano nell\'editor',
-                                      onPressed: _planPath == null ? null : _openPlanInEditor,
-                                      iconSize: 19,
-                                      icon: const Icon(Icons.edit_note_rounded),
-                                    ),
-                                  ],
-                                ),
-                                Expanded(
-                                  child: _loadError != null
-                                      ? _EmptyState(
-                                          icon: Icons.error_outline_rounded,
-                                          title: 'Piano non caricato',
-                                          text: _loadError!,
-                                        )
-                                      : engine.plan == null
-                                      ? _EmptyState(
-                                          icon: Icons.description_outlined,
-                                          title: 'Nessun piano',
-                                          text:
-                                              'Scegli un file .md o .txt: verrà diviso in blocchi '
-                                              'che l\'agente svolge uno alla volta.',
-                                          action: FilledButton.icon(
-                                            onPressed: _pickPlan,
-                                            icon: const Icon(Icons.upload_file_rounded, size: 18),
-                                            label: const Text('Scegli piano'),
-                                          ),
-                                        )
-                                      : BlocksPanel(
-                                          engine: engine,
-                                          planName: p.basename(_planPath!),
-                                          onShowInLog: (b) =>
-                                              _revealInLog.value = (b.index, (_revealInLog.value?.$2 ?? 0) + 1),
-                                        ),
-                                ),
-                              ],
+                                        ],
+                                      ),
+                                    )
+                                  : _SidebarRail(onOpen: () => _setSidebar(true)),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Panel(
-                            child: LogPanel(
-                              engine: engine,
-                              reveal: _revealInLog,
-                              selection: _selection,
-                              onOpenLogs: engine.plan == null ? null : _openLogs,
-                              onOpenProgress: _workDir == null ? null : _openProgress,
+                          const SizedBox(width: 16),
+                          SizedBox(
+                            width: 360,
+                            child: Panel(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  PanelHeader(
+                                    'Avanzamento',
+                                    titleActions: [if (engine.plan != null) BlocksPanel.expandAllButton()],
+                                    actions: [
+                                      IconButton(
+                                        tooltip: 'Apri il piano nell\'editor',
+                                        onPressed: _planPath == null ? null : _openPlanInEditor,
+                                        iconSize: 19,
+                                        icon: const Icon(Icons.edit_note_rounded),
+                                      ),
+                                    ],
+                                  ),
+                                  Expanded(
+                                    child: _loadError != null
+                                        ? _EmptyState(
+                                            icon: Icons.error_outline_rounded,
+                                            title: 'Piano non caricato',
+                                            text: _loadError!,
+                                          )
+                                        : engine.plan == null
+                                        ? _EmptyState(
+                                            icon: Icons.description_outlined,
+                                            title: 'Nessun piano',
+                                            text:
+                                                'Scegli un file .md o .txt: verrà diviso in blocchi '
+                                                'che l\'agente svolge uno alla volta.',
+                                            action: FilledButton.icon(
+                                              onPressed: _pickPlan,
+                                              icon: const Icon(Icons.upload_file_rounded, size: 18),
+                                              label: const Text('Scegli piano'),
+                                            ),
+                                          )
+                                        : BlocksPanel(
+                                            engine: engine,
+                                            planName: p.basename(_planPath!),
+                                            onShowInLog: (b) =>
+                                                _revealInLog.value = (b.index, (_revealInLog.value?.$2 ?? 0) + 1),
+                                          ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Panel(
+                              child: LogPanel(
+                                engine: engine,
+                                reveal: _revealInLog,
+                                selection: _selection,
+                                onOpenLogs: engine.plan == null ? null : _openLogs,
+                                onOpenProgress: _workDir == null ? null : _openProgress,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                _BottomBar(
-                  engine: engine,
-                  onStart: blocker != null || active || engine.phase == LoopPhase.finished ? null : engine.start,
-                  blocker: blocker == null ? null : (blocker.$2, blocker.$3),
-                  onPause: active && !engine.pauseRequested ? engine.requestPause : null,
-                  onStop: active && engine.phase != LoopPhase.stopping ? _confirmStop : null,
-                  selection: _selection,
-                ),
-              ],
-            ),
-            if (_dragging) const Positioned.fill(child: _DropOverlay()),
-          ],
+                  _BottomBar(
+                    engine: engine,
+                    onStart: blocker != null || active || engine.phase == LoopPhase.finished ? null : engine.start,
+                    blocker: blocker == null ? null : (blocker.$2, blocker.$3),
+                    onPause: active && !engine.pauseRequested ? engine.requestPause : null,
+                    onStop: active && engine.phase != LoopPhase.stopping ? _confirmStop : null,
+                    selection: _selection,
+                  ),
+                ],
+              ),
+              if (_dragging) const Positioned.fill(child: _DropOverlay()),
+            ],
+          ),
         ),
       ),
     );
@@ -723,35 +731,36 @@ class _BottomBar extends StatelessWidget {
     final stats = state == null
         ? <IconStat>[]
         : [
-            IconStat(Icons.schedule_rounded, _fmt(engine.totalTime), 'Tempo di lavoro', color: c.text),
+            IconStat(Icons.schedule_rounded, _fmt(engine.totalTime), 'Tempo di lavoro', iconColor: c.text),
             IconStat(
               Icons.toll_outlined,
               _compact(state.totalTokens),
               'Token: ${_compact(state.inputTokens)} in / ${_compact(state.outputTokens)} out',
-              color: c.text,
+              iconColor: c.text,
             ),
             if (plan != null)
               IconStat(
                 Icons.layers_outlined,
                 '${engine.doneCount}/${plan.blocks.length}',
                 'Blocchi completati',
-                color: c.text,
+                iconColor: c.text,
               ),
             IconStat(
               Icons.replay_rounded,
               '${state.runs}',
               state.runs == 1 ? '1 invocazione' : '${state.runs} invocazioni',
-              color: c.text,
+              iconColor: c.text,
             ),
             IconStat(
               Icons.commit_rounded,
               '${state.commits}',
               state.commits == 1 ? '1 commit' : '${state.commits} commit',
-              color: c.text,
+              iconColor: c.text,
             ),
           ];
 
-    return WindowDragArea(
+    // Not a drag area: only the title bar moves the window.
+    return KeyedSubtree(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         child: SizedBox(

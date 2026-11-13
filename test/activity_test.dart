@@ -36,7 +36,7 @@ void main() {
   });
 
   testWidgets('clicking a block opens its invocations in the log', (tester) async {
-    final demo = (await tester.runAsync(DemoData.create))!;
+    final demo = (await tester.runAsync(() => DemoData.create(folder: 'autoloop-demo-activity-test')))!;
     SharedPreferences.setMockInitialValues({'workDir': demo.workDir, 'planPath': demo.planPath});
     final prefs = await SharedPreferences.getInstance();
     tester.view.physicalSize = const Size(1440, 900);

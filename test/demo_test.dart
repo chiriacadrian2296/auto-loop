@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('demo data loads with mixed block states and never runs an agent', () async {
-    final demo = await DemoData.create();
+    final demo = await DemoData.create(folder: 'autoloop-demo-demo-test');
     final engine = LoopEngine(LoopSettings())..demo = true;
     expect(engine.load(workDir: demo.workDir, planPath: demo.planPath), isNull);
     final states = [for (final b in engine.plan!.blocks) engine.blockState(b).status];

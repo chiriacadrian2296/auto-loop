@@ -690,11 +690,12 @@ class _BlockHeading extends StatelessWidget {
       padding: EdgeInsets.only(top: gap, bottom: 2),
       child: SectionTitle(
         title: number == null ? title : '$number. $title',
-        icon: Icon(Icons.layers_outlined, size: 15, color: c.text),
+        icon: highlighted
+            ? _invertedDisc(c, Icon(Icons.layers_outlined, size: 15, color: c.background), size: 21)
+            : Icon(Icons.layers_outlined, size: 15, color: c.text),
         time: start == null ? null : _clock(start!),
         open: open,
         onTap: onTap,
-        highlighted: highlighted,
         badge: _badge(outcome, c),
         stats: [
           IconStat(
@@ -778,7 +779,7 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
       child: Padding(
         padding: const EdgeInsets.only(top: 6, bottom: 2),
         child: Material(
-          color: widget.highlighted ? c.primarySoft : Colors.transparent,
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           child: InkWell(
             borderRadius: BorderRadius.circular(10),
@@ -800,7 +801,11 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
                       alignment: Alignment.centerLeft,
                       child: SizedBox(
                         width: _arrow,
-                        child: Center(child: Icon(Icons.replay_rounded, size: 15, color: c.text)),
+                        child: Center(
+                          child: widget.highlighted
+                              ? _invertedDisc(c, Icon(Icons.replay_rounded, size: 15, color: c.background), size: 21)
+                              : Icon(Icons.replay_rounded, size: 15, color: c.text),
+                        ),
                       ),
                     ),
                   ),
@@ -902,7 +907,10 @@ class _LogLineState extends State<_LogLine> {
 
     // One icon per line, always in the same column and size. Only icons
     // carry color; texts stay neutral.
-    final icon = _lineIcon(e, widget.agent, c);
+    // The chosen line shows its icon inverted, like on the map.
+    final icon = widget.highlighted
+        ? _invertedDisc(c, _lineIcon(e, widget.agent, c, inverted: true), size: 21)
+        : _lineIcon(e, widget.agent, c);
 
     // One grey for every text: the icon says what kind of line it is.
     final body = TextStyle(fontSize: 13.5, height: 1.5, color: Color.lerp(c.muted, c.text, 0.55));
@@ -973,10 +981,7 @@ class _LogLineState extends State<_LogLine> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: widget.highlighted ? c.primarySoft : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
+          decoration: BoxDecoration(color: Colors.transparent, borderRadius: BorderRadius.circular(8)),
           padding: EdgeInsets.symmetric(horizontal: _sidePad, vertical: roomy ? 7 : 3),
           child: row,
         ),
@@ -1082,6 +1087,16 @@ Widget _lineIcon(LogEntry e, AgentKind agent, AppColors c, {double size = 15, bo
   };
 }
 
+/// How the chosen line shows its icon, in the log and on the map: on a
+/// light disc, colours inverted.
+Widget _invertedDisc(AppColors c, Widget icon, {double size = 22}) => Container(
+  width: size,
+  height: size,
+  alignment: Alignment.center,
+  decoration: BoxDecoration(color: c.text, shape: BoxShape.circle),
+  child: icon,
+);
+
 /// The whole activity as a map, laid out in time: each block is a neutral
 /// band with its invocations marked inside, every line is its icon
 /// (commands a grey dot), kept a little apart so none hides another. It
@@ -1121,7 +1136,7 @@ class _ActivityMapState extends State<ActivityMap> {
 
   static const _pad = 12.0;
   static const _icon = 22.0;
-  static const _dot = 8.0;
+  static const _dot = 12.0;
 
   static String _hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
@@ -1146,11 +1161,30 @@ class _ActivityMapState extends State<ActivityMap> {
 
     // What goes on the map, in order: invocation starts (no icon of their
     // own, they open the bands) and the lines the filter lets through.
-    final items = [
-      for (final e in logs)
-        if ((e.kind == LogKind.info && e.text.startsWith('▶')) || (_shown(e) && filter.accepts(e))) e,
-    ];
     bool isHeader(LogEntry e) => e.kind == LogKind.info && e.text.startsWith('▶');
+    // Every block opens with its task flag: when the log has none for it
+    // (it began before the log), one stands in, pointing at the block.
+    final starts = <LogEntry, LogEntry>{};
+    final firstHeaders = {for (final r in runs) r.first.header!};
+    final items = <LogEntry>[];
+    for (final (i, e) in logs.indexed) {
+      final header = isHeader(e);
+      if (!header && !(_shown(e) && filter.accepts(e))) continue;
+      items.add(e);
+      if (header && firstHeaders.contains(e) && filter.kinds.contains(_Kind.events)) {
+        final hasTask = logs.skip(i + 1).takeWhile((x) => !isHeader(x)).any((x) => x.kind == LogKind.task);
+        if (!hasTask) {
+          final m = RegExp(r'Blocco (\d+)/\d+ «(.*)»').firstMatch(e.text);
+          final flag = LogEntry(
+            LogKind.task,
+            m == null ? 'Compito' : 'Compito del blocco ${m.group(1)}: ${m.group(2)}',
+            at: e.at,
+          );
+          starts[flag] = e;
+          items.add(flag);
+        }
+      }
+    }
     double half(LogEntry e) => isHeader(e) ? 2 : (e.kind == LogKind.tool ? _dot / 2 : _icon / 2);
 
     // Keep up with new lines while the end is in view.
@@ -1194,20 +1228,27 @@ class _ActivityMapState extends State<ActivityMap> {
                   ? [_pad + t1.difference(t0).inMilliseconds * scale, last + 14].reduce((a, b) => a > b ? a : b)
                   : last;
               final width = [box.maxWidth, liveEnd + _pad].reduce((a, b) => a > b ? a : b);
-              final mid = (box.maxHeight - 8) / 2;
+              final mid = box.maxHeight / 2;
 
               final bands = <(double, double, List<double>, bool, String)>[];
               for (final (i, run) in runs.indexed) {
                 final head = run.first.header!;
                 final live = i == runs.length - 1 && engine.isActive;
-                final runItems = [
-                  for (final g in run) ...[?g.header, ...g.entries],
-                ].where(xs.containsKey).toList();
-                final right = live ? liveEnd : xs[runItems.last]!;
+                // From the centre of its first icon to the centre of its last:
+                // half of each sits inside the band, half outside.
+                final first = items.indexOf(head);
+                final next = runs.length > i + 1 ? items.indexOf(runs[i + 1].first.header!) : items.length;
+                final icons = [
+                  for (final e in items.sublist(first, next))
+                    if (!isHeader(e)) e,
+                ];
+                final left = icons.isEmpty ? xs[head]! - 6 : xs[icons.first]!;
+                var right = live ? liveEnd : (icons.isEmpty ? xs[head]! + 6 : xs[icons.last]!);
+                if (right < left + 6) right = left + 6;
                 final m = RegExp(r'Blocco (\d+)/\d+ «(.*)»').firstMatch(head.text);
                 bands.add((
-                  xs[head]! - 6,
-                  right + 6,
+                  left,
+                  right,
                   [
                     for (final g in run.skip(1))
                       if (xs[g.header] case final x?) x - 3,
@@ -1227,7 +1268,9 @@ class _ActivityMapState extends State<ActivityMap> {
                     best = e;
                   }
                 }
-                if (best != null) sel.select(best, this, block: false);
+                if (best == null) return;
+                final head = starts[best];
+                sel.select(head ?? best, this, block: head != null);
               }
 
               final chosen = sel.entry;
@@ -1269,39 +1312,47 @@ class _ActivityMapState extends State<ActivityMap> {
                             ),
                           for (final e in items)
                             if (!isHeader(e))
-                              Positioned(
-                                left: xs[e]! - _icon / 2,
-                                top: mid - _icon / 2,
-                                width: _icon,
-                                height: _icon,
-                                child: Tooltip(
-                                  message: '${_clock(e.at)}  ${e.text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
-                                  constraints: const BoxConstraints(maxWidth: 420),
-                                  child: GestureDetector(
-                                    onTap: () => sel.select(e, this),
-                                    // The chosen one is shown inverted: a light
-                                    // disc behind the icon.
-                                    child: Container(
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: identical(chosen, e) ? c.text : c.surface,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      // Triangles look low in their box: lift them a little.
-                                      child: Transform.translate(
-                                        offset: Offset(0, _warns(e) ? -1 : 0),
-                                        child: _lineIcon(
-                                          e,
-                                          engine.settings.agent,
-                                          c,
-                                          size: 15,
-                                          inverted: identical(chosen, e),
+                              () {
+                                // Commands sit on a smaller disc.
+                                final size = e.kind == LogKind.tool ? 12.0 : _icon;
+                                final head = starts[e];
+                                final isChosen = head == null
+                                    ? identical(chosen, e)
+                                    : identical(chosen, head) && sel.block;
+                                return Positioned(
+                                  left: xs[e]! - size / 2,
+                                  top: mid - size / 2,
+                                  width: size,
+                                  height: size,
+                                  child: Tooltip(
+                                    message: '${_clock(e.at)}  ${e.text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
+                                    constraints: const BoxConstraints(maxWidth: 420),
+                                    child: GestureDetector(
+                                      onTap: () => sel.select(head ?? e, this, block: head != null),
+                                      // The chosen one is shown inverted: a light
+                                      // disc behind the icon.
+                                      child: Container(
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: isChosen ? c.text : c.surface,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        // Triangles look low in their box: lift them a little.
+                                        child: Transform.translate(
+                                          offset: Offset(0, _warns(e) ? -1 : 0),
+                                          child: _lineIcon(
+                                            e,
+                                            engine.settings.agent,
+                                            c,
+                                            size: e.kind == LogKind.tool ? 10 : 15,
+                                            inverted: isChosen,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
+                                );
+                              }(),
                         ],
                       ),
                     ),

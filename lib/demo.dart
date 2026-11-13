@@ -39,8 +39,9 @@ Variante scura dei colori che segue le impostazioni del sistema.
 Controlli di accessibilità, meta tag e un README con le istruzioni.
 ''';
 
-  static Future<DemoData> create() async {
-    final dir = Directory(p.join(Directory.systemTemp.path, 'autoloop-demo'));
+  /// [folder] lets tests that run side by side use folders of their own.
+  static Future<DemoData> create({String folder = 'autoloop-demo'}) async {
+    final dir = Directory(p.join(Directory.systemTemp.path, folder));
     if (dir.existsSync()) dir.deleteSync(recursive: true);
     dir.createSync(recursive: true);
     final planFile = File(p.join(dir.path, 'sito-personale.md'))..writeAsStringSync(_plan);
