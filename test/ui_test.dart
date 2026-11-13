@@ -28,8 +28,8 @@ void main() {
     expect(find.text('AutoLoop'), findsOneWidget);
     expect(find.textContaining('Setup del progetto'), findsOneWidget);
     expect(find.text('0%'), findsOneWidget);
-    // No CLI configured in this test: Avvia explains why it is disabled.
-    expect(find.text('Codex: CLI non trovata'), findsOneWidget);
+    // No CLI configured in this test: Avvia says why it cannot start.
+    expect(find.byTooltip('Non si può avviare: Codex: CLI non trovata. Clicca per risolvere.'), findsOneWidget);
 
     // Block actions show on the selected tile only.
     expect(find.byTooltip('Segna completato'), findsNothing);

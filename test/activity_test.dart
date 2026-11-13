@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:auto_loop/ui/app_theme.dart';
 import 'package:auto_loop/ui/markdown_text.dart';
 import 'package:flutter/material.dart';
+import 'package:auto_loop/ui/blocks_panel.dart';
 import 'package:auto_loop/ui/log_panel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -52,7 +53,7 @@ void main() {
     await tester.pump();
     expect(find.textContaining(message, findRichText: true), findsNothing);
 
-    await tester.tap(find.text('Sezione progetti').first);
+    await tester.tap(find.descendant(of: find.byType(BlocksPanel), matching: find.text('3. Sezione progetti')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.textContaining(message, findRichText: true), findsOneWidget);

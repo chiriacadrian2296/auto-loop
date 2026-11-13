@@ -122,7 +122,7 @@ void main() {
       ]);
       engine.notifyListeners();
       await tester.pump(const Duration(milliseconds: 600));
-      await tester.tap(find.text('Modello e persistenza').first);
+      await tester.tap(find.text('2. Modello e persistenza').first);
       for (var i = 0; i < 20; i++) {
         await tester.pump(const Duration(milliseconds: 20));
       }

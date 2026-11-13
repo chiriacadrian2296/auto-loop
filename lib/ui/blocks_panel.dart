@@ -455,7 +455,9 @@ class _TimelineItem extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          block.title,
+                          // Numbered like in the activity log: the disc may
+                          // show a tick or a "!" instead of the number.
+                          '${block.index + 1}. ${block.title}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

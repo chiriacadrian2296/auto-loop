@@ -30,7 +30,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700)); // debounce
     await tester.pump();
     expect(find.text('0 di 3 blocchi completati'), findsOneWidget);
-    expect(find.text('Tre'), findsOneWidget);
+    expect(find.text('3. Tre'), findsOneWidget);
     expect(engine.logs.last.text, contains('Piano ricaricato'));
 
     await tester.pumpWidget(const SizedBox());

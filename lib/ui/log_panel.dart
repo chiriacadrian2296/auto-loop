@@ -27,10 +27,6 @@ class ActivitySelection extends ChangeNotifier {
   /// One filter for the activity panel and the strip.
   final _filter = ValueNotifier<_Filter>(_Filter.all);
 
-  /// The time span of the lines currently in view in the activity panel,
-  /// drawn on the map at the bottom.
-  final inView = ValueNotifier<(DateTime, DateTime)?>(null);
-
   void select(LogEntry? e, Object source, {bool block = false}) {
     entry = e;
     this.block = block;
@@ -259,22 +255,6 @@ class _LogPanelState extends State<LogPanel> {
     _scrollTo(target, block: widget.selection?.block ?? false);
   }
 
-  /// The time of each row, to tell the map which span is in view.
-  final _rowTimes = <DateTime>[];
-
-  void _publishInView() {
-    final sel = widget.selection;
-    if (sel == null || !_scroll.hasClients || _rowTimes.isEmpty) return;
-    final pos = _scroll.position;
-    final total = pos.maxScrollExtent + pos.viewportDimension;
-    if (total <= 0) return;
-    final n = _rowTimes.length;
-    final a = (pos.pixels / total * n).floor().clamp(0, n - 1);
-    final b = ((pos.pixels + pos.viewportDimension) / total * n).ceil().clamp(1, n) - 1;
-    final span = (_rowTimes[a], _rowTimes[b]);
-    if (sel.inView.value != span) sel.inView.value = span;
-  }
-
   /// Where the header to reveal sits among the rows (for lazy lists).
   final _rowIndex = <LogEntry, int>{};
   int _rowCount = 0;
@@ -339,7 +319,6 @@ class _LogPanelState extends State<LogPanel> {
     widget.selection?._filter.addListener(_filterChanged);
     _scroll.addListener(() {
       if (!_scroll.hasClients) return;
-      _publishInView();
       final bottom = _scroll.position.pixels >= _scroll.position.maxScrollExtent - 40;
       if (bottom != _atBottom || (bottom && _unseen)) {
         setState(() {
@@ -419,7 +398,6 @@ class _LogPanelState extends State<LogPanel> {
         ..addAll(open ? const <LogEntry>[] : headers);
     });
     final rows = <Widget>[];
-    _rowTimes.clear();
     var previousOpen = false;
     for (var r = 0; r < runs.length; r++) {
       final run = runs[r];
@@ -441,7 +419,6 @@ class _LogPanelState extends State<LogPanel> {
           time += g.duration(live: lastRun && identical(g, run.last) && engine.isActive);
         }
         _blockRowIndex[head] = rows.length;
-        _rowTimes.add(head.at);
         rows.add(
           _BlockHeading(
             key: _blockKeys.putIfAbsent(head, GlobalKey.new),
@@ -482,7 +459,6 @@ class _LogPanelState extends State<LogPanel> {
         if (header != null) {
           final chosen = identical(header, _flash) && !_blockChosen;
           if (chosen) _rowIndex[header] = rows.length;
-          _rowTimes.add(header.at);
           rows.add(
             tab(
               _InvocationHeader(
@@ -503,7 +479,6 @@ class _LogPanelState extends State<LogPanel> {
           for (final e in visible) {
             final target = identical(e, _flash);
             if (target) _rowIndex[e] = rows.length;
-            _rowTimes.add(e.at);
             rows.add(
               tab(
                 _LogLine(
@@ -521,7 +496,6 @@ class _LogPanelState extends State<LogPanel> {
       }
     }
     _rowCount = rows.length;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _publishInView());
     final silent = engine.phase == LoopPhase.running && engine.lastOutputAt != null
         ? DateTime.now().difference(engine.lastOutputAt!)
         : null;
@@ -1065,9 +1039,12 @@ class _BlockProgress extends StatelessWidget {
   }
 }
 
-/// The icon of a line, the same in the log and in the strip at the bottom:
-/// only icons carry color.
-Widget _lineIcon(LogEntry e, AgentKind agent, AppColors c, {double size = 15}) {
+/// The icon of a line, the same in the log and on the map at the bottom:
+/// only icons carry color. Commands are just a small grey dot. [inverted]
+/// draws it for a light tile (the chosen one on the map): white icons turn
+/// dark there.
+Widget _lineIcon(LogEntry e, AgentKind agent, AppColors c, {double size = 15, bool inverted = false}) {
+  final white = inverted ? c.background : c.text;
   final agentIcon = Padding(
     padding: const EdgeInsets.all(1),
     child: SvgPicture.asset(
@@ -1079,12 +1056,21 @@ Widget _lineIcon(LogEntry e, AgentKind agent, AppColors c, {double size = 15}) {
   );
   return switch (e.kind) {
     LogKind.agent => agentIcon,
-    LogKind.tool => Icon(Icons.terminal_rounded, size: size, color: c.muted),
+    LogKind.tool => SizedBox.square(
+      dimension: size,
+      child: Center(
+        child: Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: inverted ? c.background : c.muted, shape: BoxShape.circle),
+        ),
+      ),
+    ),
     LogKind.success => Icon(Icons.check_circle_rounded, size: size, color: c.success),
     // The same flag: empty when the block starts, filled when it is done.
-    LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: c.text),
+    LogKind.task => Icon(Icons.outlined_flag_rounded, size: size, color: white),
     LogKind.result => switch (e.outcome) {
-      RunOutcome.done || null => Icon(Icons.flag_rounded, size: size, color: c.text),
+      RunOutcome.done || null => Icon(Icons.flag_rounded, size: size, color: white),
       // Going on with the block reads like a word from the agent.
       RunOutcome.again => agentIcon,
       RunOutcome.interrupted => Icon(Icons.warning_amber_rounded, size: size, color: c.warning),
@@ -1096,11 +1082,11 @@ Widget _lineIcon(LogEntry e, AgentKind agent, AppColors c, {double size = 15}) {
   };
 }
 
-/// The whole activity as a map, laid out in time: each block is a tinted
-/// band (green done, red blocked, blue running), invocations are marked
-/// inside it, messages and commands are dots and the lines that matter
-/// (results, checks, warnings, errors) are icons. The part of the log in
-/// view in the activity panel is framed; a click or a drag goes there.
+/// The whole activity as a map, laid out in time: each block is a neutral
+/// band with its invocations marked inside, every line is its icon
+/// (commands a grey dot), kept a little apart so none hides another. It
+/// scrolls when it gets long; a click or a drag picks the nearest line,
+/// shown in the activity panel too.
 class ActivityMap extends StatefulWidget {
   const ActivityMap({super.key, required this.engine, required this.selection});
   final LoopEngine engine;
@@ -1111,19 +1097,21 @@ class ActivityMap extends StatefulWidget {
 }
 
 class _ActivityMapState extends State<ActivityMap> {
+  final _scroll = ScrollController();
+  int _lastCount = -1;
+
   @override
   void initState() {
     super.initState();
     widget.selection.addListener(_redraw);
     widget.selection._filter.addListener(_redraw);
-    widget.selection.inView.addListener(_redraw);
   }
 
   @override
   void dispose() {
     widget.selection.removeListener(_redraw);
     widget.selection._filter.removeListener(_redraw);
-    widget.selection.inView.removeListener(_redraw);
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -1131,13 +1119,11 @@ class _ActivityMapState extends State<ActivityMap> {
     if (mounted) setState(() {});
   }
 
-  static bool _important(LogEntry e) => switch (e.kind) {
-    LogKind.result || LogKind.success || LogKind.warning || LogKind.error || LogKind.task => true,
-    _ => false,
-  };
-
   static const _pad = 12.0;
-  static const _mid = 20.0;
+  static const _icon = 22.0;
+  static const _dot = 8.0;
+
+  static String _hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
@@ -1157,239 +1143,226 @@ class _ActivityMapState extends State<ActivityMap> {
     var t1 = logs.last.at;
     if (engine.isActive && DateTime.now().isAfter(t1)) t1 = DateTime.now();
     if (!t1.isAfter(t0)) t1 = t0.add(const Duration(seconds: 1));
-    final points = [
+
+    // What goes on the map, in order: invocation starts (no icon of their
+    // own, they open the bands) and the lines the filter lets through.
+    final items = [
       for (final e in logs)
-        if (_shown(e) && filter.accepts(e)) e,
+        if ((e.kind == LogKind.info && e.text.startsWith('▶')) || (_shown(e) && filter.accepts(e))) e,
     ];
+    bool isHeader(LogEntry e) => e.kind == LogKind.info && e.text.startsWith('▶');
+    double half(LogEntry e) => isHeader(e) ? 2 : (e.kind == LogKind.tool ? _dot / 2 : _icon / 2);
 
-    return LayoutBuilder(
-      builder: (context, box) {
-        final w = box.maxWidth;
-        double x(DateTime t) =>
-            _pad +
-            (t.difference(t0).inMilliseconds / t1.difference(t0).inMilliseconds).clamp(0.0, 1.0) * (w - 2 * _pad);
+    // Keep up with new lines while the end is in view.
+    if (logs.length != _lastCount) {
+      final atEnd = !_scroll.hasClients || _scroll.position.pixels >= _scroll.position.maxScrollExtent - 4;
+      _lastCount = logs.length;
+      if (atEnd) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        });
+      }
+    }
 
-        // A click or a drag picks what is nearest in time, among the lines
-        // shown and the starts of invocations.
-        final targets = [...points, for (final g in groups) ?g.header];
-        void pick(double dx) {
-          LogEntry? best;
-          var dist = double.infinity;
-          for (final e in targets) {
-            final d = (x(e.at) - dx).abs();
-            if (d < dist) {
-              dist = d;
-              best = e;
-            }
-          }
-          if (best != null) sel.select(best, this);
-        }
+    final hm = TextStyle(fontSize: 11, color: c.muted, fontFeatures: const [FontFeature.tabularFigures()]);
+    return Row(
+      children: [
+        Text(_hm(t0), style: hm),
+        const SizedBox(width: 10),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, box) {
+              // Positions follow time, but each item keeps a little room so
+              // none hides the next; then the map may get longer than the
+              // card and scrolls.
+              final scale = (box.maxWidth - 2 * _pad) / t1.difference(t0).inMilliseconds;
+              final xs = <LogEntry, double>{};
+              double? prevX;
+              LogEntry? prev;
+              for (final e in items) {
+                var x = _pad + e.at.difference(t0).inMilliseconds * scale;
+                if (prevX != null) {
+                  final min = prevX + half(prev!) + half(e) + 3;
+                  if (x < min) x = min;
+                }
+                xs[e] = x;
+                prevX = x;
+                prev = e;
+              }
+              final last = prevX ?? _pad;
+              final liveEnd = engine.isActive
+                  ? [_pad + t1.difference(t0).inMilliseconds * scale, last + 14].reduce((a, b) => a > b ? a : b)
+                  : last;
+              final width = [box.maxWidth, liveEnd + _pad].reduce((a, b) => a > b ? a : b);
+              final mid = (box.maxHeight - 8) / 2;
 
-        final bands = <_Band>[];
-        for (final (i, run) in runs.indexed) {
-          final live = i == runs.length - 1 && engine.isActive;
-          final end = live ? t1 : run.last.end!;
-          final outcome = run.last.outcome(live: live);
-          final color = switch (outcome) {
-            _Outcome.done => c.success,
-            _Outcome.blocked || _Outcome.failed => c.danger,
-            _Outcome.running => c.primary,
-            _Outcome.interrupted => c.warning,
-            _ => c.muted,
-          };
-          final m = RegExp(r'Blocco (\d+)/\d+ «(.*)»').firstMatch(run.first.header!.text);
-          bands.add(
-            _Band(
-              left: x(run.first.start!),
-              right: x(end),
-              color: color,
-              cuts: [for (final g in run.skip(1)) x(g.start!)],
-              label: m == null
-                  ? ''
-                  : 'Blocco ${m.group(1)}: ${m.group(2)} · ${run.length == 1 ? '1 invocazione' : '${run.length} invocazioni'}',
-              header: run.first.header!,
-            ),
-          );
-        }
-        final view = sel.inView.value;
-        final chosen = sel.entry;
+              final bands = <(double, double, List<double>, bool, String)>[];
+              for (final (i, run) in runs.indexed) {
+                final head = run.first.header!;
+                final live = i == runs.length - 1 && engine.isActive;
+                final runItems = [
+                  for (final g in run) ...[?g.header, ...g.entries],
+                ].where(xs.containsKey).toList();
+                final right = live ? liveEnd : xs[runItems.last]!;
+                final m = RegExp(r'Blocco (\d+)/\d+ «(.*)»').firstMatch(head.text);
+                bands.add((
+                  xs[head]! - 6,
+                  right + 6,
+                  [
+                    for (final g in run.skip(1))
+                      if (xs[g.header] case final x?) x - 3,
+                  ],
+                  identical(sel.entry, head),
+                  m == null ? '' : 'Blocco ${m.group(1)}: ${m.group(2)}',
+                ));
+              }
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapUp: (d) => pick(d.localPosition.dx),
-          onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _MapPainter(
-                    bands: bands,
-                    dots: [
-                      for (final e in points)
-                        if (!_important(e)) (x(e.at), e.kind == LogKind.agent ? c.primary : c.muted),
-                    ],
-                    view: view == null ? null : (x(view.$1), x(view.$2)),
-                    chosen: chosen == null ? null : x(chosen.at),
-                    line: c.border,
-                    frame: c.primary,
-                    mid: _mid,
-                  ),
-                ),
-              ),
-              // Block names on hover.
-              for (final b in bands)
-                Positioned(
-                  left: b.left,
-                  width: (b.right - b.left).clamp(6.0, double.infinity),
-                  top: _mid - 9,
-                  height: 18,
-                  child: Tooltip(message: b.label, child: const SizedBox.expand()),
-                ),
-              // The lines that matter, as icons.
-              for (final e in points)
-                if (_important(e))
-                  Positioned(
-                    left: x(e.at) - 10,
-                    top: _mid - 10,
-                    width: 20,
-                    height: 20,
-                    child: Tooltip(
-                      message: '${_clock(e.at)}  ${e.text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: GestureDetector(
-                        onTap: () => sel.select(e, this),
-                        child: Container(
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: identical(chosen, e) ? c.primarySoft : c.surface,
-                            shape: BoxShape.circle,
+              void pick(double dx) {
+                LogEntry? best;
+                var dist = double.infinity;
+                for (final e in items) {
+                  final d = (xs[e]! - dx).abs();
+                  if (d < dist) {
+                    dist = d;
+                    best = e;
+                  }
+                }
+                if (best != null) sel.select(best, this, block: false);
+              }
+
+              final chosen = sel.entry;
+              return Scrollbar(
+                controller: _scroll,
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _scroll,
+                  scrollDirection: Axis.horizontal,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (d) => pick(d.localPosition.dx),
+                    onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
+                    child: SizedBox(
+                      width: width,
+                      height: box.maxHeight,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: _MapPainter(
+                                bands: [for (final b in bands) (b.$1, b.$2, b.$3, b.$4)],
+                                band: c.muted,
+                                line: c.border,
+                                chosenBand: c.text,
+                                mid: mid,
+                              ),
+                            ),
                           ),
-                          child: _lineIcon(e, engine.settings.agent, c, size: 14),
-                        ),
+                          // Block names on hover.
+                          for (final b in bands)
+                            Positioned(
+                              left: b.$1,
+                              width: b.$2 - b.$1,
+                              top: mid - 10,
+                              height: 20,
+                              child: Tooltip(message: b.$5, child: const SizedBox.expand()),
+                            ),
+                          for (final e in items)
+                            if (!isHeader(e))
+                              Positioned(
+                                left: xs[e]! - _icon / 2,
+                                top: mid - _icon / 2,
+                                width: _icon,
+                                height: _icon,
+                                child: Tooltip(
+                                  message: '${_clock(e.at)}  ${e.text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
+                                  constraints: const BoxConstraints(maxWidth: 420),
+                                  child: GestureDetector(
+                                    onTap: () => sel.select(e, this),
+                                    // The chosen one is shown inverted: a light
+                                    // disc behind the icon.
+                                    child: Container(
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: identical(chosen, e) ? c.text : c.surface,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      // Triangles look low in their box: lift them a little.
+                                      child: Transform.translate(
+                                        offset: Offset(0, _warns(e) ? -1 : 0),
+                                        child: _lineIcon(
+                                          e,
+                                          engine.settings.agent,
+                                          c,
+                                          size: 15,
+                                          inverted: identical(chosen, e),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                        ],
                       ),
                     ),
                   ),
-              // Start and end of the session, at the corners.
-              Positioned(
-                left: _pad,
-                bottom: 0,
-                child: Text(_clock(t0), style: TextStyle(fontSize: 10, color: c.muted)),
-              ),
-              Positioned(
-                right: _pad,
-                bottom: 0,
-                child: Text(engine.isActive ? 'adesso' : _clock(t1), style: TextStyle(fontSize: 10, color: c.muted)),
-              ),
-            ],
+                ),
+              );
+            },
           ),
-        );
-      },
+        ),
+        const SizedBox(width: 10),
+        Text(engine.isActive ? 'adesso' : _hm(t1), style: hm),
+      ],
     );
   }
-}
 
-class _Band {
-  _Band({
-    required this.left,
-    required this.right,
-    required this.color,
-    required this.cuts,
-    required this.label,
-    required this.header,
-  });
-  final double left, right;
-  final Color color;
-  final List<double> cuts;
-  final String label;
-  final LogEntry header;
+  static bool _warns(LogEntry e) =>
+      e.kind == LogKind.warning || (e.kind == LogKind.result && e.outcome == RunOutcome.interrupted);
 }
 
 class _MapPainter extends CustomPainter {
   _MapPainter({
     required this.bands,
-    required this.dots,
-    required this.view,
-    required this.chosen,
+    required this.band,
     required this.line,
-    required this.frame,
+    required this.chosenBand,
     required this.mid,
   });
-  final List<_Band> bands;
-  final List<(double, Color)> dots;
-  final (double, double)? view;
-  final double? chosen;
-  final Color line, frame;
+
+  /// Left, right, invocation cuts, chosen.
+  final List<(double, double, List<double>, bool)> bands;
+  final Color band, line, chosenBand;
   final double mid;
 
   @override
   void paint(Canvas canvas, Size size) {
-    // The time line.
     canvas.drawLine(
-      Offset(12, mid),
-      Offset(size.width - 12, mid),
+      Offset(0, mid),
+      Offset(size.width, mid),
       Paint()
         ..color = line
         ..strokeWidth = 2,
     );
-    // Blocks: tinted bands, invocations marked by thin cuts.
-    for (final b in bands) {
-      final r = RRect.fromLTRBR(
-        b.left,
-        mid - 8,
-        b.right.clamp(b.left + 4, double.infinity),
-        mid + 8,
-        const Radius.circular(5),
-      );
-      canvas.drawRRect(r, Paint()..color = b.color.withValues(alpha: 0.22));
+    for (final (left, right, cuts, chosen) in bands) {
+      final r = RRect.fromLTRBR(left, mid - 13, right, mid + 13, const Radius.circular(8));
+      canvas.drawRRect(r, Paint()..color = band.withValues(alpha: 0.14));
       canvas.drawRRect(
         r,
         Paint()
-          ..color = b.color.withValues(alpha: 0.55)
+          ..color = chosen ? chosenBand : band.withValues(alpha: 0.4)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
+          ..strokeWidth = chosen ? 1.6 : 1,
       );
-      for (final cut in b.cuts) {
+      for (final x in cuts) {
         canvas.drawLine(
-          Offset(cut, mid - 8),
-          Offset(cut, mid + 8),
+          Offset(x, mid - 13),
+          Offset(x, mid + 13),
           Paint()
-            ..color = b.color.withValues(alpha: 0.7)
-            ..strokeWidth = 1.2,
+            ..color = band.withValues(alpha: 0.5)
+            ..strokeWidth = 1,
         );
       }
-    }
-    // Messages and commands: dots.
-    for (final (x, color) in dots) {
-      canvas.drawCircle(Offset(x, mid), 2.2, Paint()..color = color);
-    }
-    // What is in view in the activity panel.
-    if (view case (final a, final b)) {
-      final r = RRect.fromLTRBR(
-        a - 3,
-        2,
-        (b + 3).clamp(a + 6, double.infinity),
-        size.height - 12,
-        const Radius.circular(6),
-      );
-      canvas.drawRRect(r, Paint()..color = frame.withValues(alpha: 0.08));
-      canvas.drawRRect(
-        r,
-        Paint()
-          ..color = frame.withValues(alpha: 0.45)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
-      );
-    }
-    // The chosen line.
-    if (chosen case final x?) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height - 10),
-        Paint()
-          ..color = frame
-          ..strokeWidth = 2,
-      );
     }
   }
 
