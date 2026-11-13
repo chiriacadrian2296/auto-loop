@@ -46,6 +46,7 @@ class SectionTitle extends StatelessWidget {
     required this.title,
     required this.open,
     required this.onTap,
+    this.onSelect,
     this.badge,
     this.stats = const [],
     this.time,
@@ -60,7 +61,13 @@ class SectionTitle extends StatelessWidget {
   final double iconIndent;
   final String title;
   final bool open, highlighted;
+
+  /// Opens or closes. Without [onSelect], the whole row does it.
   final VoidCallback onTap;
+
+  /// When given, only the arrow opens and closes; the rest of the row
+  /// (greyed on hover) chooses the section.
+  final VoidCallback? onSelect;
   final Widget? badge;
   final List<IconStat> stats;
 
@@ -71,6 +78,92 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final split = onSelect != null;
+    final arrow = SizedBox(
+      width: sectionGutter,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: split
+            ? Tooltip(
+                message: open ? 'Chiudi' : 'Apri',
+                waitDuration: const Duration(milliseconds: 600),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: onTap,
+                  child: SectionChevron(open: open),
+                ),
+              )
+            : SectionChevron(open: open),
+      ),
+    );
+    // The title takes what the numbers leave; numbers that do not fit next
+    // to a readable title are left out, the last ones first.
+    Widget rest(BoxConstraints box) {
+      final room =
+          box.maxWidth -
+          (icon == null ? 0 : iconIndent + sectionGutter) -
+          (time == null ? 0 : sectionTimeWidth) -
+          (badge == null ? 0 : 26) -
+          120;
+      final shown = fitStats(context, stats, room);
+      return Row(
+        children: [
+          if (icon != null) ...[
+            SizedBox(width: iconIndent),
+            SizedBox(
+              width: sectionGutter,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: sectionArrow,
+                  child: Center(child: icon),
+                ),
+              ),
+            ),
+          ],
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: titleColor ?? c.text),
+                  ),
+                ),
+                if (badge != null) ...[const SizedBox(width: 10), badge!],
+              ],
+            ),
+          ),
+          for (final (i, w) in shown.indexed) ...[SizedBox(width: i == 0 ? 12 : 14), w],
+          if (time != null) SectionTime(time!),
+        ],
+      );
+    }
+
+    if (split) {
+      return Row(
+        children: [
+          Padding(padding: const EdgeInsets.only(left: 8), child: arrow),
+          Expanded(
+            child: Material(
+              color: highlighted ? c.primarySoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                hoverColor: c.field,
+                onTap: onSelect,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 7, 8, 7),
+                  child: LayoutBuilder(builder: (context, box) => rest(box)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Material(
       color: highlighted ? c.primarySoft : Colors.transparent,
       borderRadius: BorderRadius.circular(10),
@@ -79,60 +172,11 @@ class SectionTitle extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
-          // The title takes what the numbers leave; numbers that do not fit
-          // next to a readable title are left out, the last ones first.
-          child: LayoutBuilder(
-            builder: (context, box) {
-              final room =
-                  box.maxWidth -
-                  sectionGutter -
-                  (icon == null ? 0 : iconIndent + sectionGutter) -
-                  (time == null ? 0 : sectionTimeWidth) -
-                  (badge == null ? 0 : 26) -
-                  120;
-              final shown = fitStats(context, stats, room);
-              return Row(
-                children: [
-                  SizedBox(
-                    width: sectionGutter,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: SectionChevron(open: open),
-                    ),
-                  ),
-                  if (icon != null) ...[
-                    SizedBox(width: iconIndent),
-                    SizedBox(
-                      width: sectionGutter,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: SizedBox(
-                          width: sectionArrow,
-                          child: Center(child: icon),
-                        ),
-                      ),
-                    ),
-                  ],
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: titleColor ?? c.text),
-                          ),
-                        ),
-                        if (badge != null) ...[const SizedBox(width: 10), badge!],
-                      ],
-                    ),
-                  ),
-                  for (final (i, w) in shown.indexed) ...[SizedBox(width: i == 0 ? 12 : 14), w],
-                  if (time != null) SectionTime(time!),
-                ],
-              );
-            },
+          child: Row(
+            children: [
+              arrow,
+              Expanded(child: LayoutBuilder(builder: (context, box) => rest(box))),
+            ],
           ),
         ),
       ),

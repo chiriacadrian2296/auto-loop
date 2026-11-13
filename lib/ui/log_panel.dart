@@ -435,10 +435,9 @@ class _LogPanelState extends State<LogPanel> {
             highlighted: identical(head, _flash) && _blockChosen,
             // How the block ended here: as its latest invocation did.
             outcome: run.last.outcome(live: lastRun && engine.isActive),
-            onTap: () {
-              setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head));
-              _select(head, block: true);
-            },
+            onTap: () =>
+                setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head)),
+            onSelect: () => _select(head, block: true),
           ),
         );
       }
@@ -467,10 +466,8 @@ class _LogPanelState extends State<LogPanel> {
                 group: g,
                 open: open,
                 live: last && engine.isActive,
-                onTap: () {
-                  setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header));
-                  _select(header);
-                },
+                onTap: () => setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
+                onSelect: () => _select(header),
               ),
             ),
           );
@@ -670,6 +667,7 @@ class _BlockHeading extends StatelessWidget {
     required this.gap,
     required this.start,
     required this.onTap,
+    required this.onSelect,
     required this.outcome,
     this.highlighted = false,
   });
@@ -681,7 +679,7 @@ class _BlockHeading extends StatelessWidget {
   final double gap;
   final DateTime? start;
   final bool open, highlighted;
-  final VoidCallback onTap;
+  final VoidCallback onTap, onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -696,6 +694,7 @@ class _BlockHeading extends StatelessWidget {
         time: start == null ? null : _clock(start!),
         open: open,
         onTap: onTap,
+        onSelect: onSelect,
         badge: _badge(outcome, c),
         stats: [
           IconStat(
@@ -740,12 +739,13 @@ class _InvocationHeader extends StatefulWidget {
     required this.open,
     required this.live,
     required this.onTap,
+    required this.onSelect,
     this.highlighted = false,
   });
   final bool highlighted;
   final _Group group;
   final bool open, live;
-  final VoidCallback onTap;
+  final VoidCallback onTap, onSelect;
 
   @override
   State<_InvocationHeader> createState() => _InvocationHeaderState();
@@ -778,60 +778,80 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
       onExit: (_) => setState(() => _hover = false),
       child: Padding(
         padding: const EdgeInsets.only(top: 6, bottom: 2),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: widget.onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: _gutter,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: SectionChevron(open: widget.open),
-                    ),
+        child: Row(
+          children: [
+            // The arrow only opens and closes.
+            Padding(
+              padding: const EdgeInsets.only(left: _sidePad),
+              child: SizedBox(
+                width: _gutter,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: widget.onTap,
+                    child: SectionChevron(open: widget.open),
                   ),
-                  SizedBox(
-                    width: _gutter,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: SizedBox(
-                        width: _arrow,
-                        child: Center(
-                          child: widget.highlighted
-                              ? _invertedDisc(c, Icon(Icons.replay_rounded, size: 15, color: c.background), size: 21)
-                              : Icon(Icons.replay_rounded, size: 15, color: c.text),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    invocation == null ? 'Invocazione' : 'Invocazione $invocation',
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
-                  ),
-                  if (badge != null) ...[const SizedBox(width: 10), badge],
-                  // Lined up on the right with the time, shown on hover like
-                  // the times of the lines (blocks show theirs always).
-                  Expanded(
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 120),
-                      opacity: _hover ? 1 : 0,
-                      child: Row(children: [RightStats(stats: stats)]),
-                    ),
-                  ),
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 120),
-                    opacity: _hover ? 1 : 0,
-                    child: SectionTime(_clock(start)),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+            // The rest of the row chooses the invocation.
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  hoverColor: c.field,
+                  onTap: widget.onSelect,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 6, _sidePad, 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: _gutter,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox(
+                              width: _arrow,
+                              child: Center(
+                                child: widget.highlighted
+                                    ? _invertedDisc(
+                                        c,
+                                        Icon(Icons.replay_rounded, size: 15, color: c.background),
+                                        size: 21,
+                                      )
+                                    : Icon(Icons.replay_rounded, size: 15, color: c.text),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Text(
+                          invocation == null ? 'Invocazione' : 'Invocazione $invocation',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
+                        ),
+                        if (badge != null) ...[const SizedBox(width: 10), badge],
+                        // Lined up on the right with the time, shown on hover like
+                        // the times of the lines (blocks show theirs always).
+                        Expanded(
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 120),
+                            opacity: _hover ? 1 : 0,
+                            child: Row(children: [RightStats(stats: stats)]),
+                          ),
+                        ),
+                        AnimatedOpacity(
+                          duration: const Duration(milliseconds: 120),
+                          opacity: _hover ? 1 : 0,
+                          child: SectionTime(_clock(start)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -909,7 +929,7 @@ class _LogLineState extends State<_LogLine> {
     // carry color; texts stay neutral.
     // The chosen line shows its icon inverted, like on the map.
     final icon = widget.highlighted
-        ? _invertedDisc(c, _lineIcon(e, widget.agent, c, inverted: true), size: 21)
+        ? _invertedDisc(c, _lineIcon(e, widget.agent, c, inverted: true), size: e.kind == LogKind.tool ? 12 : 21)
         : _lineIcon(e, widget.agent, c);
 
     // One grey for every text: the icon says what kind of line it is.
@@ -981,7 +1001,10 @@ class _LogLineState extends State<_LogLine> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(color: Colors.transparent, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(
+            color: _hover ? c.field : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
           padding: EdgeInsets.symmetric(horizontal: _sidePad, vertical: roomy ? 7 : 3),
           child: row,
         ),
@@ -1274,86 +1297,111 @@ class _ActivityMapState extends State<ActivityMap> {
               }
 
               final chosen = sel.entry;
-              return Scrollbar(
-                controller: _scroll,
-                thumbVisibility: true,
-                child: SingleChildScrollView(
+              // Where the map goes on beyond an edge, that edge fades out
+              // instead of cutting the icons off.
+              return ListenableBuilder(
+                listenable: _scroll,
+                builder: (context, child) {
+                  final pos = _scroll.hasClients ? _scroll.position : null;
+                  final fadeLeft = pos != null && pos.hasContentDimensions && pos.pixels > 1;
+                  final fadeRight = pos != null && pos.hasContentDimensions && pos.pixels < pos.maxScrollExtent - 1;
+                  if (!fadeLeft && !fadeRight) return child!;
+                  final f = 28 / box.maxWidth;
+                  return ShaderMask(
+                    blendMode: BlendMode.dstIn,
+                    shaderCallback: (rect) => LinearGradient(
+                      colors: [
+                        fadeLeft ? Colors.transparent : Colors.black,
+                        Colors.black,
+                        Colors.black,
+                        fadeRight ? Colors.transparent : Colors.black,
+                      ],
+                      stops: [0, f, 1 - f, 1],
+                    ).createShader(rect),
+                    child: child,
+                  );
+                },
+                child: Scrollbar(
                   controller: _scroll,
-                  scrollDirection: Axis.horizontal,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapUp: (d) => pick(d.localPosition.dx),
-                    onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
-                    child: SizedBox(
-                      width: width,
-                      height: box.maxHeight,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _MapPainter(
-                                bands: [for (final b in bands) (b.$1, b.$2, b.$3, b.$4)],
-                                band: c.muted,
-                                line: c.border,
-                                chosenBand: c.text,
-                                mid: mid,
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _scroll,
+                    scrollDirection: Axis.horizontal,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapUp: (d) => pick(d.localPosition.dx),
+                      onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
+                      child: SizedBox(
+                        width: width,
+                        height: box.maxHeight,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: _MapPainter(
+                                  bands: [for (final b in bands) (b.$1, b.$2, b.$3, b.$4)],
+                                  band: c.muted,
+                                  line: c.muted.withValues(alpha: 0.7),
+                                  chosenBand: c.text,
+                                  mid: mid,
+                                ),
                               ),
                             ),
-                          ),
-                          // Block names on hover.
-                          for (final b in bands)
-                            Positioned(
-                              left: b.$1,
-                              width: b.$2 - b.$1,
-                              top: mid - 10,
-                              height: 20,
-                              child: Tooltip(message: b.$5, child: const SizedBox.expand()),
-                            ),
-                          for (final e in items)
-                            if (!isHeader(e))
-                              () {
-                                // Commands sit on a smaller disc.
-                                final size = e.kind == LogKind.tool ? 12.0 : _icon;
-                                final head = starts[e];
-                                final isChosen = head == null
-                                    ? identical(chosen, e)
-                                    : identical(chosen, head) && sel.block;
-                                return Positioned(
-                                  left: xs[e]! - size / 2,
-                                  top: mid - size / 2,
-                                  width: size,
-                                  height: size,
-                                  child: Tooltip(
-                                    message: '${_clock(e.at)}  ${e.text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
-                                    constraints: const BoxConstraints(maxWidth: 420),
-                                    child: GestureDetector(
-                                      onTap: () => sel.select(head ?? e, this, block: head != null),
-                                      // The chosen one is shown inverted: a light
-                                      // disc behind the icon.
-                                      child: Container(
-                                        alignment: Alignment.center,
-                                        decoration: BoxDecoration(
-                                          color: isChosen ? c.text : c.surface,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        // Triangles look low in their box: lift them a little.
-                                        child: Transform.translate(
-                                          offset: Offset(0, _warns(e) ? -1 : 0),
-                                          child: _lineIcon(
-                                            e,
-                                            engine.settings.agent,
-                                            c,
-                                            size: e.kind == LogKind.tool ? 10 : 15,
-                                            inverted: isChosen,
+                            // Block names on hover.
+                            for (final b in bands)
+                              Positioned(
+                                left: b.$1,
+                                width: b.$2 - b.$1,
+                                top: mid - 10,
+                                height: 20,
+                                child: Tooltip(message: b.$5, child: const SizedBox.expand()),
+                              ),
+                            for (final e in items)
+                              if (!isHeader(e))
+                                () {
+                                  // Commands sit on a smaller disc.
+                                  final size = e.kind == LogKind.tool ? 12.0 : _icon;
+                                  final head = starts[e];
+                                  final isChosen = head == null
+                                      ? identical(chosen, e)
+                                      : identical(chosen, head) && sel.block;
+                                  return Positioned(
+                                    left: xs[e]! - size / 2,
+                                    top: mid - size / 2,
+                                    width: size,
+                                    height: size,
+                                    child: Tooltip(
+                                      message: '${_clock(e.at)}  ${e.text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
+                                      constraints: const BoxConstraints(maxWidth: 420),
+                                      child: GestureDetector(
+                                        onTap: () => sel.select(head ?? e, this, block: head != null),
+                                        // The chosen one is shown inverted: a light
+                                        // disc behind the icon.
+                                        child: Container(
+                                          alignment: Alignment.center,
+                                          decoration: BoxDecoration(
+                                            color: isChosen ? c.text : c.surface,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          // Triangles look low in their box: lift them a little.
+                                          child: Transform.translate(
+                                            offset: Offset(0, _warns(e) ? -1 : 0),
+                                            child: _lineIcon(
+                                              e,
+                                              engine.settings.agent,
+                                              c,
+                                              size: e.kind == LogKind.tool ? 10 : 15,
+                                              inverted: isChosen,
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              }(),
-                        ],
+                                  );
+                                }(),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1388,20 +1436,15 @@ class _MapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawLine(
-      Offset(0, mid),
-      Offset(size.width, mid),
-      Paint()
-        ..color = line
-        ..strokeWidth = 2,
-    );
+    // Blocks: a light band; its outline and the cuts between invocations
+    // stay faint, so the time line through the middle reads first.
     for (final (left, right, cuts, chosen) in bands) {
       final r = RRect.fromLTRBR(left, mid - 13, right, mid + 13, const Radius.circular(8));
-      canvas.drawRRect(r, Paint()..color = band.withValues(alpha: 0.14));
+      canvas.drawRRect(r, Paint()..color = band.withValues(alpha: 0.10));
       canvas.drawRRect(
         r,
         Paint()
-          ..color = chosen ? chosenBand : band.withValues(alpha: 0.4)
+          ..color = chosen ? chosenBand : band.withValues(alpha: 0.18)
           ..style = PaintingStyle.stroke
           ..strokeWidth = chosen ? 1.6 : 1,
       );
@@ -1410,11 +1453,18 @@ class _MapPainter extends CustomPainter {
           Offset(x, mid - 13),
           Offset(x, mid + 13),
           Paint()
-            ..color = band.withValues(alpha: 0.5)
+            ..color = band.withValues(alpha: 0.22)
             ..strokeWidth = 1,
         );
       }
     }
+    canvas.drawLine(
+      Offset(0, mid),
+      Offset(size.width, mid),
+      Paint()
+        ..color = line
+        ..strokeWidth = 2,
+    );
   }
 
   @override
