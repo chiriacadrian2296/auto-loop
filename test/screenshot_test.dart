@@ -93,31 +93,32 @@ void main() {
         ..currentBlock = 2
         ..runStartedAt = DateTime.now().subtract(const Duration(minutes: 3, seconds: 12))
         ..statusMessage = 'Blocco 3: Interfaccia principale con lista, filtri e swipe per eliminare';
-      final t = DateTime(2026, 11, 10, 17, 4, 10);
+      // Realistic times, so the activity map shows its shape.
+      final t = DateTime.now().subtract(const Duration(minutes: 31));
       engine.logs.addAll([
-        LogEntry(LogKind.info, 'Avvio del loop con Claude Code su piano-todo-app.md.', at: t),
-        LogEntry(LogKind.info, '▶ Blocco 2/5 «Modello e persistenza» — invocazione 2', at: t),
-        LogEntry(LogKind.system, 'Sessione Claude avviata (claude-sonnet-5-5)', at: t),
-        LogEntry(LogKind.tool, 'Read: lib/models/todo.dart', at: t),
-        LogEntry(LogKind.tool, 'Bash: flutter test test/models', at: t),
+        LogEntry(LogKind.info, 'Avvio del loop con Claude Code su piano-todo-app.md.', at: t.add(const Duration(seconds: 0))),
+        LogEntry(LogKind.info, '▶ Blocco 2/5 «Modello e persistenza» — invocazione 2', at: t.add(const Duration(seconds: 5))),
+        LogEntry(LogKind.system, 'Sessione Claude avviata (claude-sonnet-5-5)', at: t.add(const Duration(seconds: 6))),
+        LogEntry(LogKind.tool, 'Read: lib/models/todo.dart', at: t.add(const Duration(seconds: 40))),
+        LogEntry(LogKind.tool, 'Bash: flutter test test/models', at: t.add(const Duration(seconds: 120))),
         LogEntry(LogKind.agent,
             'Ho completato il repository JSON e i test per serializzazione e caricamento. Tutti i 14 test passano.',
-            at: t),
-        LogEntry(LogKind.tool, 'Verifica: flutter test', at: t),
-        LogEntry(LogKind.success, 'Verifica superata in 21 s · All tests passed!', at: t),
-        LogEntry(LogKind.success, 'Commit 9c41e07 · 4 file · +188 −2', at: t),
-        LogEntry(LogKind.result, 'Blocco completato.', at: t, outcome: RunOutcome.done),
+            at: t.add(const Duration(seconds: 260))),
+        LogEntry(LogKind.tool, 'Verifica: flutter test', at: t.add(const Duration(seconds: 300))),
+        LogEntry(LogKind.success, 'Verifica superata in 21 s · All tests passed!', at: t.add(const Duration(seconds: 320))),
+        LogEntry(LogKind.success, 'Commit 9c41e07 · 4 file · +188 −2', at: t.add(const Duration(seconds: 330))),
+        LogEntry(LogKind.result, 'Blocco completato.', at: t.add(const Duration(seconds: 331)), outcome: RunOutcome.done),
         LogEntry(LogKind.info,
             '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 1',
-            at: t),
-        LogEntry(LogKind.task, 'Lista dei todo con filtri tutti/attivi/completati e swipe per eliminare.', at: t),
-        LogEntry(LogKind.tool, 'Edit: lib/ui/home_screen.dart', at: t),
+            at: t.add(const Duration(seconds: 340))),
+        LogEntry(LogKind.task, 'Lista dei todo con filtri tutti/attivi/completati e swipe per eliminare.', at: t.add(const Duration(seconds: 342))),
+        LogEntry(LogKind.tool, 'Edit: lib/ui/home_screen.dart', at: t.add(const Duration(seconds: 400))),
         LogEntry(LogKind.result, 'Terminata dal supervisore: nessun output per 10 minuti.',
-            at: t, outcome: RunOutcome.interrupted),
+            at: t.add(const Duration(seconds: 1000)), outcome: RunOutcome.interrupted),
         LogEntry(LogKind.info, '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 2',
-            at: t),
-        LogEntry(LogKind.agent, 'Riprendo da PROGRESS.md: manca il filtro "completati" e lo swipe per eliminare.', at: t),
-        LogEntry(LogKind.tool, 'Write: lib/ui/widgets/todo_tile.dart', at: t),
+            at: t.add(const Duration(seconds: 1030))),
+        LogEntry(LogKind.agent, 'Riprendo da PROGRESS.md: manca il filtro "completati" e lo swipe per eliminare.', at: t.add(const Duration(seconds: 1400))),
+        LogEntry(LogKind.tool, 'Write: lib/ui/widgets/todo_tile.dart', at: t.add(const Duration(seconds: 1700))),
       ]);
       engine.notifyListeners();
       await tester.pump(const Duration(milliseconds: 600));

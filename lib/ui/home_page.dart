@@ -21,6 +21,7 @@ import 'choice_dialog.dart';
 import 'blocks_panel.dart';
 import 'log_panel.dart';
 import 'logo.dart';
+import 'section_title.dart';
 import 'notifications.dart';
 import 'settings_panel.dart';
 import 'window_controls.dart';
@@ -697,8 +698,31 @@ class _BottomBar extends StatelessWidget {
       ? '${(n / 1000).toStringAsFixed(1)}k'
       : '$n';
 
+  /// What is going on, in a few words.
+  String _status() {
+    final plan = engine.plan;
+    final i = engine.currentBlock;
+    switch (engine.phase) {
+      case LoopPhase.running || LoopPhase.verifying || LoopPhase.stopping when plan != null && i != null:
+        final b = plan.blocks[i];
+        final started = engine.runStartedAt;
+        return [
+          'Blocco ${i + 1} di ${plan.blocks.length}',
+          'invocazione ${engine.blockState(b).attempts}',
+          if (started != null) _fmt(DateTime.now().difference(started)),
+        ].join(' · ');
+      case LoopPhase.finished:
+        return plan == null ? 'Piano completato' : 'Tutti i ${plan.blocks.length} blocchi completati';
+      case LoopPhase.paused:
+        return const ['In pausa.', 'Fermato.', ''].contains(engine.statusMessage) ? 'In pausa' : engine.statusMessage;
+      default:
+        return engine.isActive && engine.statusMessage.isNotEmpty ? engine.statusMessage : 'Pronto per partire';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final state = engine.state;
     final active = engine.isActive;
     final paused = engine.phase == LoopPhase.paused;
@@ -712,75 +736,144 @@ class _BottomBar extends StatelessWidget {
             onPause,
           )
         : finished
-        ? (Icons.check_rounded, 'Piano completato', 'Tutti i blocchi sono completati', null)
+        ? (Icons.check_rounded, 'Piano completato', 'Riepilogo del piano', () => showPlanCompleted(context, engine))
         : paused
         ? (Icons.play_arrow_rounded, 'Riprendi', 'Riprendi (Spazio)', onStart)
         : (Icons.play_arrow_rounded, 'Avvia', 'Avvia (Spazio)', onStart);
 
     final plan = engine.plan;
     final stats = state == null
-        ? <_Stat>[]
+        ? <IconStat>[]
         : [
-            _Stat(value: _fmt(engine.totalTime), label: 'tempo'),
-            _Stat(value: _compact(state.totalTokens), label: 'token'),
-            if (plan != null) _Stat(value: '${engine.doneCount}/${plan.blocks.length}', label: 'blocchi'),
-            _Stat(value: '${state.runs}', label: state.runs == 1 ? 'invocazione' : 'invocazioni'),
-            _Stat(value: '${state.commits}', label: 'commit'),
+            IconStat(Icons.schedule_rounded, _fmt(engine.totalTime), 'Tempo di lavoro'),
+            IconStat(
+              Icons.toll_outlined,
+              _compact(state.totalTokens),
+              'Token: ${_compact(state.inputTokens)} in / ${_compact(state.outputTokens)} out',
+            ),
+            if (plan != null)
+              IconStat(Icons.layers_outlined, '${engine.doneCount}/${plan.blocks.length}', 'Blocchi completati'),
+            IconStat(
+              Icons.replay_rounded,
+              '${state.runs}',
+              state.runs == 1 ? '1 invocazione' : '${state.runs} invocazioni',
+            ),
+            IconStat(
+              Icons.commit_rounded,
+              '${state.commits}',
+              state.commits == 1 ? '1 commit' : '${state.commits} commit',
+            ),
           ];
+
+    // The main control: a filled pill; green once the plan is done.
+    final pillColor = finished ? c.success : c.primary;
+    final pill = Tooltip(
+      message: tooltip,
+      child: FilledButton.icon(
+        onPressed: action,
+        style: FilledButton.styleFrom(
+          backgroundColor: pillColor,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: c.border,
+          disabledForegroundColor: c.muted,
+          padding: const EdgeInsets.fromLTRB(14, 0, 18, 0),
+          minimumSize: const Size(0, 36),
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            fontFamily: uiFont,
+            fontFamilyFallback: uiFallback,
+          ),
+        ),
+        icon: Icon(icon, size: 20),
+        label: Text(label),
+      ),
+    );
+
+    final status = blocker == null
+        ? Text(
+            _status(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: active ? c.text : c.muted),
+          )
+        // Why it cannot start, and a click to fix it.
+        : MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: blocker!.$2,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline_rounded, size: 16, color: c.danger),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      blocker!.$1,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.danger),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
 
     return WindowDragArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         child: SizedBox(
-          // Room for the strip: invocation brackets above, block ones below.
-          height: 64,
-          // Controls and totals under the first two panels, the strip under
-          // the activity panel.
+          height: 56,
+          // Two cards lined up with the panels: controls and totals under
+          // the first two, the map of the activity under the third.
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
                 width: _leftPanelsWidth,
-                child: Row(
-                  children: [
-                    // Lined up with the logo and the name in the title bar.
-                    const SizedBox(width: 6),
-                    _MainAction(icon: icon, label: label, tooltip: tooltip, onTap: action),
-                    if (active) ...[
-                      const SizedBox(width: 22),
-                      _MainAction(
-                        icon: Icons.stop_rounded,
-                        label: 'Ferma',
-                        tooltip: 'Ferma ora (Maiusc+Spazio)',
-                        onTap: onStop,
-                      ),
-                    ],
-                    if (blocker case (final reason, final fix)) ...[
+                child: Panel(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    children: [
+                      pill,
+                      if (active) ...[
+                        const SizedBox(width: 4),
+                        IconButton(
+                          tooltip: 'Ferma ora (Maiusc+Spazio)',
+                          onPressed: onStop,
+                          color: c.danger,
+                          iconSize: 22,
+                          icon: const Icon(Icons.stop_circle_outlined),
+                        ),
+                      ],
                       const SizedBox(width: 12),
-                      // Its text is capped in width, so it never squeezes the totals.
-                      _BlockerChip(reason: reason, onTap: fix),
-                    ],
-                    // The totals that fit, on the right of the two panels above.
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, box) {
-                          var room = box.maxWidth - 16;
-                          final shown = <_Stat>[];
-                          for (final st in stats) {
-                            final w = st.width(context);
-                            if (w > room) break;
-                            room -= w;
-                            shown.add(st);
-                          }
-                          return Row(mainAxisAlignment: MainAxisAlignment.end, children: shown);
-                        },
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, box) {
+                            // The status takes what the totals leave, keeping
+                            // at least a readable stretch.
+                            final shown = fitStats(context, stats, box.maxWidth - 160);
+                            return Row(
+                              children: [
+                                Expanded(child: status),
+                                for (final st in shown) ...[const SizedBox(width: 14), st],
+                                const SizedBox(width: 6),
+                              ],
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: engine.logs.isEmpty ? const SizedBox() : ActivityStrip(engine: engine, selection: selection),
+                child: Panel(
+                  padding: const EdgeInsets.fromLTRB(4, 6, 4, 4),
+                  child: selection == null ? const SizedBox() : ActivityMap(engine: engine, selection: selection!),
+                ),
               ),
             ],
           ),
@@ -855,50 +948,6 @@ class _DropOverlay extends StatelessWidget {
   }
 }
 
-class _BlockerChip extends StatelessWidget {
-  const _BlockerChip({required this.reason, required this.onTap});
-  final String reason;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Tooltip(
-      message: 'Avvia è disabilitato: clicca per risolvere',
-      child: Material(
-        color: c.danger.withValues(alpha: 0.1),
-        shape: const StadiumBorder(),
-        child: InkWell(
-          customBorder: const StadiumBorder(),
-          onTap: onTap,
-          child: Container(
-            height: 36,
-            padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.error_outline_rounded, size: 16, color: c.danger),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 220),
-                    child: Text(
-                      reason,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.danger),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _PulseDot extends StatefulWidget {
   const _PulseDot({required this.color, required this.pulsing});
   final Color color;
@@ -958,50 +1007,6 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
   );
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.value, required this.label});
-  final String value, label;
-
-  /// Width this total takes, padding included (a little generous).
-  double width(BuildContext context) {
-    double w(String t, TextStyle st) => (TextPainter(
-      text: TextSpan(text: t, style: DefaultTextStyle.of(context).style.merge(st)),
-      textDirection: TextDirection.ltr,
-      textScaler: MediaQuery.textScalerOf(context),
-      maxLines: 1,
-    )..layout()).width;
-    return 32 +
-        w(value, const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)) +
-        w(label, const TextStyle(fontSize: 12));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: c.text,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          const SizedBox(width: 5),
-          Text(label, style: TextStyle(fontSize: 12, color: c.muted)),
-        ],
-      ),
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.icon, required this.title, required this.text, this.action});
   final IconData icon;
@@ -1036,50 +1041,6 @@ class _EmptyState extends StatelessWidget {
             ),
             if (action != null) ...[const SizedBox(height: 18), action!],
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A control of the bottom bar: a round button whose icon takes the colour
-/// of the background, and its name, both clickable.
-class _MainAction extends StatelessWidget {
-  const _MainAction({required this.icon, required this.label, required this.tooltip, this.onTap});
-  final IconData icon;
-  final String label, tooltip;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Tooltip(
-      message: tooltip,
-      child: MouseRegion(
-        cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(color: onTap == null ? c.border : c.primary, shape: BoxShape.circle),
-                child: Icon(icon, size: 18, color: c.background),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
-                  color: onTap == null ? c.muted : c.text,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

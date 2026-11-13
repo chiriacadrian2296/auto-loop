@@ -27,6 +27,10 @@ class ActivitySelection extends ChangeNotifier {
   /// One filter for the activity panel and the strip.
   final _filter = ValueNotifier<_Filter>(_Filter.all);
 
+  /// The time span of the lines currently in view in the activity panel,
+  /// drawn on the map at the bottom.
+  final inView = ValueNotifier<(DateTime, DateTime)?>(null);
+
   void select(LogEntry? e, Object source, {bool block = false}) {
     entry = e;
     this.block = block;
@@ -255,6 +259,22 @@ class _LogPanelState extends State<LogPanel> {
     _scrollTo(target, block: widget.selection?.block ?? false);
   }
 
+  /// The time of each row, to tell the map which span is in view.
+  final _rowTimes = <DateTime>[];
+
+  void _publishInView() {
+    final sel = widget.selection;
+    if (sel == null || !_scroll.hasClients || _rowTimes.isEmpty) return;
+    final pos = _scroll.position;
+    final total = pos.maxScrollExtent + pos.viewportDimension;
+    if (total <= 0) return;
+    final n = _rowTimes.length;
+    final a = (pos.pixels / total * n).floor().clamp(0, n - 1);
+    final b = ((pos.pixels + pos.viewportDimension) / total * n).ceil().clamp(1, n) - 1;
+    final span = (_rowTimes[a], _rowTimes[b]);
+    if (sel.inView.value != span) sel.inView.value = span;
+  }
+
   /// Where the header to reveal sits among the rows (for lazy lists).
   final _rowIndex = <LogEntry, int>{};
   int _rowCount = 0;
@@ -319,6 +339,7 @@ class _LogPanelState extends State<LogPanel> {
     widget.selection?._filter.addListener(_filterChanged);
     _scroll.addListener(() {
       if (!_scroll.hasClients) return;
+      _publishInView();
       final bottom = _scroll.position.pixels >= _scroll.position.maxScrollExtent - 40;
       if (bottom != _atBottom || (bottom && _unseen)) {
         setState(() {
@@ -398,6 +419,7 @@ class _LogPanelState extends State<LogPanel> {
         ..addAll(open ? const <LogEntry>[] : headers);
     });
     final rows = <Widget>[];
+    _rowTimes.clear();
     var previousOpen = false;
     for (var r = 0; r < runs.length; r++) {
       final run = runs[r];
@@ -419,6 +441,7 @@ class _LogPanelState extends State<LogPanel> {
           time += g.duration(live: lastRun && identical(g, run.last) && engine.isActive);
         }
         _blockRowIndex[head] = rows.length;
+        _rowTimes.add(head.at);
         rows.add(
           _BlockHeading(
             key: _blockKeys.putIfAbsent(head, GlobalKey.new),
@@ -459,6 +482,7 @@ class _LogPanelState extends State<LogPanel> {
         if (header != null) {
           final chosen = identical(header, _flash) && !_blockChosen;
           if (chosen) _rowIndex[header] = rows.length;
+          _rowTimes.add(header.at);
           rows.add(
             tab(
               _InvocationHeader(
@@ -479,6 +503,7 @@ class _LogPanelState extends State<LogPanel> {
           for (final e in visible) {
             final target = identical(e, _flash);
             if (target) _rowIndex[e] = rows.length;
+            _rowTimes.add(e.at);
             rows.add(
               tab(
                 _LogLine(
@@ -496,6 +521,7 @@ class _LogPanelState extends State<LogPanel> {
       }
     }
     _rowCount = rows.length;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _publishInView());
     final silent = engine.phase == LoopPhase.running && engine.lastOutputAt != null
         ? DateTime.now().difference(engine.lastOutputAt!)
         : null;
@@ -1070,61 +1096,34 @@ Widget _lineIcon(LogEntry e, AgentKind agent, AppColors c, {double size = 15}) {
   };
 }
 
-/// The whole activity as a row of icons, newest on the right: each icon's
-/// tooltip tells the line; block and invocation numbers mark where each
-/// invocation starts. Filtered like the activity log.
-class ActivityStrip extends StatefulWidget {
-  const ActivityStrip({super.key, required this.engine, this.selection});
+/// The whole activity as a map, laid out in time: each block is a tinted
+/// band (green done, red blocked, blue running), invocations are marked
+/// inside it, messages and commands are dots and the lines that matter
+/// (results, checks, warnings, errors) are icons. The part of the log in
+/// view in the activity panel is framed; a click or a drag goes there.
+class ActivityMap extends StatefulWidget {
+  const ActivityMap({super.key, required this.engine, required this.selection});
   final LoopEngine engine;
-
-  /// The chosen line, shared with the activity panel.
-  final ActivitySelection? selection;
+  final ActivitySelection selection;
 
   @override
-  State<ActivityStrip> createState() => _ActivityStripState();
+  State<ActivityMap> createState() => _ActivityMapState();
 }
 
-/// One invocation in the strip: its start and its lines.
-class _StripRun {
-  _StripRun(this.header, this.number);
-  final LogEntry header;
-  final String number;
-  final items = <LogEntry>[];
-}
-
-/// One block in the strip: its consecutive invocations.
-class _StripBlock {
-  _StripBlock(this.header, this.number, this.title);
-  final LogEntry header;
-  final String number, title;
-  final runs = <_StripRun>[];
-}
-
-class _ActivityStripState extends State<ActivityStrip> {
-  final _Filter _ownFilter = _Filter.all;
-  _Filter get _filter => widget.selection?._filter.value ?? _ownFilter;
-
-  static String _short(String text) {
-    final t = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return t.length > 280 ? '${t.substring(0, 280)}…' : t;
-  }
-
-  final _keys = <LogEntry, GlobalKey>{};
-  final _blockKeys = <LogEntry, GlobalKey>{};
-  final _scroll = ScrollController();
-
+class _ActivityMapState extends State<ActivityMap> {
   @override
   void initState() {
     super.initState();
-    widget.selection?.addListener(_onSelection);
-    widget.selection?._filter.addListener(_redraw);
+    widget.selection.addListener(_redraw);
+    widget.selection._filter.addListener(_redraw);
+    widget.selection.inView.addListener(_redraw);
   }
 
   @override
   void dispose() {
-    widget.selection?.removeListener(_onSelection);
-    widget.selection?._filter.removeListener(_redraw);
-    _scroll.dispose();
+    widget.selection.removeListener(_redraw);
+    widget.selection._filter.removeListener(_redraw);
+    widget.selection.inView.removeListener(_redraw);
     super.dispose();
   }
 
@@ -1132,262 +1131,268 @@ class _ActivityStripState extends State<ActivityStrip> {
     if (mounted) setState(() {});
   }
 
-  /// Chosen in the activity panel: bring it into view here too.
-  void _onSelection() {
-    _redraw();
-    final sel = widget.selection;
-    final e = sel?.entry;
-    if (e == null || identical(sel?.source, this)) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = (sel!.block ? _blockKeys : _keys)[e]?.currentContext;
-      if (ctx != null) Scrollable.ensureVisible(ctx, alignment: 0.5, duration: const Duration(milliseconds: 250));
-    });
-  }
+  static bool _important(LogEntry e) => switch (e.kind) {
+    LogKind.result || LogKind.success || LogKind.warning || LogKind.error || LogKind.task => true,
+    _ => false,
+  };
 
-  /// Makes an item clickable and marks it when chosen, the way the other
-  /// panels mark what is selected.
-  Widget _clickable(LogEntry e, Widget child, {bool block = false}) {
-    final c = context.colors;
-    final sel = widget.selection;
-    final chosen = identical(sel?.entry, e) && (sel?.block ?? false) == block;
-    return MouseRegion(
-      key: (block ? _blockKeys : _keys).putIfAbsent(e, GlobalKey.new),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () => sel?.select(e, this, block: block),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: chosen ? c.primarySoft : Colors.transparent,
-            borderRadius: BorderRadius.circular(7),
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-
-  /// The icon (and number) in the middle of a bracket.
-  Widget _marker(IconData icon, String value, String tooltip) {
-    final c = context.colors;
-    return Tooltip(
-      message: tooltip,
-      child: Container(
-        color: c.background,
-        padding: const EdgeInsets.symmetric(horizontal: 3),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: c.text),
-            const SizedBox(width: 2),
-            Text(
-              value,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.text, height: 1),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static const _bracketHeight = 18.0;
-  static const _iconRow = 26.0;
-
-  Widget _item(LogEntry e) {
-    final c = context.colors;
-    return _clickable(
-      e,
-      Tooltip(
-        message: '${_clock(e.at)}  ${_short(e.text)}',
-        constraints: const BoxConstraints(maxWidth: 420),
-        waitDuration: const Duration(milliseconds: 150),
-        // On the window's background, so the line runs behind the icon.
-        child: Container(
-          padding: const EdgeInsets.all(1),
-          decoration: BoxDecoration(color: c.background, shape: BoxShape.circle),
-          child: _lineIcon(e, widget.engine.settings.agent, c, size: 16),
-        ),
-      ),
-    );
-  }
+  static const _pad = 12.0;
+  static const _mid = 20.0;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final engine = widget.engine;
-
-    // Lines grouped by invocation, invocations by block, as in the log.
-    final loose = <LogEntry>[];
-    final blocks = <_StripBlock>[];
-    for (final e in engine.logs) {
-      if (e.kind == LogKind.info && e.text.startsWith('▶')) {
-        final m = RegExp(r'Blocco (\d+)/\d+ «(.*)» — invocazione (\d+)').firstMatch(e.text);
-        if (m == null) continue;
-        if (blocks.isEmpty || blocks.last.number != m.group(1)) blocks.add(_StripBlock(e, m.group(1)!, m.group(2)!));
-        blocks.last.runs.add(_StripRun(e, m.group(3)!));
-        continue;
-      }
-      if (!_shown(e) || !_filter.accepts(e)) continue;
-      if (blocks.isEmpty) {
-        loose.add(e);
-      } else {
-        blocks.last.runs.last.items.add(e);
-      }
+    final sel = widget.selection;
+    final filter = sel._filter.value;
+    final logs = engine.logs;
+    if (logs.isEmpty) {
+      return Center(
+        child: Text('L\'attività apparirà qui', style: TextStyle(fontSize: 12.5, color: c.muted)),
+      );
     }
+    final groups = _groupLogs(logs);
+    final runs = _runs(groups).where((r) => r.first.header != null).toList();
+    final t0 = logs.first.at;
+    var t1 = logs.last.at;
+    if (engine.isActive && DateTime.now().isAfter(t1)) t1 = DateTime.now();
+    if (!t1.isAfter(t0)) t1 = t0.add(const Duration(seconds: 1));
+    final points = [
+      for (final e in logs)
+        if (_shown(e) && filter.accepts(e)) e,
+    ];
 
-    // One slot per icon, spread evenly over the width as before; an
-    // invocation with no line shown still gets an (empty) slot.
-    final slots = <LogEntry?>[...loose];
-    final runSpans = <(_StripRun, int, int)>[];
-    final blockSpans = <(_StripBlock, int, int)>[];
-    for (final b in blocks) {
-      final blockStart = slots.length;
-      for (final r in b.runs) {
-        final start = slots.length;
-        if (r.items.isEmpty) {
-          slots.add(null);
-        } else {
-          slots.addAll(r.items);
-        }
-        runSpans.add((r, start, slots.length - 1));
-      }
-      blockSpans.add((b, blockStart, slots.length - 1));
-    }
-    if (slots.isEmpty) return Text('Nessuna attività', style: TextStyle(fontSize: 12.5, color: c.muted));
+    return LayoutBuilder(
+      builder: (context, box) {
+        final w = box.maxWidth;
+        double x(DateTime t) =>
+            _pad +
+            (t.difference(t0).inMilliseconds / t1.difference(t0).inMilliseconds).clamp(0.0, 1.0) * (w - 2 * _pad);
 
-    const slot = 24.0, minStep = 28.0, markerBox = 90.0;
-    const height = _bracketHeight * 2 + _iconRow;
-    final bracketColor = c.muted.withValues(alpha: 0.6);
-
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: () => widget.selection?.select(null, this),
-      child: LayoutBuilder(
-        builder: (context, box) {
-          final n = slots.length;
-          // Spread over the width while it fits; otherwise scroll, the
-          // newest staying on the right.
-          final width = n * minStep > box.maxWidth ? n * minStep : box.maxWidth;
-          double x(int i) => n == 1 ? slot / 2 : slot / 2 + i * (width - slot) / (n - 1);
-
-          // Brackets run from the centre of the first icon to the centre
-          // of the last one of their group.
-          List<Widget> bracket(int from, int to, {required bool above, required Widget marker}) {
-            var left = x(from), right = x(to);
-            if (right - left < 16) {
-              final mid = (left + right) / 2;
-              left = mid - 8;
-              right = mid + 8;
+        // A click or a drag picks what is nearest in time, among the lines
+        // shown and the starts of invocations.
+        final targets = [...points, for (final g in groups) ?g.header];
+        void pick(double dx) {
+          LogEntry? best;
+          var dist = double.infinity;
+          for (final e in targets) {
+            final d = (x(e.at) - dx).abs();
+            if (d < dist) {
+              dist = d;
+              best = e;
             }
-            final mid = (left + right) / 2;
-            final top = above ? 0.0 : _bracketHeight + _iconRow;
-            return [
-              Positioned(
-                left: left,
-                top: top,
-                width: right - left,
-                height: _bracketHeight,
-                child: CustomPaint(
-                  painter: _BracketPainter(above: above, color: bracketColor),
-                ),
-              ),
-              Positioned(
-                left: mid - markerBox / 2,
-                top: top,
-                width: markerBox,
-                height: _bracketHeight,
-                child: Center(child: marker),
-              ),
-            ];
           }
+          if (best != null) sel.select(best, this);
+        }
 
-          final children = <Widget>[
-            Positioned(
-              left: 0,
-              right: 0,
-              top: _bracketHeight + _iconRow / 2 - 1,
-              child: Container(height: 2, color: c.border),
-            ),
-          ];
-          for (final (r, from, to) in runSpans) {
-            children.addAll(
-              bracket(
-                from,
-                to,
-                above: true,
-                marker: _clickable(
-                  r.header,
-                  _marker(Icons.replay_rounded, r.number, 'Invocazione ${r.number} · ${_clock(r.header.at)}'),
-                ),
-              ),
-            );
-          }
-          for (final (b, from, to) in blockSpans) {
-            children.addAll(
-              bracket(
-                from,
-                to,
-                above: false,
-                marker: _clickable(
-                  b.header,
-                  _marker(Icons.layers_outlined, b.number, 'Blocco ${b.number}: ${b.title}'),
-                  block: true,
-                ),
-              ),
-            );
-          }
-          for (final (i, e) in slots.indexed) {
-            if (e == null) continue;
-            children.add(
-              Positioned(
-                left: x(i) - slot / 2,
-                top: _bracketHeight,
-                width: slot,
-                height: _iconRow,
-                child: Center(child: _item(e)),
-              ),
-            );
-          }
-          return SingleChildScrollView(
-            controller: _scroll,
-            scrollDirection: Axis.horizontal,
-            reverse: true,
-            child: SizedBox(
-              width: width,
-              height: height,
-              child: Stack(clipBehavior: Clip.none, children: children),
+        final bands = <_Band>[];
+        for (final (i, run) in runs.indexed) {
+          final live = i == runs.length - 1 && engine.isActive;
+          final end = live ? t1 : run.last.end!;
+          final outcome = run.last.outcome(live: live);
+          final color = switch (outcome) {
+            _Outcome.done => c.success,
+            _Outcome.blocked || _Outcome.failed => c.danger,
+            _Outcome.running => c.primary,
+            _Outcome.interrupted => c.warning,
+            _ => c.muted,
+          };
+          final m = RegExp(r'Blocco (\d+)/\d+ «(.*)»').firstMatch(run.first.header!.text);
+          bands.add(
+            _Band(
+              left: x(run.first.start!),
+              right: x(end),
+              color: color,
+              cuts: [for (final g in run.skip(1)) x(g.start!)],
+              label: m == null
+                  ? ''
+                  : 'Blocco ${m.group(1)}: ${m.group(2)} · ${run.length == 1 ? '1 invocazione' : '${run.length} invocazioni'}',
+              header: run.first.header!,
             ),
           );
-        },
-      ),
+        }
+        final view = sel.inView.value;
+        final chosen = sel.entry;
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (d) => pick(d.localPosition.dx),
+          onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _MapPainter(
+                    bands: bands,
+                    dots: [
+                      for (final e in points)
+                        if (!_important(e)) (x(e.at), e.kind == LogKind.agent ? c.primary : c.muted),
+                    ],
+                    view: view == null ? null : (x(view.$1), x(view.$2)),
+                    chosen: chosen == null ? null : x(chosen.at),
+                    line: c.border,
+                    frame: c.primary,
+                    mid: _mid,
+                  ),
+                ),
+              ),
+              // Block names on hover.
+              for (final b in bands)
+                Positioned(
+                  left: b.left,
+                  width: (b.right - b.left).clamp(6.0, double.infinity),
+                  top: _mid - 9,
+                  height: 18,
+                  child: Tooltip(message: b.label, child: const SizedBox.expand()),
+                ),
+              // The lines that matter, as icons.
+              for (final e in points)
+                if (_important(e))
+                  Positioned(
+                    left: x(e.at) - 10,
+                    top: _mid - 10,
+                    width: 20,
+                    height: 20,
+                    child: Tooltip(
+                      message: '${_clock(e.at)}  ${e.text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: GestureDetector(
+                        onTap: () => sel.select(e, this),
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: identical(chosen, e) ? c.primarySoft : c.surface,
+                            shape: BoxShape.circle,
+                          ),
+                          child: _lineIcon(e, engine.settings.agent, c, size: 14),
+                        ),
+                      ),
+                    ),
+                  ),
+              // Start and end of the session, at the corners.
+              Positioned(
+                left: _pad,
+                bottom: 0,
+                child: Text(_clock(t0), style: TextStyle(fontSize: 10, color: c.muted)),
+              ),
+              Positioned(
+                right: _pad,
+                bottom: 0,
+                child: Text(engine.isActive ? 'adesso' : _clock(t1), style: TextStyle(fontSize: 10, color: c.muted)),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
-/// A square bracket: a line across, with short ends turned toward the icons
-/// (down when it sits above them, up when it sits below).
-class _BracketPainter extends CustomPainter {
-  _BracketPainter({required this.above, required this.color});
-  final bool above;
+class _Band {
+  _Band({
+    required this.left,
+    required this.right,
+    required this.color,
+    required this.cuts,
+    required this.label,
+    required this.header,
+  });
+  final double left, right;
   final Color color;
+  final List<double> cuts;
+  final String label;
+  final LogEntry header;
+}
+
+class _MapPainter extends CustomPainter {
+  _MapPainter({
+    required this.bands,
+    required this.dots,
+    required this.view,
+    required this.chosen,
+    required this.line,
+    required this.frame,
+    required this.mid,
+  });
+  final List<_Band> bands;
+  final List<(double, Color)> dots;
+  final (double, double)? view;
+  final double? chosen;
+  final Color line, frame;
+  final double mid;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.4
-      ..style = PaintingStyle.stroke;
-    final y = size.height / 2;
-    final end = above ? size.height - 2 : 2.0;
-    final path = Path()
-      ..moveTo(0, end)
-      ..lineTo(0, y)
-      ..lineTo(size.width, y)
-      ..lineTo(size.width, end);
-    canvas.drawPath(path, paint);
+    // The time line.
+    canvas.drawLine(
+      Offset(12, mid),
+      Offset(size.width - 12, mid),
+      Paint()
+        ..color = line
+        ..strokeWidth = 2,
+    );
+    // Blocks: tinted bands, invocations marked by thin cuts.
+    for (final b in bands) {
+      final r = RRect.fromLTRBR(
+        b.left,
+        mid - 8,
+        b.right.clamp(b.left + 4, double.infinity),
+        mid + 8,
+        const Radius.circular(5),
+      );
+      canvas.drawRRect(r, Paint()..color = b.color.withValues(alpha: 0.22));
+      canvas.drawRRect(
+        r,
+        Paint()
+          ..color = b.color.withValues(alpha: 0.55)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+      for (final cut in b.cuts) {
+        canvas.drawLine(
+          Offset(cut, mid - 8),
+          Offset(cut, mid + 8),
+          Paint()
+            ..color = b.color.withValues(alpha: 0.7)
+            ..strokeWidth = 1.2,
+        );
+      }
+    }
+    // Messages and commands: dots.
+    for (final (x, color) in dots) {
+      canvas.drawCircle(Offset(x, mid), 2.2, Paint()..color = color);
+    }
+    // What is in view in the activity panel.
+    if (view case (final a, final b)) {
+      final r = RRect.fromLTRBR(
+        a - 3,
+        2,
+        (b + 3).clamp(a + 6, double.infinity),
+        size.height - 12,
+        const Radius.circular(6),
+      );
+      canvas.drawRRect(r, Paint()..color = frame.withValues(alpha: 0.08));
+      canvas.drawRRect(
+        r,
+        Paint()
+          ..color = frame.withValues(alpha: 0.45)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
+    // The chosen line.
+    if (chosen case final x?) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height - 10),
+        Paint()
+          ..color = frame
+          ..strokeWidth = 2,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(_BracketPainter old) => old.above != above || old.color != color;
+  bool shouldRepaint(_MapPainter old) => true;
 }
