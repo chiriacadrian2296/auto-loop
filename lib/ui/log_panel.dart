@@ -872,7 +872,7 @@ class _LogLine extends StatefulWidget {
   const _LogLine(this.entry, {super.key, required this.agent, this.highlighted = false, this.onTap, this.indent = 0});
   final LogEntry entry;
 
-  /// Room on the left inside the row, so its hover covers the whole width.
+  /// Room on the left of the row: its highlight starts at its icon.
   final double indent;
   final bool highlighted;
   final VoidCallback? onTap;
@@ -976,7 +976,8 @@ class _LogLineState extends State<_LogLine> {
             color: _hover ? Theme.of(context).hoverColor : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
-          padding: EdgeInsets.fromLTRB(_sidePad + widget.indent, roomy ? 6 : 2, _sidePad, roomy ? 6 : 2),
+          margin: EdgeInsets.only(left: widget.indent),
+          padding: EdgeInsets.fromLTRB(_sidePad, roomy ? 6 : 2, _sidePad, roomy ? 6 : 2),
           child: row,
         ),
       ),
@@ -1112,13 +1113,13 @@ class _ActivityMapState extends State<ActivityMap> {
   @override
   void initState() {
     super.initState();
-    widget.selection.addListener(_redraw);
+    widget.selection.addListener(_onSelection);
     widget.selection._filter.addListener(_redraw);
   }
 
   @override
   void dispose() {
-    widget.selection.removeListener(_redraw);
+    widget.selection.removeListener(_onSelection);
     widget.selection._filter.removeListener(_redraw);
     _scroll.dispose();
     super.dispose();
@@ -1128,7 +1129,28 @@ class _ActivityMapState extends State<ActivityMap> {
     if (mounted) setState(() {});
   }
 
-  static const _pad = 12.0;
+  void _onSelection() {
+    _redraw();
+    final sel = widget.selection;
+    final e = sel.entry;
+    if (e == null || identical(sel.source, this)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final x = _xs[e];
+      if (x == null || !_scroll.hasClients) return;
+      final pos = _scroll.position;
+      // Only when it is out of view (or at the very edge, under the fade).
+      if (x - 30 >= pos.pixels && x + 30 <= pos.pixels + _viewport) return;
+      final target = (x - _viewport / 2).clamp(0.0, pos.maxScrollExtent);
+      _scroll.animateTo(target, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    });
+  }
+
+  static const _pad = 11.0;
+
+  /// Where each item was drawn and how wide the card is, to bring the
+  /// chosen one into view.
+  Map<LogEntry, double> _xs = {};
+  double _viewport = 0;
   static const _icon = 22.0;
   static const _dot = 12.0;
 
@@ -1209,6 +1231,12 @@ class _ActivityMapState extends State<ActivityMap> {
               LogEntry? prev;
               for (final e in items) {
                 var x = _pad + e.at.difference(t0).inMilliseconds * scale;
+                // Invocation starts are only where bands begin or are cut:
+                // they take no room, so the first icon sits at the edge.
+                if (isHeader(e)) {
+                  xs[e] = prevX == null ? x : (x < prevX ? prevX : x);
+                  continue;
+                }
                 if (prevX != null) {
                   final min = prevX + half(prev!) + half(e) + 3;
                   if (x < min) x = min;
@@ -1218,6 +1246,8 @@ class _ActivityMapState extends State<ActivityMap> {
                 prev = e;
               }
               final last = prevX ?? _pad;
+              _xs = xs;
+              _viewport = box.maxWidth;
               final liveEnd = engine.isActive
                   ? [_pad + t1.difference(t0).inMilliseconds * scale, last + 14].reduce((a, b) => a > b ? a : b)
                   : last;
@@ -1351,8 +1381,32 @@ class _ActivityMapState extends State<ActivityMap> {
                                     width: size,
                                     height: size,
                                     child: Tooltip(
-                                      message: '${_clock(e.at)}  ${e.text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
-                                      constraints: const BoxConstraints(maxWidth: 420),
+                                      // Keyed by its line, so a test can find it.
+                                      key: ValueKey<LogEntry>(e),
+                                      richMessage: WidgetSpan(
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(maxWidth: 400),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                e.text.replaceAll(RegExp(r'\s+'), ' ').trim(),
+                                                style: const TextStyle(fontSize: 12.5, color: Colors.white),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                _clock(e.at),
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.white.withValues(alpha: 0.7),
+                                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
                                       child: GestureDetector(
                                         // Only lines are chosen; the stand-in task flag is not one.
                                         onTap: head == null ? () => sel.select(e, this) : null,

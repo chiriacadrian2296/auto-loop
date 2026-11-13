@@ -68,7 +68,7 @@ void main() {
     expect(find.textContaining(check, findRichText: true), findsNothing);
     final icon = find.descendant(
       of: find.byType(ActivityMap),
-      matching: find.byWidgetPredicate((w) => w is Tooltip && (w.message ?? '').contains(check)),
+      matching: find.byWidgetPredicate((w) => w.key is ValueKey<LogEntry> && (w.key! as ValueKey<LogEntry>).value.text.contains(check)),
     );
     await tester.tap(icon);
     await tester.pump();
