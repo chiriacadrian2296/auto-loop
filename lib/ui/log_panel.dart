@@ -1296,34 +1296,41 @@ class _ActivityMapState extends State<ActivityMap> {
                 sel.select(head ?? best, this, block: head != null);
               }
 
+              final icons = [
+                for (final e in items)
+                  if (!isHeader(e)) xs[e]!,
+              ];
+              final lineFrom = icons.isEmpty ? _pad : icons.first;
+              final lineTo = engine.isActive ? liveEnd : (icons.isEmpty ? _pad : icons.last);
+
               final chosen = sel.entry;
               // Where the map goes on beyond an edge, that edge fades out
               // instead of cutting the icons off.
-              return ListenableBuilder(
-                listenable: _scroll,
-                builder: (context, child) {
-                  final pos = _scroll.hasClients ? _scroll.position : null;
-                  final fadeLeft = pos != null && pos.hasContentDimensions && pos.pixels > 1;
-                  final fadeRight = pos != null && pos.hasContentDimensions && pos.pixels < pos.maxScrollExtent - 1;
-                  if (!fadeLeft && !fadeRight) return child!;
-                  final f = 28 / box.maxWidth;
-                  return ShaderMask(
-                    blendMode: BlendMode.dstIn,
-                    shaderCallback: (rect) => LinearGradient(
-                      colors: [
-                        fadeLeft ? Colors.transparent : Colors.black,
-                        Colors.black,
-                        Colors.black,
-                        fadeRight ? Colors.transparent : Colors.black,
-                      ],
-                      stops: [0, f, 1 - f, 1],
-                    ).createShader(rect),
-                    child: child,
-                  );
-                },
-                child: Scrollbar(
-                  controller: _scroll,
-                  thumbVisibility: true,
+              return Scrollbar(
+                controller: _scroll,
+                thumbVisibility: true,
+                child: ListenableBuilder(
+                  listenable: _scroll,
+                  builder: (context, child) {
+                    final pos = _scroll.hasClients ? _scroll.position : null;
+                    final fadeLeft = pos != null && pos.hasContentDimensions && pos.pixels > 1;
+                    final fadeRight = pos != null && pos.hasContentDimensions && pos.pixels < pos.maxScrollExtent - 1;
+                    if (!fadeLeft && !fadeRight) return child!;
+                    final f = 28 / box.maxWidth;
+                    return ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      shaderCallback: (rect) => LinearGradient(
+                        colors: [
+                          fadeLeft ? Colors.transparent : Colors.black,
+                          Colors.black,
+                          Colors.black,
+                          fadeRight ? Colors.transparent : Colors.black,
+                        ],
+                        stops: [0, f, 1 - f, 1],
+                      ).createShader(rect),
+                      child: child,
+                    );
+                  },
                   child: SingleChildScrollView(
                     controller: _scroll,
                     scrollDirection: Axis.horizontal,
@@ -1342,7 +1349,9 @@ class _ActivityMapState extends State<ActivityMap> {
                                 painter: _MapPainter(
                                   bands: [for (final b in bands) (b.$1, b.$2, b.$3, b.$4)],
                                   band: c.muted,
-                                  line: c.muted.withValues(alpha: 0.7),
+                                  line: c.muted.withValues(alpha: 0.45),
+                                  from: lineFrom,
+                                  to: lineTo,
                                   chosenBand: c.text,
                                   mid: mid,
                                 ),
@@ -1427,12 +1436,17 @@ class _MapPainter extends CustomPainter {
     required this.line,
     required this.chosenBand,
     required this.mid,
+    required this.from,
+    required this.to,
   });
 
   /// Left, right, invocation cuts, chosen.
   final List<(double, double, List<double>, bool)> bands;
   final Color band, line, chosenBand;
   final double mid;
+
+  /// Where the time line starts and ends: the first and the last icon.
+  final double from, to;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1459,8 +1473,8 @@ class _MapPainter extends CustomPainter {
       }
     }
     canvas.drawLine(
-      Offset(0, mid),
-      Offset(size.width, mid),
+      Offset(from, mid),
+      Offset(to, mid),
       Paint()
         ..color = line
         ..strokeWidth = 2,
