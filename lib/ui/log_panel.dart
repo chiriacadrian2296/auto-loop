@@ -437,7 +437,6 @@ class _LogPanelState extends State<LogPanel> {
             outcome: run.last.outcome(live: lastRun && engine.isActive),
             onTap: () =>
                 setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head)),
-            onSelect: () => _select(head, block: true),
           ),
         );
       }
@@ -456,18 +455,13 @@ class _LogPanelState extends State<LogPanel> {
         final header = g.header;
         final open = header == null || !_toggled.contains(header);
         if (header != null) {
-          final chosen = identical(header, _flash) && !_blockChosen;
-          if (chosen) _rowIndex[header] = rows.length;
           rows.add(
             tab(
               _InvocationHeader(
-                key: chosen ? _headerKeys.putIfAbsent(header, GlobalKey.new) : null,
-                highlighted: chosen,
                 group: g,
                 open: open,
                 live: last && engine.isActive,
                 onTap: () => setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
-                onSelect: () => _select(header),
               ),
             ),
           );
@@ -477,15 +471,13 @@ class _LogPanelState extends State<LogPanel> {
             final target = identical(e, _flash);
             if (target) _rowIndex[e] = rows.length;
             rows.add(
-              tab(
-                _LogLine(
-                  e,
-                  key: target ? _headerKeys.putIfAbsent(e, GlobalKey.new) : null,
-                  agent: engine.settings.agent,
-                  highlighted: target,
-                  onTap: () => _select(e),
-                ),
-                2,
+              _LogLine(
+                e,
+                key: target ? _headerKeys.putIfAbsent(e, GlobalKey.new) : null,
+                agent: engine.settings.agent,
+                highlighted: target,
+                onTap: () => _select(e),
+                indent: _indent * 2,
               ),
             );
           }
@@ -667,7 +659,6 @@ class _BlockHeading extends StatelessWidget {
     required this.gap,
     required this.start,
     required this.onTap,
-    required this.onSelect,
     required this.outcome,
     this.highlighted = false,
   });
@@ -679,7 +670,7 @@ class _BlockHeading extends StatelessWidget {
   final double gap;
   final DateTime? start;
   final bool open, highlighted;
-  final VoidCallback onTap, onSelect;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -688,13 +679,10 @@ class _BlockHeading extends StatelessWidget {
       padding: EdgeInsets.only(top: gap, bottom: 2),
       child: SectionTitle(
         title: number == null ? title : '$number. $title',
-        icon: highlighted
-            ? _invertedDisc(c, Icon(Icons.layers_outlined, size: 15, color: c.background), size: 21)
-            : Icon(Icons.layers_outlined, size: 15, color: c.text),
+        icon: Icon(Icons.layers_outlined, size: 15, color: c.text),
         time: start == null ? null : _clock(start!),
         open: open,
         onTap: onTap,
-        onSelect: onSelect,
         badge: _badge(outcome, c),
         stats: [
           IconStat(
@@ -733,19 +721,10 @@ String _k(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(n >= 100000 ? 0 : 
 /// One invocation: its name and how it ended; how long it took, what it
 /// cost and when it started show on hover, like the times of the lines.
 class _InvocationHeader extends StatefulWidget {
-  const _InvocationHeader({
-    super.key,
-    required this.group,
-    required this.open,
-    required this.live,
-    required this.onTap,
-    required this.onSelect,
-    this.highlighted = false,
-  });
-  final bool highlighted;
+  const _InvocationHeader({required this.group, required this.open, required this.live, required this.onTap});
   final _Group group;
   final bool open, live;
-  final VoidCallback onTap, onSelect;
+  final VoidCallback onTap;
 
   @override
   State<_InvocationHeader> createState() => _InvocationHeaderState();
@@ -778,80 +757,56 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
       onExit: (_) => setState(() => _hover = false),
       child: Padding(
         padding: const EdgeInsets.only(top: 6, bottom: 2),
-        child: Row(
-          children: [
-            // The arrow only opens and closes.
-            Padding(
-              padding: const EdgeInsets.only(left: _sidePad),
-              child: SizedBox(
-                width: _gutter,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(6),
-                    onTap: widget.onTap,
-                    child: SectionChevron(open: widget.open),
-                  ),
-                ),
-              ),
-            ),
-            // The rest of the row chooses the invocation.
-            Expanded(
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  hoverColor: c.field,
-                  onTap: widget.onSelect,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 6, _sidePad, 6),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: _gutter,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: SizedBox(
-                              width: _arrow,
-                              child: Center(
-                                child: widget.highlighted
-                                    ? _invertedDisc(
-                                        c,
-                                        Icon(Icons.replay_rounded, size: 15, color: c.background),
-                                        size: 21,
-                                      )
-                                    : Icon(Icons.replay_rounded, size: 15, color: c.text),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Text(
-                          invocation == null ? 'Invocazione' : 'Invocazione $invocation',
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
-                        ),
-                        if (badge != null) ...[const SizedBox(width: 10), badge],
-                        // Lined up on the right with the time, shown on hover like
-                        // the times of the lines (blocks show theirs always).
-                        Expanded(
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 120),
-                            opacity: _hover ? 1 : 0,
-                            child: Row(children: [RightStats(stats: stats)]),
-                          ),
-                        ),
-                        AnimatedOpacity(
-                          duration: const Duration(milliseconds: 120),
-                          opacity: _hover ? 1 : 0,
-                          child: SectionTime(_clock(start)),
-                        ),
-                      ],
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: _sidePad),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: _gutter,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SectionChevron(open: widget.open),
                     ),
                   ),
-                ),
+                  SizedBox(
+                    width: _gutter,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        width: _arrow,
+                        child: Center(child: Icon(Icons.replay_rounded, size: 15, color: c.text)),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    invocation == null ? 'Invocazione' : 'Invocazione $invocation',
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
+                  ),
+                  if (badge != null) ...[const SizedBox(width: 10), badge],
+                  // Lined up on the right with the time, shown on hover like
+                  // the times of the lines (blocks show theirs always).
+                  Expanded(
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 120),
+                      opacity: _hover ? 1 : 0,
+                      child: Row(children: [RightStats(stats: stats)]),
+                    ),
+                  ),
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: _hover ? 1 : 0,
+                    child: SectionTime(_clock(start)),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -864,6 +819,13 @@ const _sidePad = 8.0;
 const _gutter = sectionGutter;
 const _timeWidth = 64.0;
 const _indent = sectionGutter;
+
+/// The box every line icon sits in, chosen or not.
+const _iconBox = 21.0;
+
+/// Warning triangles sit low in their box.
+bool _isWarning(LogEntry e) =>
+    e.kind == LogKind.warning || (e.kind == LogKind.result && e.outcome == RunOutcome.interrupted);
 
 const _arrow = sectionArrow;
 
@@ -907,8 +869,11 @@ class _WorkingLine extends StatelessWidget {
 }
 
 class _LogLine extends StatefulWidget {
-  const _LogLine(this.entry, {super.key, required this.agent, this.highlighted = false, this.onTap});
+  const _LogLine(this.entry, {super.key, required this.agent, this.highlighted = false, this.onTap, this.indent = 0});
   final LogEntry entry;
+
+  /// Room on the left inside the row, so its hover covers the whole width.
+  final double indent;
   final bool highlighted;
   final VoidCallback? onTap;
   final AgentKind agent;
@@ -925,12 +890,19 @@ class _LogLineState extends State<_LogLine> {
     final c = context.colors;
     final e = widget.entry;
 
-    // One icon per line, always in the same column and size. Only icons
-    // carry color; texts stay neutral.
-    // The chosen line shows its icon inverted, like on the map.
-    final icon = widget.highlighted
-        ? _invertedDisc(c, _lineIcon(e, widget.agent, c, inverted: true), size: e.kind == LogKind.tool ? 12 : 21)
-        : _lineIcon(e, widget.agent, c);
+    // One icon per line, always in the same column and in a box of the same
+    // size, chosen or not: only the disc behind it changes. The chosen line
+    // shows its icon inverted, like on the map.
+    final chosen = widget.highlighted;
+    final glyph = Transform.translate(
+      // Triangles look low in their box: lift them a little.
+      offset: Offset(0, _isWarning(e) ? -1 : 0),
+      child: _lineIcon(e, widget.agent, c, inverted: chosen),
+    );
+    final icon = SizedBox.square(
+      dimension: _iconBox,
+      child: Center(child: chosen ? _invertedDisc(c, glyph, size: e.kind == LogKind.tool ? 12 : _iconBox) : glyph),
+    );
 
     // One grey for every text: the icon says what kind of line it is.
     final body = TextStyle(fontSize: 13.5, height: 1.5, color: Color.lerp(c.muted, c.text, 0.55));
@@ -957,17 +929,15 @@ class _LogLineState extends State<_LogLine> {
     final row = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Centred on the same axis as the headers' arrows, and on the first
+        // line of the text.
         SizedBox(
           width: _gutter,
-          child: Padding(
-            padding: EdgeInsets.only(top: e.kind == LogKind.tool ? 3 : 3.5),
-            // Centred on the same axis as the headers' arrows.
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: SizedBox(
-                width: _arrow,
-                child: Center(child: icon),
-              ),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: _arrow,
+              child: Center(child: icon),
             ),
           ),
         ),
@@ -1001,11 +971,12 @@ class _LogLineState extends State<_LogLine> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
+          // The whole row greys on hover, as the progress tiles do.
           decoration: BoxDecoration(
-            color: _hover ? c.field : Colors.transparent,
+            color: _hover ? Theme.of(context).hoverColor : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
-          padding: EdgeInsets.symmetric(horizontal: _sidePad, vertical: roomy ? 7 : 3),
+          padding: EdgeInsets.fromLTRB(_sidePad + widget.indent, roomy ? 6 : 2, _sidePad, roomy ? 6 : 2),
           child: row,
         ),
       ),
@@ -1285,15 +1256,14 @@ class _ActivityMapState extends State<ActivityMap> {
                 LogEntry? best;
                 var dist = double.infinity;
                 for (final e in items) {
+                  if (isHeader(e) || starts.containsKey(e)) continue;
                   final d = (xs[e]! - dx).abs();
                   if (d < dist) {
                     dist = d;
                     best = e;
                   }
                 }
-                if (best == null) return;
-                final head = starts[best];
-                sel.select(head ?? best, this, block: head != null);
+                if (best != null) sel.select(best, this);
               }
 
               final icons = [
@@ -1384,7 +1354,8 @@ class _ActivityMapState extends State<ActivityMap> {
                                       message: '${_clock(e.at)}  ${e.text.replaceAll(RegExp(r'\s+'), ' ').trim()}',
                                       constraints: const BoxConstraints(maxWidth: 420),
                                       child: GestureDetector(
-                                        onTap: () => sel.select(head ?? e, this, block: head != null),
+                                        // Only lines are chosen; the stand-in task flag is not one.
+                                        onTap: head == null ? () => sel.select(e, this) : null,
                                         // The chosen one is shown inverted: a light
                                         // disc behind the icon.
                                         child: Container(
@@ -1395,7 +1366,7 @@ class _ActivityMapState extends State<ActivityMap> {
                                           ),
                                           // Triangles look low in their box: lift them a little.
                                           child: Transform.translate(
-                                            offset: Offset(0, _warns(e) ? -1 : 0),
+                                            offset: Offset(0, _isWarning(e) ? -1 : 0),
                                             child: _lineIcon(
                                               e,
                                               engine.settings.agent,
@@ -1424,9 +1395,6 @@ class _ActivityMapState extends State<ActivityMap> {
       ],
     );
   }
-
-  static bool _warns(LogEntry e) =>
-      e.kind == LogKind.warning || (e.kind == LogKind.result && e.outcome == RunOutcome.interrupted);
 }
 
 class _MapPainter extends CustomPainter {
