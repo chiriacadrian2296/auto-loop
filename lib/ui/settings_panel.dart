@@ -484,7 +484,6 @@ class SettingsPanel extends StatelessWidget {
             ],
           ),
         ),
-        if (projectDir != null) _ProjectFooter(projectDir: projectDir!),
       ],
     );
   }
@@ -521,7 +520,29 @@ const _fieldInfo = <String, String>{
       'Eseguito con cmd.exe nella cartella di lavoro quando l\'agente dichiara il blocco finito. '
       'Se fallisce, l\'output torna all\'agente.',
   'Regole per ogni blocco': 'Testo aggiunto a ogni prompt, utile per stack, stile e cose da non toccare.',
+  'Quando la quota finisce': 'Cosa fare quando la CLI segnala che il limite di utilizzo è stato raggiunto.',
+  // Cards whose name alone does not say what they are for.
+  'Cartella di lavoro':
+      'Dove l\'agente crea e modifica i file. Le impostazioni di questo pannello si salvano qui, '
+      'in .autoloop/settings.json, e tornano quando riapri il progetto. Percorsi delle CLI e set di '
+      'account restano invece uguali per tutti i progetti.',
+  'Suddivisione in blocchi':
+      'Come il piano viene diviso in blocchi. L\'agente ne svolge uno alla volta, e ogni blocco ha il suo esito.',
+  'Ragionamento': 'Quanto l\'agente ragiona prima di agire: più alto dà risultati migliori, ma usa più tempo e token.',
+  'Permessi': 'Cosa l\'agente può fare da solo, senza chiedere conferma, mentre lavora sul piano.',
+  'Account e CLI': 'Con quale account lavora la CLI dell\'agente. Si possono tenere più set di account, per esempio di persone diverse.',
 };
+
+/// The ⓘ next to a field's name, when the name needs explaining.
+Widget? _infoIcon(String? label, AppColors c) {
+  final info = label == null ? null : _fieldInfo[label];
+  if (info == null) return null;
+  return Tooltip(
+    message: info,
+    waitDuration: const Duration(milliseconds: 150),
+    child: Icon(Icons.info_outline_rounded, size: 13, color: c.muted),
+  );
+}
 
 /// Related settings in one rounded card, as rows separated by hairlines.
 class _Group extends StatelessWidget {
@@ -549,56 +570,6 @@ class _Group extends StatelessWidget {
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Says, at the foot of the panel, that these settings travel with the
-/// project folder.
-class _ProjectFooter extends StatelessWidget {
-  const _ProjectFooter({required this.projectDir});
-  final String projectDir;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Tooltip(
-      message:
-          'Salvate in ${p.join(p.basename(projectDir), '.autoloop', 'settings.json')}.\n'
-          'Restano uguali per tutti i progetti: percorsi delle CLI e set di account.',
-      waitDuration: const Duration(milliseconds: 300),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: c.border)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.bookmark_added_outlined, size: 17, color: c.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Impostazioni salvate nel progetto',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.text),
-                  ),
-                  Text(
-                    'Le ritrovi ogni volta che riapri «${p.basename(projectDir)}»',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11.5, color: c.muted),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.info_outline_rounded, size: 14, color: c.muted),
-          ],
         ),
       ),
     );
@@ -905,14 +876,23 @@ class _PathCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (caption != null)
-                      Text(
-                        caption!.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.9,
-                          color: highlighted ? c.primary : c.muted,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              caption!.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.9,
+                                color: highlighted ? c.primary : c.muted,
+                              ),
+                            ),
+                          ),
+                          if (_infoIcon(caption, c) case final info?) ...[const SizedBox(width: 4), info],
+                        ],
                       ),
                     Text(
                       title,
@@ -967,14 +947,7 @@ class _Field extends StatelessWidget {
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text),
                 ),
               ),
-              if (_fieldInfo[label] case final info?) ...[
-                const SizedBox(width: 4),
-                Tooltip(
-                  message: info,
-                  waitDuration: const Duration(milliseconds: 150),
-                  child: Icon(Icons.info_outline_rounded, size: 14, color: c.muted),
-                ),
-              ],
+              if (_infoIcon(label, c) case final info?) ...[const SizedBox(width: 4), info],
             ],
           ),
           const SizedBox(height: 6),

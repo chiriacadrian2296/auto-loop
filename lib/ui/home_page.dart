@@ -285,7 +285,7 @@ class _HomePageState extends State<HomePage> {
     final picked = await showChoiceDialog<String>(
       context: context,
       title: 'Piano',
-      subtitle: 'Riapri un piano recente o scegline uno nuovo.',
+      subtitle: 'Riapri un piano recente o scegline uno nuovo. Ogni progetto ritrova le sue impostazioni.',
       selected: '${recent.indexWhere((r) => _planPath != null && p.equals(r.$1, _planPath!))}',
       choices: [
         for (final (i, r) in recent.indexed)

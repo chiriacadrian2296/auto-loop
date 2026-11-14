@@ -136,14 +136,11 @@ class _ThemeCaptionButtonState extends State<ThemeCaptionButton> {
     final fg = dark
         ? Colors.white.withValues(alpha: _pressed ? 0.786 : 1)
         : Colors.black.withValues(alpha: _pressed ? 0.6063 : 0.8956);
-    final (IconData icon, String now, ThemeMode next, String then) = switch (widget.mode) {
-      ThemeMode.system => (Icons.brightness_auto_outlined, 'segue il sistema', ThemeMode.light, 'chiaro'),
-      ThemeMode.light => (Icons.light_mode_outlined, 'chiaro', ThemeMode.dark, 'scuro'),
-      ThemeMode.dark => (Icons.dark_mode_outlined, 'scuro', ThemeMode.system, 'come il sistema'),
-    };
-    return Tooltip(
-      message: 'Tema: $now · clic per $then',
-      waitDuration: const Duration(milliseconds: 400),
+    // Just light and dark: the icon shows the one in use, a click switches.
+    final (IconData icon, ThemeMode next) = dark
+        ? (Icons.dark_mode_outlined, ThemeMode.light)
+        : (Icons.light_mode_outlined, ThemeMode.dark);
+    return KeyedSubtree(
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),

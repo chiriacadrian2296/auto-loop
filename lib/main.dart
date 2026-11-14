@@ -49,11 +49,17 @@ class AutoLoopApp extends StatefulWidget {
 }
 
 class _AutoLoopAppState extends State<AutoLoopApp> {
-  // 'system' (default), 'light' or 'dark'.
+  // 'light' or 'dark'; until one is chosen (or from the old "system"
+  // setting) the system's own brightness decides.
   late final ValueNotifier<ThemeMode> _mode =
-      ValueNotifier(
-        ThemeMode.values.firstWhere((m) => m.name == widget.prefs.getString('theme'), orElse: () => ThemeMode.system),
-      )..addListener(() {
+      ValueNotifier(switch (widget.prefs.getString('theme')) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ =>
+          WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark
+              ? ThemeMode.dark
+              : ThemeMode.light,
+      })..addListener(() {
         widget.prefs.setString('theme', _mode.value.name);
         setState(() {});
       });

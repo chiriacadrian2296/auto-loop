@@ -73,7 +73,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(planCard);
     await tester.pumpAndSettle();
-    expect(find.text('Riapri un piano recente o scegline uno nuovo.'), findsOneWidget);
+    expect(find.textContaining('Riapri un piano recente o scegline uno nuovo.'), findsOneWidget);
     expect(find.text('Sfoglia…'), findsOneWidget);
     await tester.tapAt(const Offset(5, 5)); // close the popup
     await tester.pumpAndSettle();
