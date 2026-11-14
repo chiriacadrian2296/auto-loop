@@ -1365,10 +1365,9 @@ class _ActivityMapState extends State<ActivityMap> {
                 bands.add((
                   left,
                   right,
-                  [
-                    for (final g in run.skip(1))
-                      if (xs[g.header] case final x?) x - 3,
-                  ],
+                  // Where one invocation ends and the next begins: halfway
+                  // between the last icon of one and the first of the next.
+                  [for (final g in run.skip(1)) ?_between(items, g.header!, isHeader, xs)],
                   identical(sel.entry, head),
                   m == null ? '' : 'Blocco ${m.group(1)}: ${m.group(2)}',
                 ));
@@ -1570,6 +1569,16 @@ class _ActivityMapState extends State<ActivityMap> {
   }
 }
 
+/// Halfway between the icon before [header] and the one after it, on the map.
+double? _between(List<LogEntry> items, LogEntry header, bool Function(LogEntry) isHeader, Map<LogEntry, double> xs) {
+  final i = items.indexOf(header);
+  if (i < 0) return null;
+  final before = items.take(i).where((e) => !isHeader(e)).lastOrNull;
+  final after = items.skip(i + 1).where((e) => !isHeader(e)).firstOrNull;
+  if (before == null || after == null) return xs[header];
+  return (xs[before]! + xs[after]!) / 2;
+}
+
 class _MapPainter extends CustomPainter {
   _MapPainter({
     required this.bands,
@@ -1591,9 +1600,8 @@ class _MapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Blocks: a light band; its outline and the cuts between invocations
-    // stay faint, so the time line through the middle reads first.
-    for (final (left, right, cuts, chosen) in bands) {
+    // Blocks: a light band with a faint outline.
+    for (final (left, right, _, chosen) in bands) {
       final r = RRect.fromLTRBR(left, mid - 13, right, mid + 13, const Radius.circular(8));
       canvas.drawRRect(r, Paint()..color = band.withValues(alpha: 0.10));
       canvas.drawRRect(
@@ -1603,23 +1611,20 @@ class _MapPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = chosen ? 1.6 : 1,
       );
-      for (final x in cuts) {
-        canvas.drawLine(
-          Offset(x, mid - 13),
-          Offset(x, mid + 13),
-          Paint()
-            ..color = band.withValues(alpha: 0.22)
-            ..strokeWidth = 1,
-        );
-      }
     }
-    canvas.drawLine(
-      Offset(from, mid),
-      Offset(to, mid),
-      Paint()
-        ..color = line
-        ..strokeWidth = 2,
-    );
+    // The time line, broken where one invocation ends and the next begins.
+    final cuts = [for (final b in bands) ...b.$3]..sort();
+    const gap = 3.0;
+    var x = from;
+    final paint = Paint()
+      ..color = line
+      ..strokeWidth = 2;
+    for (final cut in cuts) {
+      if (cut <= x || cut >= to) continue;
+      canvas.drawLine(Offset(x, mid), Offset(cut - gap, mid), paint);
+      x = cut + gap;
+    }
+    if (x < to) canvas.drawLine(Offset(x, mid), Offset(to, mid), paint);
   }
 
   @override

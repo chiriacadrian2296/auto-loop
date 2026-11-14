@@ -403,7 +403,7 @@ class _TimelineItemState extends State<_TimelineItem> {
             BlockStatus.pending => state.attempts > 0 ? 'Da riprendere' : null,
             BlockStatus.done => state.attempts > 0 ? null : 'Segnato a mano',
             BlockStatus.blocked => state.attempts > 0 ? null : 'Bloccato',
-            BlockStatus.skipped => 'Saltato',
+            BlockStatus.skipped => null,
           };
     final subColor = current ? c.primary : c.muted;
     final Widget? subtitle = status == null && stats.isEmpty
@@ -451,6 +451,12 @@ class _TimelineItemState extends State<_TimelineItem> {
       message: 'Si fermerà dopo questo blocco',
       child: Icon(Icons.pan_tool_outlined, size: 16, color: c.danger),
     );
+    final skipped = state.status == BlockStatus.skipped;
+    final skipMark = Tooltip(
+      message: 'Saltato',
+      child: Icon(Icons.redo_rounded, size: 17, color: c.primary),
+    );
+    final marks = [if (skipped) skipMark, if (pause) pauseMark];
     // One button for all the block's options, in a menu.
     final more = Builder(
       builder: (context) => IconButton(
@@ -462,6 +468,9 @@ class _TimelineItemState extends State<_TimelineItem> {
         onPressed: () {
           // Opening a block's options selects it.
           if (!selected) widget.onTap();
+          // The menu covers the tile, which no longer shows its hover: the
+          // fade behind the button must not keep the hover tint either.
+          setState(() => _hover = false);
           final box = context.findRenderObject()! as RenderBox;
           widget.onContextMenu(box.localToGlobal(box.size.bottomLeft(Offset.zero)));
         },
@@ -521,8 +530,7 @@ class _TimelineItemState extends State<_TimelineItem> {
                                 fontSize: 13.5,
                                 height: 1.3,
                                 fontWeight: current || selected ? FontWeight.w700 : FontWeight.w500,
-                                color: state.status == BlockStatus.skipped ? c.muted : c.text,
-                                decoration: state.status == BlockStatus.skipped ? TextDecoration.lineThrough : null,
+                                color: c.text,
                               ),
                             ),
                             if (subtitle != null) ...[const SizedBox(height: 3), subtitle],
@@ -537,7 +545,7 @@ class _TimelineItemState extends State<_TimelineItem> {
               // after this block, and on hover or when selected the options
               // button, which pushes the hand to its left. They come over the
               // tile, so the title keeps all its room.
-              if (pause || showActions)
+              if (marks.isNotEmpty || showActions)
                 Positioned(
                   right: 0,
                   top: 0,
@@ -563,8 +571,8 @@ class _TimelineItemState extends State<_TimelineItem> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (pause) pauseMark,
-                            if (showActions) ...[if (pause) const SizedBox(width: 10), more],
+                            for (final (i, m) in marks.indexed) ...[if (i > 0) const SizedBox(width: 8), m],
+                            if (showActions) ...[if (marks.isNotEmpty) const SizedBox(width: 10), more],
                           ],
                         ),
                       ),
@@ -626,12 +634,10 @@ class _Node extends StatelessWidget {
       // Icons in coloured discs take the background colour, like the others.
       BlockStatus.done => (c.success, Icon(Icons.check_rounded, size: 16, color: c.background)),
       BlockStatus.blocked => (c.danger, Icon(Icons.priority_high_rounded, size: 15, color: c.background)),
-      BlockStatus.skipped => (
-        Color.alphaBlend(c.muted.withValues(alpha: 0.18), c.surface),
-        Icon(Icons.redo_rounded, size: 14, color: c.muted),
-      ),
-      // Solid, so the line behind does not show through.
-      BlockStatus.pending => (Color.alphaBlend(c.muted.withValues(alpha: 0.28), c.surface), number),
+      // Solid, so the line behind does not show through. A skipped block
+      // keeps its number: the blue arrow on its tile says it is skipped.
+      BlockStatus.pending ||
+      BlockStatus.skipped => (Color.alphaBlend(c.muted.withValues(alpha: 0.28), c.surface), number),
     };
     // Grey discs look smaller than coloured ones of the same size.
     final grey = status == BlockStatus.pending || status == BlockStatus.skipped;
