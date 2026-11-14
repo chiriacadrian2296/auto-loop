@@ -1344,6 +1344,8 @@ class _ActivityMapState extends State<ActivityMap> {
               // A block chosen in the progress panel marks its first and its
               // last icon: where it starts and how it ended.
               final blockIcons = <LogEntry>{};
+              // Where each new invocation starts, inside its block's band.
+              final invocationMarks = <(double, LogEntry)>[];
               for (final (i, run) in runs.indexed) {
                 final head = run.first.header!;
                 final live = i == runs.length - 1 && engine.isActive;
@@ -1371,6 +1373,9 @@ class _ActivityMapState extends State<ActivityMap> {
                   identical(sel.entry, head),
                   m == null ? '' : 'Blocco ${m.group(1)}: ${m.group(2)}',
                 ));
+                for (final g in run.skip(1)) {
+                  if (_between(items, g.header!, isHeader, xs) case final x?) invocationMarks.add((x, g.header!));
+                }
               }
 
               void pick(double dx) {
@@ -1464,6 +1469,20 @@ class _ActivityMapState extends State<ActivityMap> {
                                     ),
                                   ),
                                 ),
+                                // A small grey mark where the line breaks for a new invocation.
+                                for (final (x, header) in invocationMarks)
+                                  Positioned(
+                                    left: x - 7,
+                                    top: mid - 7,
+                                    width: 14,
+                                    height: 14,
+                                    child: Tooltip(
+                                      message:
+                                          'Invocazione ${RegExp(r'invocazione (\d+)').firstMatch(header.text)?.group(1) ?? ''}'
+                                          ' · ${_clock(header.at)}',
+                                      child: Icon(Icons.replay_rounded, size: 11, color: c.muted),
+                                    ),
+                                  ),
                                 // Block names on hover.
                                 for (final b in bands)
                                   Positioned(
@@ -1614,7 +1633,8 @@ class _MapPainter extends CustomPainter {
     }
     // The time line, broken where one invocation ends and the next begins.
     final cuts = [for (final b in bands) ...b.$3]..sort();
-    const gap = 3.0;
+    // Room for the small mark in the break.
+    const gap = 9.0;
     var x = from;
     final paint = Paint()
       ..color = line
