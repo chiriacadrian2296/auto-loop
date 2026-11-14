@@ -35,6 +35,11 @@ class HomePage extends StatefulWidget {
 
   @override
   State<HomePage> createState() => _HomePageState();
+
+  /// Screenshots only: what the probes of each CLI return, without running
+  /// anything (version, account).
+  @visibleForTesting
+  static (String, AccountStatus) Function(AgentKind kind)? debugCliProbe;
 }
 
 class _HomePageState extends State<HomePage> {
@@ -138,6 +143,14 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _detectClis({bool force = false}) async {
     final s = engine.settings;
+    if (HomePage.debugCliProbe case final probe?) {
+      for (final kind in AgentKind.values) {
+        final (version, account) = probe(kind);
+        _versions[kind] = version;
+        _accounts[kind] = account;
+      }
+      return;
+    }
     for (final kind in AgentKind.values) {
       var path = kind == AgentKind.codex ? s.codexPath : s.claudePath;
       if (force || path.isEmpty || !File(path).existsSync()) {

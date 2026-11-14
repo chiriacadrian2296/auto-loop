@@ -15,6 +15,7 @@ import 'package:auto_loop/ui/accounts_dialog.dart';
 import 'package:auto_loop/ui/agent_badge.dart';
 import 'package:auto_loop/ui/app_theme.dart';
 import 'package:auto_loop/ui/choice_dialog.dart';
+import 'package:auto_loop/ui/home_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -67,7 +68,14 @@ void main() {
         'sidebarOpen': !dark, // the dark shot shows the closed control panel
       });
       final prefs = await SharedPreferences.getInstance();
-      final engine = LoopEngine(LoopSettings(agent: AgentKind.claude, verifyCommand: 'flutter test'));
+      // A CLI that is found and signed in, with a demo account.
+      final fake = p.join(Directory.current.path, 'test', 'fake_agent', 'fake_claude.cmd');
+      HomePage.debugCliProbe = (_) =>
+          ('2.1.319', const AccountStatus(loggedIn: true, email: 'demo@autoloop.dev', plan: 'max'));
+      addTearDown(() => HomePage.debugCliProbe = null);
+      final engine = LoopEngine(
+        LoopSettings(agent: AgentKind.claude, claudePath: fake, codexPath: fake, verifyCommand: 'flutter test'),
+      );
 
       tester.view.physicalSize = const Size(1440, 900);
       tester.view.devicePixelRatio = 1;
@@ -80,6 +88,7 @@ void main() {
           child: AutoLoopApp(engine: engine, prefs: prefs),
         ),
       );
+      await tester.pump();
       await tester.pump();
 
       // Fake a run in progress: two blocks done, the third running.
@@ -100,6 +109,7 @@ void main() {
         ..phase = LoopPhase.running
         ..currentBlock = 2
         ..runStartedAt = DateTime.now().subtract(const Duration(minutes: 3, seconds: 12))
+        ..sessionStartedAt = DateTime.now().subtract(const Duration(minutes: 31))
         ..statusMessage = 'Blocco 3: Interfaccia principale con lista, filtri e swipe per eliminare';
       // Realistic times, so the activity map shows its shape.
       final t = DateTime.now().subtract(const Duration(minutes: 31));

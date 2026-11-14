@@ -7,6 +7,8 @@ non è esaurita.
 
 È l'evoluzione del supervisore Python *Codex Autonomous Loop*, che eseguiva un unico piano JSON rigido.
 
+Sito: [chiriacadrian2296.github.io/auto-loop](https://chiriacadrian2296.github.io/auto-loop/) · Download: [ultima versione](https://github.com/chiriacadrian2296/auto-loop/releases/latest)
+
 ![AutoLoop durante un'esecuzione](docs/screenshot.png)
 
 ## Come funziona
