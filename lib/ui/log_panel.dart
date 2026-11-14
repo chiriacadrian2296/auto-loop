@@ -750,7 +750,7 @@ class _BlockHeading extends StatelessWidget {
       padding: EdgeInsets.only(top: gap, bottom: 2),
       child: SectionTitle(
         title: number == null ? title : '$number. $title',
-        icon: Icon(Icons.crop_square_rounded, size: 15, color: c.text),
+        icon: Icon(Icons.view_day_outlined, size: 15, color: c.text),
         time: start == null ? null : _clock(start!),
         open: open,
         onTap: onTap,

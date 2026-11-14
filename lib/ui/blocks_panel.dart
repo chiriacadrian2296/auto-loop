@@ -141,7 +141,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
         badge: badge,
         stats: [
           IconStat(
-            Icons.crop_square_rounded,
+            Icons.view_day_outlined,
             '${blocks.length}',
             blocks.length == 1 ? '1 blocco' : '${blocks.length} blocchi',
           ),
@@ -396,7 +396,6 @@ class _TimelineItemState extends State<_TimelineItem> {
           'Token: ${_tokens(state.inputTokens)} in / ${_tokens(state.outputTokens)} out',
         ),
     ];
-    final subColor = current ? c.primary : null;
     final Widget? subtitle = stats.isEmpty
         ? null
         // Fixed height: the tile measures its rows, and a LayoutBuilder
@@ -417,11 +416,7 @@ class _TimelineItemState extends State<_TimelineItem> {
                 }
                 return Row(
                   children: [
-                    for (final (i, w) in shown.indexed) ...[
-                      if (i > 0) const SizedBox(width: 12),
-                      // Blue while the block is being worked on.
-                      subColor == null ? w : IconStat(w.icon, w.value, w.tooltip, color: subColor),
-                    ],
+                    for (final (i, w) in shown.indexed) ...[if (i > 0) const SizedBox(width: 12), w],
                   ],
                 );
               },

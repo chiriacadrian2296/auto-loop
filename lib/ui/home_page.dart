@@ -842,7 +842,7 @@ class _BottomBar extends StatelessWidget {
             ),
             if (plan != null)
               IconStat(
-                Icons.crop_square_rounded,
+                Icons.view_day_outlined,
                 '${engine.doneCount}/${plan.blocks.length}',
                 'Blocchi completati',
                 iconColor: c.text,
