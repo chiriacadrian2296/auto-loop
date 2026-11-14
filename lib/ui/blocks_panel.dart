@@ -460,16 +460,18 @@ class _TimelineItemState extends State<_TimelineItem> {
         color: c.muted,
         icon: const Icon(Icons.more_horiz_rounded),
         onPressed: () {
+          // Opening a block's options selects it.
+          if (!selected) widget.onTap();
           final box = context.findRenderObject()! as RenderBox;
           widget.onContextMenu(box.localToGlobal(box.size.bottomLeft(Offset.zero)));
         },
       ),
     );
     // What the tile looks like behind the buttons, so they sit on it cleanly.
-    final tileColor = Color.alphaBlend(
-      selected ? c.primarySoft : (_hover ? Theme.of(context).hoverColor : Colors.transparent),
-      c.surface,
-    );
+    // Selected and hovered stack up, as they do on the tile itself.
+    var tileColor = c.surface;
+    if (selected) tileColor = Color.alphaBlend(c.primarySoft, tileColor);
+    if (_hover) tileColor = Color.alphaBlend(Theme.of(context).hoverColor, tileColor);
 
     final tile = GestureDetector(
       onSecondaryTapUp: (d) => widget.onContextMenu(d.globalPosition),
@@ -553,7 +555,7 @@ class _TimelineItemState extends State<_TimelineItem> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (pause) pauseMark,
-                        if (showActions) ...[if (pause) const SizedBox(width: 2), more],
+                        if (showActions) ...[if (pause) const SizedBox(width: 10), more],
                       ],
                     ),
                   ),
