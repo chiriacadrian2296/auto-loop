@@ -207,6 +207,24 @@ testo
       expect((LoopEngine(settings())..load(workDir: dir.path, planPath: plan.path)).logs, isEmpty);
     });
 
+    test('stops after a chosen block, then goes on when resumed', () async {
+      final plan = File(p.join(dir.path, 'plan.md'))..writeAsStringSync('## Uno\nfai uno\n## Due\nfai due\n');
+      final alerts = <String>[];
+      final engine = LoopEngine(settings())
+        ..onAttention = ((title, _) => alerts.add(title))
+        ..load(workDir: dir.path, planPath: plan.path);
+      engine.setPauseAfter(engine.plan!.blocks[0], true);
+      await engine.start();
+      expect(engine.phase, LoopPhase.paused);
+      expect(alerts, ['In pausa per un controllo']);
+      expect(engine.blockState(engine.plan!.blocks[0]).status, BlockStatus.done);
+      expect(engine.blockState(engine.plan!.blocks[1]).attempts, 0);
+      // The stop is used up: resuming runs the rest of the plan.
+      expect(engine.blockState(engine.plan!.blocks[0]).pauseAfter, isFalse);
+      await engine.start();
+      expect(engine.phase, LoopPhase.finished);
+    });
+
     test('a work folder inside another repository gets no commits', () async {
       final sub = Directory(p.join(dir.path, 'progetto'))..createSync();
       final plan = File(p.join(sub.path, 'plan.md'))..writeAsStringSync('## Uno\nfai uno\n');

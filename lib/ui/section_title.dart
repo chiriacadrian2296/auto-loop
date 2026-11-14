@@ -269,7 +269,7 @@ class ProgressSummary extends StatelessWidget {
     final c = context.colors;
     final tint = color ?? c.primary;
     final body = Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -310,7 +310,15 @@ class ProgressSummary extends StatelessWidget {
         ],
       ),
     );
-    return tooltip == null ? body : Tooltip(message: tooltip!, child: body);
+    // A rule under it, like the one under the panel's title.
+    final withRule = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        body,
+        Divider(height: 1, color: c.border),
+      ],
+    );
+    return tooltip == null ? withRule : Tooltip(message: tooltip!, child: withRule);
   }
 }
 

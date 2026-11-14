@@ -287,7 +287,16 @@ class _HomePageState extends State<HomePage> {
       title: 'Piano',
       subtitle: 'Riapri un piano recente o scegline uno nuovo. Ogni progetto ritrova le sue impostazioni.',
       selected: '${recent.indexWhere((r) => _planPath != null && p.equals(r.$1, _planPath!))}',
+      // Choosing a new file comes first, like the default choice of the other
+      // popups; the recent plans follow.
       choices: [
+        Choice(
+          value: _browse,
+          icon: Icons.folder_open_outlined,
+          label: 'Sfoglia…',
+          description: 'Scegli un file .md o .txt dal computer.',
+          dividerAfter: recent.isNotEmpty,
+        ),
         for (final (i, r) in recent.indexed)
           Choice(
             value: '$i',
@@ -295,13 +304,6 @@ class _HomePageState extends State<HomePage> {
             label: p.basename(r.$1),
             description: 'Cartella di lavoro: ${short(r.$2)}',
           ),
-        const Choice(
-          value: _browse,
-          icon: Icons.folder_open_outlined,
-          label: 'Sfoglia…',
-          description: 'Scegli un file .md o .txt dal computer.',
-          accent: true,
-        ),
       ],
     );
     if (picked == null) return;

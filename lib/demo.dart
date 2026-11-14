@@ -83,6 +83,8 @@ Controlli di accessibilità, meta tag e un README con le istruzioni.
     state.of(plan.blocks[3].id)
       ..stepsDone = 4
       ..stepsTotal = 5;
+    // A stop asked for after block 5, to check the work before going on.
+    state.of(plan.blocks[4].id).pauseAfter = true;
     state.save(dir.path);
 
     final t = DateTime.now().subtract(const Duration(minutes: 12));

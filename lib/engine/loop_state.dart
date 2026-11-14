@@ -26,6 +26,7 @@ class BlockState {
     this.outputTokens = 0,
     this.stepsDone = 0,
     this.stepsTotal = 0,
+    this.pauseAfter = false,
   });
 
   BlockStatus status;
@@ -49,8 +50,13 @@ class BlockState {
   int stepsDone;
   int stepsTotal;
 
+  /// Stop the loop once this block is completed, to look at the work before
+  /// going on.
+  bool pauseAfter;
+
   Map<String, Object?> toJson() => {
     'stepsDone': stepsDone,
+    'pauseAfter': pauseAfter,
     'stepsTotal': stepsTotal,
     'status': status.name,
     'attempts': attempts,
@@ -71,6 +77,7 @@ class BlockState {
     outputTokens: j['outputTokens'] as int? ?? 0,
     stepsDone: j['stepsDone'] as int? ?? 0,
     stepsTotal: j['stepsTotal'] as int? ?? 0,
+    pauseAfter: j['pauseAfter'] as bool? ?? false,
   );
 }
 

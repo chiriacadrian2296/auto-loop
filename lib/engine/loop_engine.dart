@@ -117,6 +117,15 @@ class LoopEngine extends ChangeNotifier {
     return null;
   }
 
+  /// Asks the loop to stop once [b] is completed (or not any more). It can be
+  /// changed at any time, also while the loop runs.
+  void setPauseAfter(PlanBlock b, bool pause) {
+    final s = blockState(b);
+    s.pauseAfter = pause;
+    state!.save(workDir!);
+    notifyListeners();
+  }
+
   void setBlockStatus(PlanBlock b, BlockStatus status) {
     final s = blockState(b);
     s.status = status;
@@ -363,6 +372,15 @@ class LoopEngine extends ChangeNotifier {
           _attention('Loop interrotto', 'Impossibile avviare ${settings.agent.label}.');
           return;
         case _RunResult.blockDone:
+          // A stop the user asked for: once, then the loop can be resumed.
+          if (bs.pauseAfter) {
+            bs.pauseAfter = false;
+            state.save(dir);
+            _log(LogKind.info, 'In pausa dopo il blocco ${next.index + 1}, come richiesto: controlla e riprendi.');
+            _setPhase(LoopPhase.paused, 'In pausa dopo il blocco ${next.index + 1}: controlla e riprendi.');
+            _attention('In pausa per un controllo', 'Blocco ${next.index + 1} «${next.title}» completato.');
+            return;
+          }
         case _RunResult.again:
           break;
       }

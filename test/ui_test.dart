@@ -31,7 +31,7 @@ void main() {
     // No CLI configured in this test: Avvia says why it cannot start.
     expect(find.byTooltip('Non si può avviare: Codex: CLI non trovata. Clicca per risolvere.'), findsOneWidget);
 
-    // Block actions show on the selected tile only.
+    // Block actions show on hover and on the selected tile only.
     expect(find.byTooltip('Segna completato'), findsNothing);
     await tester.tap(find.textContaining('Setup del progetto'));
     await tester.pump();

@@ -1341,6 +1341,9 @@ class _ActivityMapState extends State<ActivityMap> {
               final mid = box.maxHeight / 2;
 
               final bands = <(double, double, List<double>, bool, String)>[];
+              // A block chosen in the progress panel marks its first and its
+              // last icon: where it starts and how it ended.
+              final blockIcons = <LogEntry>{};
               for (final (i, run) in runs.indexed) {
                 final head = run.first.header!;
                 final live = i == runs.length - 1 && engine.isActive;
@@ -1352,6 +1355,9 @@ class _ActivityMapState extends State<ActivityMap> {
                   for (final e in items.sublist(first, next))
                     if (!isHeader(e)) e,
                 ];
+                if (sel.block && identical(sel.entry, head) && icons.isNotEmpty) {
+                  blockIcons.addAll([icons.first, if (!live) icons.last]);
+                }
                 final left = icons.isEmpty ? xs[head]! - 6 : xs[icons.first]!;
                 var right = live ? liveEnd : (icons.isEmpty ? xs[head]! + 6 : xs[icons.last]!);
                 if (right < left + 6) right = left + 6;
@@ -1474,9 +1480,7 @@ class _ActivityMapState extends State<ActivityMap> {
                                       // Commands sit on a smaller disc.
                                       final size = e.kind == LogKind.tool ? 12.0 : _icon;
                                       final head = starts[e];
-                                      final isChosen = head == null
-                                          ? identical(chosen, e)
-                                          : identical(chosen, head) && sel.block;
+                                      final isChosen = sel.block ? blockIcons.contains(e) : identical(chosen, e);
                                       return Positioned(
                                         left: xs[e]! - size / 2,
                                         top: mid - size / 2,

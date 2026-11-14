@@ -161,6 +161,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
   Future<void> _contextMenu(Offset position, PlanBlock block) async {
     final engine = widget.engine;
     final status = engine.blockState(block).status;
+    final pause = engine.blockState(block).pauseAfter;
     final c = context.colors;
     final picked = await showMenu<Object>(
       context: context,
@@ -174,10 +175,20 @@ class _BlocksPanelState extends State<BlocksPanel> {
       items: [
         for (final (label, icon, target) in _actionsFor(status))
           PopupMenuItem(value: target, height: 40, enabled: !engine.isActive, child: _MenuRow(icon, label)),
+        if (status == BlockStatus.pending || status == BlockStatus.blocked)
+          PopupMenuItem(
+            value: 'pause',
+            height: 40,
+            child: _MenuRow(
+              Icons.pan_tool_outlined,
+              pause ? 'Non fermarti dopo questo blocco' : 'Fermati dopo questo blocco',
+            ),
+          ),
       ],
     );
     if (!mounted || picked == null) return;
     if (picked is BlockStatus) engine.setBlockStatus(block, picked);
+    if (picked == 'pause') engine.setPauseAfter(block, !pause);
   }
 
   @override
@@ -220,10 +231,18 @@ class _BlocksPanelState extends State<BlocksPanel> {
                         isFirst: k == 0,
                         isLast: k == blocks.length - 1,
                         selected: _selected == b.index,
-                        // Selecting a block shows its invocations in the activity log.
+                        // Selecting a block shows its invocations in the activity log;
+                        // a second click drops the selection.
                         onTap: () {
+                          if (_selected == b.index) {
+                            setState(() => _selected = null);
+                            return;
+                          }
                           setState(() => _selected = b.index);
                           if (engine.blockState(b).attempts > 0) widget.onShowInLog?.call(b);
+                        },
+                        onDeselect: () {
+                          if (_selected == b.index) setState(() => _selected = null);
                         },
                         onContextMenu: (pos) => _contextMenu(pos, b),
                       ),
@@ -324,7 +343,7 @@ Future<void> showPlanCompleted(BuildContext context, LoopEngine engine) {
   );
 }
 
-class _TimelineItem extends StatelessWidget {
+class _TimelineItem extends StatefulWidget {
   const _TimelineItem({
     required this.engine,
     required this.block,
@@ -332,17 +351,27 @@ class _TimelineItem extends StatelessWidget {
     required this.isLast,
     required this.selected,
     required this.onTap,
+    required this.onDeselect,
     required this.onContextMenu,
   });
 
   final LoopEngine engine;
   final PlanBlock block;
   final bool isFirst, isLast, selected;
-  final VoidCallback onTap;
+  final VoidCallback onTap, onDeselect;
   final ValueChanged<Offset> onContextMenu;
 
   @override
+  State<_TimelineItem> createState() => _TimelineItemState();
+}
+
+class _TimelineItemState extends State<_TimelineItem> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
+    final engine = widget.engine, block = widget.block, selected = widget.selected;
+    final isFirst = widget.isFirst, isLast = widget.isLast;
     final c = context.colors;
     final state = engine.blockState(block);
     final current = engine.currentBlock == block.index && engine.isActive;
@@ -407,85 +436,131 @@ class _TimelineItem extends StatelessWidget {
               },
             ),
           );
-    // The actions show on the selected block only.
-    final actions = selected ? _actionsFor(state.status) : const <(String, IconData, BlockStatus)>[];
+    // The buttons show on hover and on the selected block; the stop asked
+    // for after this block stays in view, so it is not forgotten.
+    final showActions = _hover || selected;
+    final canPause = state.status == BlockStatus.pending || state.status == BlockStatus.blocked;
+    final pause = state.pauseAfter;
+    final pauseButton = _ActionButton(
+      icon: pause ? Icons.pan_tool_rounded : Icons.pan_tool_outlined,
+      tooltip: pause
+          ? 'Si fermerà dopo questo blocco: clicca per non fermarti'
+          : 'Fermati dopo questo blocco, per un controllo',
+      active: pause,
+      // Also while the loop runs: it only takes effect at the end of the block.
+      onPressed: () => engine.setPauseAfter(block, !pause),
+    );
+    // What the tile looks like behind the buttons, so they sit on it cleanly.
+    final tileColor = Color.alphaBlend(
+      selected ? c.primarySoft : (_hover ? Theme.of(context).hoverColor : Colors.transparent),
+      c.surface,
+    );
 
-    return GestureDetector(
-      onSecondaryTapUp: (d) => onContextMenu(d.globalPosition),
+    final tile = GestureDetector(
+      onSecondaryTapUp: (d) => widget.onContextMenu(d.globalPosition),
       child: Material(
         color: selected ? c.primarySoft : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // The line runs behind; the node sits on top of it.
-                SizedBox(
-                  width: 44,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Column(
+          onTap: widget.onTap,
+          onHover: (h) => setState(() => _hover = h),
+          child: Stack(
+            children: [
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // The line runs behind; the node sits on top of it.
+                    SizedBox(
+                      width: 44,
+                      child: Stack(
+                        alignment: Alignment.center,
                         children: [
-                          Expanded(child: Container(width: 2, color: isFirst ? Colors.transparent : lineColor)),
-                          Expanded(child: Container(width: 2, color: isLast ? Colors.transparent : lineColor)),
+                          Column(
+                            children: [
+                              Expanded(child: Container(width: 2, color: isFirst ? Colors.transparent : lineColor)),
+                              Expanded(child: Container(width: 2, color: isLast ? Colors.transparent : lineColor)),
+                            ],
+                          ),
+                          _Node(index: block.index, status: state.status, running: current),
                         ],
                       ),
-                      _Node(index: block.index, status: state.status, running: current),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 12, 12, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          // Numbered like in the activity log: the disc may
-                          // show a tick or a "!" instead of the number.
-                          '${block.index + 1}. ${block.title}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            height: 1.3,
-                            fontWeight: current || selected ? FontWeight.w700 : FontWeight.w500,
-                            color: state.status == BlockStatus.skipped ? c.muted : c.text,
-                            decoration: state.status == BlockStatus.skipped ? TextDecoration.lineThrough : null,
-                          ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 12, 12, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              // Numbered like in the activity log: the disc may
+                              // show a tick or a "!" instead of the number.
+                              '${block.index + 1}. ${block.title}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                height: 1.3,
+                                fontWeight: current || selected ? FontWeight.w700 : FontWeight.w500,
+                                color: state.status == BlockStatus.skipped ? c.muted : c.text,
+                                decoration: state.status == BlockStatus.skipped ? TextDecoration.lineThrough : null,
+                              ),
+                            ),
+                            if (subtitle != null) ...[const SizedBox(height: 3), subtitle],
+                          ],
                         ),
-                        if (subtitle != null) ...[const SizedBox(height: 3), subtitle],
+                      ),
+                    ),
+                    // The stop asked for stays in view, also without hover.
+                    if (pause && !showActions)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Center(child: pauseButton),
+                      ),
+                  ],
+                ),
+              ),
+              // On hover and on the selected block the buttons come over the
+              // right end of the tile, so the title keeps all its room.
+              if (showActions)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(28, 0, 8, 0),
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+                      gradient: LinearGradient(
+                        colors: [tileColor.withValues(alpha: 0), tileColor, tileColor],
+                        stops: const [0, 0.35, 1],
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final (label, icon, target) in _actionsFor(state.status)) ...[
+                          const SizedBox(width: 4),
+                          _ActionButton(
+                            icon: icon,
+                            tooltip: label,
+                            onPressed: engine.isActive ? null : () => engine.setBlockStatus(block, target),
+                          ),
+                        ],
+                        if (canPause) ...[const SizedBox(width: 4), pauseButton],
                       ],
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final (label, icon, target) in actions) ...[
-                        const SizedBox(width: 4),
-                        _ActionButton(
-                          icon: icon,
-                          tooltip: label,
-                          onPressed: engine.isActive ? null : () => engine.setBlockStatus(block, target),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
     );
+    // A click anywhere else drops the selection.
+    return selected ? TapRegion(onTapOutside: (_) => widget.onDeselect(), child: tile) : tile;
   }
 }
 
@@ -555,10 +630,13 @@ class _Node extends StatelessWidget {
 
 /// Small square button with a tinted background, one per available action.
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.icon, required this.tooltip, required this.onPressed});
+  const _ActionButton({required this.icon, required this.tooltip, required this.onPressed, this.active = false});
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
+
+  /// Switched on (the stop after this block): blue, like a chosen option.
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -571,8 +649,8 @@ class _ActionButton extends StatelessWidget {
         fixedSize: const Size.square(30),
         minimumSize: const Size.square(30),
         padding: EdgeInsets.zero,
-        backgroundColor: c.field,
-        foregroundColor: c.muted,
+        backgroundColor: active ? c.primary : c.field,
+        foregroundColor: active ? c.background : c.muted,
         disabledBackgroundColor: c.field.withValues(alpha: 0.5),
         disabledForegroundColor: c.muted.withValues(alpha: 0.4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

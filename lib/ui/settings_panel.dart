@@ -417,20 +417,60 @@ class SettingsPanel extends StatelessWidget {
                             },
                           ),
                         ),
+                        // Two-way choices are cards with a popup, like all the others.
                         _Group(
-                          indent: 14,
                           children: [
-                            _Toggle(
-                              title: 'Commit git a ogni blocco',
+                            _ChoiceCard<bool>(
+                              caption: 'Commit git',
+                              icon: s.gitCommit ? Icons.commit_rounded : Icons.block_rounded,
+                              dialogTitle: 'Commit git',
+                              dialogSubtitle: 'Se registrare le modifiche di ogni blocco completato.',
                               value: s.gitCommit,
+                              choices: const [
+                                Choice(
+                                  value: true,
+                                  icon: Icons.commit_rounded,
+                                  label: 'A ogni blocco',
+                                  short: 'Un commit per ogni blocco completato',
+                                  description:
+                                      'Quando un blocco è completato, le sue modifiche vengono registrate con un commit '
+                                      '(se la cartella di lavoro è un repository git).',
+                                ),
+                                Choice(
+                                  value: false,
+                                  icon: Icons.block_rounded,
+                                  label: 'Mai',
+                                  short: 'Le modifiche restano da registrare',
+                                  description: 'Nessun commit automatico: le modifiche le registri tu quando vuoi.',
+                                ),
+                              ],
                               onChanged: (v) {
                                 s.gitCommit = v;
                                 onChanged();
                               },
                             ),
-                            _Toggle(
-                              title: 'Salta i blocchi bloccati',
+                            _ChoiceCard<bool>(
+                              caption: 'Blocchi bloccati',
+                              icon: s.skipBlocked ? Icons.redo_rounded : Icons.pause_circle_outline_rounded,
+                              dialogTitle: 'Quando un blocco è bloccato',
+                              dialogSubtitle: 'Cosa fare se l\'agente non riesce a proseguire su un blocco.',
                               value: s.skipBlocked,
+                              choices: const [
+                                Choice(
+                                  value: false,
+                                  icon: Icons.pause_circle_outline_rounded,
+                                  label: 'Metti in pausa',
+                                  short: 'Aspetta il tuo intervento',
+                                  description: 'Il loop si ferma su quel blocco e aspetta che tu lo risolva.',
+                                ),
+                                Choice(
+                                  value: true,
+                                  icon: Icons.redo_rounded,
+                                  label: 'Passa al successivo',
+                                  short: 'Continua con gli altri blocchi',
+                                  description: 'Il blocco resta bloccato e il loop va avanti con quelli dopo.',
+                                ),
+                              ],
                               onChanged: (v) {
                                 s.skipBlocked = v;
                                 onChanged();
@@ -517,10 +557,10 @@ const _fieldInfo = <String, String>{
       'terminare con exit 0 perché il blocco sia completato. Se fallisce, l\'output torna all\'agente.',
   'Regole per ogni blocco':
       'Testo aggiunto a ogni prompt, oltre al piano: utile per stack, stile e cose da non toccare.',
-  'Commit git a ogni blocco':
+  'Commit git':
       'A ogni blocco completato registra le modifiche con un commit. Solo se la cartella di lavoro è un '
       'repository git.',
-  'Salta i blocchi bloccati':
+  'Blocchi bloccati':
       'Quando un blocco resta bloccato passa al successivo. Altrimenti il loop va in pausa e aspetta te.',
   'File del piano':
       'Il file di testo (.md o .txt) con il piano. Viene diviso in blocchi, che l\'agente svolge uno alla volta.',
@@ -552,11 +592,8 @@ Widget? _infoIcon(String? label, AppColors c) {
 
 /// Related settings in one rounded card, as rows separated by hairlines.
 class _Group extends StatelessWidget {
-  const _Group({required this.children, this.indent = 0});
+  const _Group({required this.children});
   final List<Widget> children;
-
-  /// Where the separators start: past the icon for cards, flush for toggles.
-  final double indent;
 
   @override
   Widget build(BuildContext context) {
@@ -571,7 +608,7 @@ class _Group extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (var i = 0; i < children.length; i++) ...[
-                if (i > 0) Divider(height: 1, thickness: 1, indent: indent, color: c.border),
+                if (i > 0) Divider(height: 1, thickness: 1, color: c.border),
                 children[i],
               ],
             ],
@@ -1164,45 +1201,6 @@ class _NumberFieldState extends State<_NumberField> {
           suffixIconConstraints: const BoxConstraints(minHeight: 36),
         ),
         onChanged: _apply,
-      ),
-    );
-  }
-}
-
-class _Toggle extends StatelessWidget {
-  const _Toggle({required this.title, required this.value, required this.onChanged});
-  final String title;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return InkWell(
-      onTap: () => onChanged(!value),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      title,
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
-                    ),
-                  ),
-                  if (_infoIcon(title, c) case final info?) ...[const SizedBox(width: 4), info],
-                ],
-              ),
-            ),
-            Transform.scale(
-              scale: 0.8,
-              child: Switch(value: value, onChanged: onChanged),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -196,8 +196,6 @@ class _ChoiceRow<T> extends StatelessWidget {
                 const SizedBox(width: 10),
                 if (selected)
                   Icon(Icons.check_circle_rounded, size: 20, color: c.primary)
-                else if (choice.accent)
-                  Icon(Icons.edit_outlined, size: 18, color: c.primary)
                 else
                   const SizedBox(width: 20),
               ],
