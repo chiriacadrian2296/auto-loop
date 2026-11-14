@@ -88,6 +88,7 @@ void main() {
         ..status = BlockStatus.done
         ..attempts = 2;
       engine.blockState(blocks[2]).attempts = 2;
+      engine.blockState(blocks[3]).pauseAfter = true; // shows the hand on its tile
       engine
         ..phase = LoopPhase.running
         ..currentBlock = 2

@@ -31,11 +31,18 @@ void main() {
     // No CLI configured in this test: Avvia says why it cannot start.
     expect(find.byTooltip('Non si può avviare: Codex: CLI non trovata. Clicca per risolvere.'), findsOneWidget);
 
-    // Block actions show on hover and on the selected tile only.
-    expect(find.byTooltip('Segna completato'), findsNothing);
+    // Each tile has one options button, shown on hover and when selected;
+    // it opens the block's options.
+    expect(find.byTooltip('Opzioni del blocco'), findsNothing);
     await tester.tap(find.textContaining('Setup del progetto'));
     await tester.pump();
-    expect(find.byTooltip('Segna completato'), findsOneWidget);
+    expect(find.byTooltip('Opzioni del blocco'), findsOneWidget);
+    await tester.tap(find.byTooltip('Opzioni del blocco'));
+    await tester.pumpAndSettle();
+    expect(find.text('Segna completato'), findsOneWidget);
+    expect(find.text('Fermati dopo questo blocco'), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5)); // close the menu
+    await tester.pumpAndSettle();
 
     // Every section starts open; closed, it shows a summary of its choices.
     final sidebar = find.descendant(of: find.byType(SettingsPanel), matching: find.byType(Scrollable)).first;

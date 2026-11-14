@@ -267,7 +267,13 @@ class _MenuRow extends StatelessWidget {
       children: [
         Icon(icon, size: 17, color: c.muted),
         const SizedBox(width: 12),
-        Text(label, style: TextStyle(fontSize: 13.5, color: c.text)),
+        Flexible(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13.5, color: c.text),
+          ),
+        ),
       ],
     );
   }
@@ -439,16 +445,25 @@ class _TimelineItemState extends State<_TimelineItem> {
     // The buttons show on hover and on the selected block; the stop asked
     // for after this block stays in view, so it is not forgotten.
     final showActions = _hover || selected;
-    final canPause = state.status == BlockStatus.pending || state.status == BlockStatus.blocked;
     final pause = state.pauseAfter;
-    final pauseButton = _ActionButton(
-      icon: pause ? Icons.pan_tool_rounded : Icons.pan_tool_outlined,
-      tooltip: pause
-          ? 'Si fermerà dopo questo blocco: clicca per non fermarti'
-          : 'Fermati dopo questo blocco, per un controllo',
-      active: pause,
-      // Also while the loop runs: it only takes effect at the end of the block.
-      onPressed: () => engine.setPauseAfter(block, !pause),
+    // The stop asked for after this block: a plain red hand, no background.
+    final pauseMark = Tooltip(
+      message: 'Si fermerà dopo questo blocco',
+      child: Icon(Icons.pan_tool_outlined, size: 16, color: c.danger),
+    );
+    // One button for all the block's options, in a menu.
+    final more = Builder(
+      builder: (context) => IconButton(
+        tooltip: 'Opzioni del blocco',
+        iconSize: 18,
+        visualDensity: VisualDensity.compact,
+        color: c.muted,
+        icon: const Icon(Icons.more_horiz_rounded),
+        onPressed: () {
+          final box = context.findRenderObject()! as RenderBox;
+          widget.onContextMenu(box.localToGlobal(box.size.bottomLeft(Offset.zero)));
+        },
+      ),
     );
     // What the tile looks like behind the buttons, so they sit on it cleanly.
     final tileColor = Color.alphaBlend(
@@ -513,43 +528,32 @@ class _TimelineItemState extends State<_TimelineItem> {
                         ),
                       ),
                     ),
-                    // The stop asked for stays in view, also without hover.
-                    if (pause && !showActions)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Center(child: pauseButton),
-                      ),
                   ],
                 ),
               ),
-              // On hover and on the selected block the buttons come over the
-              // right end of the tile, so the title keeps all its room.
-              if (showActions)
+              // On the right end of the tile: the hand when the loop is to stop
+              // after this block, and on hover or when selected the options
+              // button, which pushes the hand to its left. They come over the
+              // tile, so the title keeps all its room.
+              if (pause || showActions)
                 Positioned(
                   right: 0,
                   top: 0,
                   bottom: 0,
                   child: Container(
-                    padding: const EdgeInsets.fromLTRB(28, 0, 8, 0),
+                    padding: EdgeInsets.fromLTRB(24, 0, showActions ? 4 : 12, 0),
                     decoration: BoxDecoration(
                       borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
                       gradient: LinearGradient(
                         colors: [tileColor.withValues(alpha: 0), tileColor, tileColor],
-                        stops: const [0, 0.35, 1],
+                        stops: const [0, 0.4, 1],
                       ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        for (final (label, icon, target) in _actionsFor(state.status)) ...[
-                          const SizedBox(width: 4),
-                          _ActionButton(
-                            icon: icon,
-                            tooltip: label,
-                            onPressed: engine.isActive ? null : () => engine.setBlockStatus(block, target),
-                          ),
-                        ],
-                        if (canPause) ...[const SizedBox(width: 4), pauseButton],
+                        if (pause) pauseMark,
+                        if (showActions) ...[if (pause) const SizedBox(width: 2), more],
                       ],
                     ),
                   ),
@@ -624,38 +628,6 @@ class _Node extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
       child: child,
-    );
-  }
-}
-
-/// Small square button with a tinted background, one per available action.
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.icon, required this.tooltip, required this.onPressed, this.active = false});
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  /// Switched on (the stop after this block): blue, like a chosen option.
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      iconSize: 16,
-      style: IconButton.styleFrom(
-        fixedSize: const Size.square(30),
-        minimumSize: const Size.square(30),
-        padding: EdgeInsets.zero,
-        backgroundColor: active ? c.primary : c.field,
-        foregroundColor: active ? c.background : c.muted,
-        disabledBackgroundColor: c.field.withValues(alpha: 0.5),
-        disabledForegroundColor: c.muted.withValues(alpha: 0.4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      icon: Icon(icon),
     );
   }
 }
