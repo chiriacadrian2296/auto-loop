@@ -204,6 +204,45 @@ class LoopEngine extends ChangeNotifier {
   /// Sample-data mode (`--demo`): everything works except running an agent.
   bool demo = false;
 
+  /// Block states as they were before [demoShow] marked every block done.
+  Map<String, BlockStatus>? _demoSaved;
+
+  /// Demo only: the window as it looks in [phase], on [block], without
+  /// running anything. [allDone] shows the plan completed (and is undone by
+  /// the next call without it).
+  void demoShow(
+    LoopPhase phase, {
+    int? block,
+    String message = '',
+    bool pauseRequested = false,
+    bool allDone = false,
+    Duration quiet = Duration.zero,
+  }) {
+    if (!demo || plan == null || state == null) return;
+    final st = state!;
+    if (allDone) {
+      _demoSaved ??= {for (final b in plan!.blocks) b.id: st.of(b.id).status};
+      for (final b in plan!.blocks) {
+        st.of(b.id).status = BlockStatus.done;
+      }
+    } else if (_demoSaved case final saved?) {
+      for (final b in plan!.blocks) {
+        st.of(b.id).status = saved[b.id] ?? st.of(b.id).status;
+      }
+      _demoSaved = null;
+    }
+    this.phase = phase;
+    currentBlock = block;
+    statusMessage = message;
+    _pauseRequested = pauseRequested;
+    final working = phase == LoopPhase.running || phase == LoopPhase.verifying || phase == LoopPhase.stopping;
+    final now = DateTime.now();
+    runStartedAt = working ? now.subtract(const Duration(minutes: 3, seconds: 12)) : null;
+    lastOutputAt = working ? now.subtract(quiet) : null;
+    sessionStartedAt = isActive ? now.subtract(const Duration(minutes: 18)) : null;
+    notifyListeners();
+  }
+
   Future<void> start() async {
     if (isActive || plan == null || workDir == null) return;
     if (demo) {

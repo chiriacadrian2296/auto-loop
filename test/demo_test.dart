@@ -24,5 +24,15 @@ void main() {
     await engine.start();
     expect(engine.phase, LoopPhase.idle);
     expect(engine.state!.runs, 9); // unchanged: nothing was invoked
+ 
+    // The demo menu shows made-up states; leaving "completed" restores the blocks.
+    engine.demoShow(LoopPhase.running, block: 4);
+    expect(engine.isActive, isTrue);
+    expect(engine.currentBlock, 4);
+    engine.demoShow(LoopPhase.finished, allDone: true);
+    expect(engine.doneCount, 6);
+    engine.demoShow(LoopPhase.idle);
+    expect([for (final b in engine.plan!.blocks) engine.blockState(b).status], states);
+    expect(engine.state!.runs, 9);
   });
 }

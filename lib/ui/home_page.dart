@@ -440,7 +440,81 @@ class _HomePageState extends State<HomePage> {
 
   /// The first thing that prevents a start, with the section it belongs to
   /// and what clicking the warning should do. Null when ready.
+  /// Demo only: a reason to show the window as it is when it cannot start.
+  (String, String, VoidCallback)? _demoBlocker;
+
+  /// Demo only: the state chosen in the demo menu.
+  String _demoState = 'Pronto';
+
+  /// The states the demo menu can show, all made up: nothing runs.
+  late final _demoStates = <(String, IconData, VoidCallback)>[
+    ('Pronto', Icons.play_circle_outline_rounded, () => engine.demoShow(LoopPhase.idle)),
+    (
+      'Manca qualcosa per partire',
+      Icons.error_outline_rounded,
+      () {
+        engine.demoShow(LoopPhase.idle);
+        _demoBlocker = ('Account', 'Accedi a ${engine.settings.agent.label}', _openAccounts);
+      },
+    ),
+    (
+      'Agente al lavoro',
+      Icons.bolt_rounded,
+      () => engine.demoShow(LoopPhase.running, block: 4, message: 'Blocco 5: Tema scuro'),
+    ),
+    (
+      'Agente in silenzio da un po\'',
+      Icons.hourglass_bottom_rounded,
+      () => engine.demoShow(
+        LoopPhase.running,
+        block: 4,
+        message: 'Blocco 5: Tema scuro',
+        quiet: const Duration(minutes: 4, seconds: 10),
+      ),
+    ),
+    (
+      'Pausa richiesta',
+      Icons.pause_circle_outline_rounded,
+      () => engine.demoShow(LoopPhase.running, block: 4, pauseRequested: true),
+    ),
+    ('Verifica in corso', Icons.fact_check_outlined, () => engine.demoShow(LoopPhase.verifying, block: 4)),
+    (
+      'In attesa del richiamo',
+      Icons.schedule_rounded,
+      () => engine.demoShow(LoopPhase.waiting, block: 4, message: 'Richiamo tra 30s.'),
+    ),
+    (
+      'Quota esaurita, in attesa',
+      Icons.update_rounded,
+      () => engine.demoShow(LoopPhase.quotaWait, block: 4, message: 'Quota esaurita: nuovo tentativo tra 30 min.'),
+    ),
+    ('In pausa', Icons.pause_rounded, () => engine.demoShow(LoopPhase.paused, message: 'In pausa.')),
+    (
+      'In pausa per un controllo',
+      Icons.pan_tool_outlined,
+      () => engine.demoShow(LoopPhase.paused, message: 'In pausa dopo il blocco 5: controlla e riprendi.'),
+    ),
+    (
+      'Piano completato',
+      Icons.check_circle_outline_rounded,
+      () {
+        engine.demoShow(LoopPhase.finished, allDone: true);
+        showPlanCompleted(context, engine);
+      },
+    ),
+  ];
+
+  void _showDemoState(String name) {
+    final entry = _demoStates.firstWhere((e) => e.$1 == name);
+    setState(() {
+      _demoState = name;
+      _demoBlocker = null;
+      entry.$3();
+    });
+  }
+
   (String, String, VoidCallback)? _blocker() {
+    if (_demoBlocker != null) return _demoBlocker;
     final s = engine.settings;
     if (_loadError != null) return ('Piano', _loadError!, _pickPlan);
     if (_planPath == null || engine.plan == null) return ('Piano', 'Scegli un file di piano', _pickPlan);
@@ -490,7 +564,18 @@ class _HomePageState extends State<HomePage> {
             children: [
               Column(
                 children: [
-                  _TopBar(themeMode: widget.themeMode.value, onThemeChanged: (m) => widget.themeMode.value = m),
+                  _TopBar(
+                    themeMode: widget.themeMode.value,
+                    onThemeChanged: (m) => widget.themeMode.value = m,
+                    // In the demo, a menu to see the window in each state.
+                    demo: engine.demo
+                        ? _DemoMenu(
+                            current: _demoState,
+                            states: [for (final e in _demoStates) (e.$1, e.$2)],
+                            onChanged: _showDemoState,
+                          )
+                        : null,
+                  ),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -623,10 +708,16 @@ class _HomePageState extends State<HomePage> {
                   ),
                   _BottomBar(
                     engine: engine,
-                    onStart: blocker != null || active || engine.phase == LoopPhase.finished ? null : engine.start,
+                    onStart: blocker != null || active || engine.phase == LoopPhase.finished
+                        ? null
+                        : (engine.demo ? () => _showDemoState('Agente al lavoro') : engine.start),
                     blocker: blocker == null ? null : (blocker.$2, blocker.$3),
-                    onPause: active && !engine.pauseRequested ? engine.requestPause : null,
-                    onStop: active && engine.phase != LoopPhase.stopping ? _confirmStop : null,
+                    onPause: active && !engine.pauseRequested
+                        ? (engine.demo ? () => _showDemoState('Pausa richiesta') : engine.requestPause)
+                        : null,
+                    onStop: active && engine.phase != LoopPhase.stopping
+                        ? (engine.demo ? () => _showDemoState('In pausa') : _confirmStop)
+                        : null,
                     selection: _selection,
                   ),
                 ],
@@ -642,9 +733,12 @@ class _HomePageState extends State<HomePage> {
 
 /// The window's title bar: the app's name, and the window buttons.
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.themeMode, required this.onThemeChanged});
+  const _TopBar({required this.themeMode, required this.onThemeChanged, this.demo});
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
+
+  /// The demo's state menu, next to the name.
+  final Widget? demo;
 
   @override
   Widget build(BuildContext context) {
@@ -664,6 +758,7 @@ class _TopBar extends StatelessWidget {
                     'AutoLoop',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
                   ),
+                  if (demo != null) ...[const SizedBox(width: 16), demo!],
                   const Spacer(),
                 ],
               ),
@@ -742,7 +837,7 @@ class _BottomBar extends StatelessWidget {
             ),
             if (plan != null)
               IconStat(
-                Icons.layers_outlined,
+                Icons.crop_square_rounded,
                 '${engine.doneCount}/${plan.blocks.length}',
                 'Blocchi completati',
                 iconColor: c.text,
@@ -1035,6 +1130,70 @@ class _EmptyState extends StatelessWidget {
             ),
             if (action != null) ...[const SizedBox(height: 18), action!],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Demo only: shows which made-up state the window is in, and switches it.
+class _DemoMenu extends StatelessWidget {
+  const _DemoMenu({required this.current, required this.states, required this.onChanged});
+  final String current;
+  final List<(String, IconData)> states;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(c.surface),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: c.border),
+          ),
+        ),
+      ),
+      menuChildren: [
+        for (final (name, icon) in states)
+          MenuItemButton(
+            onPressed: () => onChanged(name),
+            style: MenuItemButton.styleFrom(
+              backgroundColor: name == current ? c.primarySoft : Colors.transparent,
+              foregroundColor: name == current ? c.primary : c.text,
+              iconColor: name == current ? c.primary : c.muted,
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(fontSize: 13.5, fontFamily: uiFont, fontFamilyFallback: uiFallback),
+            ),
+            leadingIcon: Icon(icon, size: 16),
+            child: Text(name),
+          ),
+      ],
+      builder: (context, menu, _) => Material(
+        color: c.primarySoft,
+        shape: const StadiumBorder(),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: () => menu.isOpen ? menu.close() : menu.open(),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Demo · $current',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.primary),
+                ),
+                Icon(Icons.expand_more_rounded, size: 18, color: c.primary),
+              ],
+            ),
+          ),
         ),
       ),
     );

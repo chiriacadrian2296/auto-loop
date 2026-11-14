@@ -298,7 +298,8 @@ class IconStat extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: iconColor ?? tint),
+          // The bolt is a thin glyph: a little bigger, it weighs like the others.
+          Icon(icon, size: icon == Icons.bolt_rounded ? 16 : 14, color: iconColor ?? tint),
           const SizedBox(width: 4),
           Text(value, style: _style.copyWith(color: tint)),
         ],

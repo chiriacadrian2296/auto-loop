@@ -750,7 +750,7 @@ class _BlockHeading extends StatelessWidget {
       padding: EdgeInsets.only(top: gap, bottom: 2),
       child: SectionTitle(
         title: number == null ? title : '$number. $title',
-        icon: Icon(Icons.layers_outlined, size: 15, color: c.text),
+        icon: Icon(Icons.crop_square_rounded, size: 15, color: c.text),
         time: start == null ? null : _clock(start!),
         open: open,
         onTap: onTap,
@@ -769,7 +769,7 @@ class _BlockHeading extends StatelessWidget {
 /// The outcome icon of a block or invocation.
 Widget? _badge(_Outcome outcome, AppColors c) => switch (outcome) {
   _Outcome.done => Icon(Icons.check_circle_rounded, size: 15, color: c.success),
-  _Outcome.again => Icon(Icons.replay_circle_filled_rounded, size: 15, color: c.muted),
+  _Outcome.again => Icon(Icons.more_horiz_rounded, size: 17, color: c.muted),
   _Outcome.blocked => Icon(Icons.error_rounded, size: 15, color: c.danger),
   _Outcome.interrupted => Icon(Icons.warning_rounded, size: 15, color: c.warning),
   _Outcome.failed => Icon(Icons.cancel_rounded, size: 15, color: c.danger),
@@ -844,7 +844,7 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
                       alignment: Alignment.centerLeft,
                       child: SizedBox(
                         width: _arrow,
-                        child: Center(child: Icon(Icons.bolt_rounded, size: 15, color: c.text)),
+                        child: Center(child: Icon(Icons.bolt_rounded, size: 17, color: c.text)),
                       ),
                     ),
                   ),
@@ -1486,7 +1486,7 @@ class _ActivityMapState extends State<ActivityMap> {
                                       message:
                                           'Invocazione ${RegExp(r'invocazione (\d+)').firstMatch(header.text)?.group(1) ?? ''}'
                                           ' · ${_clock(header.at)}',
-                                      child: Icon(Icons.bolt_rounded, size: 9, color: c.muted),
+                                      child: Icon(Icons.bolt_rounded, size: 11, color: c.muted),
                                     ),
                                   ),
                                 for (final e in items)

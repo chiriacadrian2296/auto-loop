@@ -141,7 +141,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
         badge: badge,
         stats: [
           IconStat(
-            Icons.layers_outlined,
+            Icons.crop_square_rounded,
             '${blocks.length}',
             blocks.length == 1 ? '1 blocco' : '${blocks.length} blocchi',
           ),
