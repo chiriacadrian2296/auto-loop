@@ -24,7 +24,7 @@ void main() {
     await engine.start();
     expect(engine.phase, LoopPhase.idle);
     expect(engine.state!.runs, 9); // unchanged: nothing was invoked
- 
+
     // The demo menu shows made-up states; leaving "completed" restores the blocks.
     engine.demoShow(LoopPhase.running, block: 4);
     expect(engine.isActive, isTrue);

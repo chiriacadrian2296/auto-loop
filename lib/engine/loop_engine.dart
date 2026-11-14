@@ -489,7 +489,7 @@ class LoopEngine extends ChangeNotifier {
     lastOutputAt = runStartedAt;
     _setPhase(LoopPhase.running, 'Blocco ${block.index + 1}: ${block.title}');
 
-    final stream = backend.newStream();
+    final stream = backend.newStream(workDir: dir);
     final raw = File(p.join(logDir.path, 'output.jsonl')).openWrite();
     ProcessOutcome outcome;
     try {

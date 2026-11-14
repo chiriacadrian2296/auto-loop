@@ -19,7 +19,8 @@ void main() {
   });
 
   test('codex catalog parsing hides hidden models and keeps per-model levels', () {
-    const json = '{"models":['
+    const json =
+        '{"models":['
         '{"slug":"b","display_name":"B","visibility":"list","priority":2,"default_reasoning_level":"medium",'
         '"supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"}]},'
         '{"slug":"a","display_name":"A","visibility":"list","priority":1,"default_reasoning_level":"low",'
@@ -38,8 +39,10 @@ void main() {
       if (exe == null) return markTestSkipped('CLI not installed');
       final c = await discoverCatalog(kind, exe);
       // ignore: avoid_print
-      print('${kind.name}: ${c.models.map((m) => '${m.id}[${c.effortsFor(m.id).join('/')}]').join(', ')}'
-          ' | global: ${c.efforts}');
+      print(
+        '${kind.name}: ${c.models.map((m) => '${m.id}[${c.effortsFor(m.id).join('/')}]').join(', ')}'
+        ' | global: ${c.efforts}',
+      );
       expect(c.models, isNotEmpty);
       expect(c.effortsFor(''), isNotEmpty);
     }, timeout: const Timeout(Duration(minutes: 2)));

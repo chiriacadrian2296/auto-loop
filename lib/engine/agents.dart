@@ -109,7 +109,8 @@ abstract class AgentBackend {
 
   List<String> buildArgs({required String workDir, required LoopSettings settings, required String lastMessageFile});
 
-  AgentStream newStream();
+  /// [workDir] lets the log show paths inside it as relative ones.
+  AgentStream newStream({String workDir = ''});
 
   /// Some CLIs write the final message to a file; prefer it when present.
   String? readFinalMessage(String lastMessageFile) {
@@ -125,6 +126,77 @@ abstract class AgentBackend {
 String _short(String s, [int max = 300]) {
   final one = s.replaceAll(RegExp(r'\s+'), ' ').trim();
   return one.length <= max ? one : '${one.substring(0, max)}…';
+}
+
+/// [text] with the paths inside [workDir] made relative to it, as the user
+/// thinks of them: `C:\\proj\\lib\\a.dart` → `lib\\a.dart`, the folder itself → `.`.
+String relativePaths(String text, String workDir) {
+  final parts = workDir.split(RegExp(r'[\\/]+')).where((x) => x.isNotEmpty).map(RegExp.escape).toList();
+  if (parts.length < 2) return text;
+  // Either separator, doubled too (as in escaped strings).
+  final root = parts.join(r'[\\/]+');
+  return text
+      .replaceAll(RegExp('$root[\\\\/]+', caseSensitive: false), '')
+      .replaceAll(RegExp('$root(?![\\w.-])', caseSensitive: false), '.');
+}
+
+/// A command as the agent meant it: without the shell that runs it
+/// (`"…\\powershell.exe" -Command '…'`, `bash -lc '…'`, `cmd /c …`), without a
+/// leading `cd` into the working folder, and with relative paths.
+String tidyCommand(String command, String workDir) {
+  var c = command.trim();
+  final shell = RegExp(
+    r'''^(?:"[^"]*?(?:powershell|pwsh|bash|cmd)(?:\.exe)?"|\S*?(?:powershell|pwsh|bash|cmd)(?:\.exe)?)'''
+    r'''((?:\s+-\w+(?:\s+(?!-)[^'"\s]+)?)*?)\s+(?:-Command|-c|-lc|/c|/d\s+/s\s+/c)\s+([\s\S]+)$''',
+    caseSensitive: false,
+  ).firstMatch(c);
+  if (shell != null) {
+    final arg = shell.group(2)!.trim();
+    c = _shellWord(arg) ?? arg;
+  }
+  c = relativePaths(c, workDir);
+  return c.replaceFirst(RegExp(r'''^cd\s+(?:/d\s+)?["']?\.["']?\s*(?:&&|;)\s*'''), '');
+}
+
+/// The text of one shell word written with POSIX quoting, as Codex quotes
+/// the script it passes to the shell: `'a '"'"'b'"'"''` → `a 'b'`. Null when
+/// [s] is not exactly one word.
+String? _shellWord(String s) {
+  final out = StringBuffer();
+  var i = 0;
+  while (i < s.length) {
+    final ch = s[i];
+    if (ch == "'") {
+      final end = s.indexOf("'", i + 1);
+      if (end < 0) return null;
+      out.write(s.substring(i + 1, end));
+      i = end + 1;
+    } else if (ch == '"') {
+      i++;
+      while (true) {
+        if (i >= s.length) return null;
+        final d = s[i];
+        if (d == '"') break;
+        if (d == r'\' && i + 1 < s.length && r'"\$`'.contains(s[i + 1])) {
+          out.write(s[i + 1]);
+          i += 2;
+        } else {
+          out.write(d);
+          i++;
+        }
+      }
+      i++;
+    } else if (ch.trim().isEmpty) {
+      return null;
+    } else if (ch == r'\' && i + 1 < s.length) {
+      out.write(s[i + 1]);
+      i += 2;
+    } else {
+      out.write(ch);
+      i++;
+    }
+  }
+  return out.toString();
 }
 
 Map<String, Object?>? _json(String line) {
@@ -170,10 +242,12 @@ class CodexBackend extends AgentBackend {
   }
 
   @override
-  AgentStream newStream() => _CodexStream();
+  AgentStream newStream({String workDir = ''}) => _CodexStream(workDir);
 }
 
 class _CodexStream implements AgentStream {
+  _CodexStream(this.workDir);
+  final String workDir;
   String _final = '';
 
   @override
@@ -251,7 +325,7 @@ class _CodexStream implements AgentStream {
         if (text.trim().isNotEmpty) _final = text;
         return [LogEntry(LogKind.agent, fixMojibake(text.trim()))];
       case 'command_execution':
-        final cmd = _short(item['command']?.toString() ?? '', 200);
+        final cmd = _short(tidyCommand(item['command']?.toString() ?? '', workDir), 200);
         if (!completed) return [LogEntry(LogKind.tool, '\$ $cmd')];
         final code = item['exit_code'];
         if (code is int && code != 0) {
@@ -261,7 +335,10 @@ class _CodexStream implements AgentStream {
       case 'file_change':
         if (!completed) return const [];
         final changes = (item['changes'] as List?) ?? const [];
-        final paths = changes.whereType<Map>().map((c) => '${c['kind'] ?? ''} ${c['path'] ?? ''}'.trim()).join(', ');
+        final paths = changes
+            .whereType<Map>()
+            .map((c) => '${c['kind'] ?? ''} ${relativePaths('${c['path'] ?? ''}', workDir)}'.trim())
+            .join(', ');
         return [LogEntry(LogKind.tool, '✎ ${_short(paths, 300)}')];
       case 'error':
         final msg = item['message']?.toString() ?? '';
@@ -298,10 +375,12 @@ class ClaudeBackend extends AgentBackend {
   String? readFinalMessage(String lastMessageFile) => null;
 
   @override
-  AgentStream newStream() => _ClaudeStream();
+  AgentStream newStream({String workDir = ''}) => _ClaudeStream(workDir);
 }
 
 class _ClaudeStream implements AgentStream {
+  _ClaudeStream(this.workDir);
+  final String workDir;
   String _final = '';
   double? _cost;
 
@@ -388,7 +467,7 @@ class _ClaudeStream implements AgentStream {
     if (input is! Map) return '';
     for (final key in ['command', 'file_path', 'path', 'pattern', 'url', 'description']) {
       final v = input[key];
-      if (v is String && v.isNotEmpty) return _short(v, 200);
+      if (v is String && v.isNotEmpty) return _short(tidyCommand(v, workDir), 200);
     }
     return _short(jsonEncode(input), 160);
   }

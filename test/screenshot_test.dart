@@ -52,12 +52,14 @@ void main() {
     testWidgets('screenshot ${dark ? 'dark' : 'light'}', (tester) async {
       final dir = Directory.systemTemp.createTempSync('autoloop_shot_');
       final plan = File(p.join(dir.path, 'piano-todo-app.md'))
-        ..writeAsStringSync('# Todo app\n\nObiettivo.\n\n'
-            '## Struttura del progetto\nCrea il progetto Flutter.\n'
-            '## Modello e persistenza\nModello Todo con JSON.\n'
-            '## Interfaccia principale con lista, filtri e swipe per eliminare\nUI.\n'
-            '## Tema chiaro e scuro\nTema.\n'
-            '## README e rifinitura finale\nDocs.\n');
+        ..writeAsStringSync(
+          '# Todo app\n\nObiettivo.\n\n'
+          '## Struttura del progetto\nCrea il progetto Flutter.\n'
+          '## Modello e persistenza\nModello Todo con JSON.\n'
+          '## Interfaccia principale con lista, filtri e swipe per eliminare\nUI.\n'
+          '## Tema chiaro e scuro\nTema.\n'
+          '## README e rifinitura finale\nDocs.\n',
+        );
       SharedPreferences.setMockInitialValues({
         'workDir': dir.path,
         'planPath': plan.path,
@@ -72,7 +74,12 @@ void main() {
       addTearDown(tester.view.reset);
 
       final key = GlobalKey();
-      await tester.pumpWidget(RepaintBoundary(key: key, child: AutoLoopApp(engine: engine, prefs: prefs)));
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: key,
+          child: AutoLoopApp(engine: engine, prefs: prefs),
+        ),
+      );
       await tester.pump();
 
       // Fake a run in progress: two blocks done, the third running.
@@ -97,28 +104,64 @@ void main() {
       // Realistic times, so the activity map shows its shape.
       final t = DateTime.now().subtract(const Duration(minutes: 31));
       engine.logs.addAll([
-        LogEntry(LogKind.info, 'Avvio del loop con Claude Code su piano-todo-app.md.', at: t.add(const Duration(seconds: 0))),
-        LogEntry(LogKind.info, '▶ Blocco 2/5 «Modello e persistenza» — invocazione 2', at: t.add(const Duration(seconds: 5))),
+        LogEntry(
+          LogKind.info,
+          'Avvio del loop con Claude Code su piano-todo-app.md.',
+          at: t.add(const Duration(seconds: 0)),
+        ),
+        LogEntry(
+          LogKind.info,
+          '▶ Blocco 2/5 «Modello e persistenza» — invocazione 2',
+          at: t.add(const Duration(seconds: 5)),
+        ),
         LogEntry(LogKind.system, 'Sessione Claude avviata (claude-sonnet-5-5)', at: t.add(const Duration(seconds: 6))),
         LogEntry(LogKind.tool, 'Read: lib/models/todo.dart', at: t.add(const Duration(seconds: 40))),
         LogEntry(LogKind.tool, 'Bash: flutter test test/models', at: t.add(const Duration(seconds: 120))),
-        LogEntry(LogKind.agent,
-            'Ho completato il repository JSON e i test per serializzazione e caricamento. Tutti i 14 test passano.',
-            at: t.add(const Duration(seconds: 260))),
+        LogEntry(
+          LogKind.agent,
+          'Ho completato il repository JSON e i test per serializzazione e caricamento. Tutti i 14 test passano.',
+          at: t.add(const Duration(seconds: 260)),
+        ),
         LogEntry(LogKind.tool, 'Verifica: flutter test', at: t.add(const Duration(seconds: 300))),
-        LogEntry(LogKind.success, 'Verifica superata in 21 s · All tests passed!', at: t.add(const Duration(seconds: 320))),
+        LogEntry(
+          LogKind.success,
+          'Verifica superata in 21 s · All tests passed!',
+          at: t.add(const Duration(seconds: 320)),
+        ),
         LogEntry(LogKind.success, 'Commit 9c41e07 · 4 file · +188 −2', at: t.add(const Duration(seconds: 330))),
-        LogEntry(LogKind.result, 'Blocco completato.', at: t.add(const Duration(seconds: 331)), outcome: RunOutcome.done),
-        LogEntry(LogKind.info,
-            '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 1',
-            at: t.add(const Duration(seconds: 340))),
-        LogEntry(LogKind.task, 'Lista dei todo con filtri tutti/attivi/completati e swipe per eliminare.', at: t.add(const Duration(seconds: 342))),
+        LogEntry(
+          LogKind.result,
+          'Blocco completato.',
+          at: t.add(const Duration(seconds: 331)),
+          outcome: RunOutcome.done,
+        ),
+        LogEntry(
+          LogKind.info,
+          '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 1',
+          at: t.add(const Duration(seconds: 340)),
+        ),
+        LogEntry(
+          LogKind.task,
+          'Lista dei todo con filtri tutti/attivi/completati e swipe per eliminare.',
+          at: t.add(const Duration(seconds: 342)),
+        ),
         LogEntry(LogKind.tool, 'Edit: lib/ui/home_screen.dart', at: t.add(const Duration(seconds: 400))),
-        LogEntry(LogKind.result, 'Terminata dal supervisore: nessun output per 10 minuti.',
-            at: t.add(const Duration(seconds: 1000)), outcome: RunOutcome.interrupted),
-        LogEntry(LogKind.info, '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 2',
-            at: t.add(const Duration(seconds: 1030))),
-        LogEntry(LogKind.agent, 'Riprendo da PROGRESS.md: manca il filtro "completati" e lo swipe per eliminare.', at: t.add(const Duration(seconds: 1400))),
+        LogEntry(
+          LogKind.result,
+          'Terminata dal supervisore: nessun output per 10 minuti.',
+          at: t.add(const Duration(seconds: 1000)),
+          outcome: RunOutcome.interrupted,
+        ),
+        LogEntry(
+          LogKind.info,
+          '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 2',
+          at: t.add(const Duration(seconds: 1030)),
+        ),
+        LogEntry(
+          LogKind.agent,
+          'Riprendo da PROGRESS.md: manca il filtro "completati" e lo swipe per eliminare.',
+          at: t.add(const Duration(seconds: 1400)),
+        ),
         LogEntry(LogKind.tool, 'Write: lib/ui/widgets/todo_tile.dart', at: t.add(const Duration(seconds: 1700))),
       ]);
       engine.notifyListeners();
@@ -159,7 +202,12 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final key = GlobalKey();
-      await tester.pumpWidget(RepaintBoundary(key: key, child: AutoLoopApp(engine: engine, prefs: prefs)));
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: key,
+          child: AutoLoopApp(engine: engine, prefs: prefs),
+        ),
+      );
       for (var i = 0; i < 20; i++) {
         await tester.pump(const Duration(milliseconds: 30));
       }
@@ -183,7 +231,11 @@ void main() {
     addTearDown(tester.view.reset);
     final key = GlobalKey();
     await tester.pumpWidget(
-        RepaintBoundary(key: key, child: AutoLoopApp(engine: LoopEngine(LoopSettings()), prefs: prefs)));
+      RepaintBoundary(
+        key: key,
+        child: AutoLoopApp(engine: LoopEngine(LoopSettings()), prefs: prefs),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 300));
     await tester.runAsync(() async {
       final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
@@ -202,28 +254,45 @@ void main() {
       addTearDown(tester.view.reset);
       final key = GlobalKey();
       late BuildContext ctx;
-      await tester.pumpWidget(RepaintBoundary(
-        key: key,
-        child: MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: buildTheme(dark ? Brightness.dark : Brightness.light),
-          home: Builder(builder: (c) {
-            ctx = c;
-            return const Scaffold();
-          }),
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: key,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: buildTheme(dark ? Brightness.dark : Brightness.light),
+            home: Builder(
+              builder: (c) {
+                ctx = c;
+                return const Scaffold();
+              },
+            ),
+          ),
         ),
-      ));
+      );
       showChoiceDialog<String>(
         context: ctx,
         title: 'Modello',
         subtitle: '8 modelli dal catalogo di Codex',
         selected: 'gpt-6.1-sol',
         choices: const [
-          Choice(value: '', label: 'Predefinito della CLI', description: 'Il modello configurato nella CLI.', dividerAfter: true),
-          Choice(value: 'gpt-6.1-sol', label: 'GPT-6.1-Sol', tag: 'gpt-6.1-sol',
-              description: 'Latest workhorse model for coding and everyday work.'),
-          Choice(value: 'gpt-6-astra', label: 'GPT-6-Astra', tag: 'gpt-6-astra',
-              description: 'Frontier model for the hardest problems.'),
+          Choice(
+            value: '',
+            label: 'Predefinito della CLI',
+            description: 'Il modello configurato nella CLI.',
+            dividerAfter: true,
+          ),
+          Choice(
+            value: 'gpt-6.1-sol',
+            label: 'GPT-6.1-Sol',
+            tag: 'gpt-6.1-sol',
+            description: 'Latest workhorse model for coding and everyday work.',
+          ),
+          Choice(
+            value: 'gpt-6-astra',
+            label: 'GPT-6-Astra',
+            tag: 'gpt-6-astra',
+            description: 'Frontier model for the hardest problems.',
+          ),
           Choice(value: 'gpt-6-luna', label: 'GPT-6-Luna', tag: 'gpt-6-luna', description: 'Fast and inexpensive.'),
         ],
       );
@@ -245,21 +314,24 @@ void main() {
     tester.view.physicalSize = const Size(1100, 760);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final settings = LoopSettings(codexPath: codex ?? '', claudePath: claude ?? '',
-        profiles: []);
+    final settings = LoopSettings(codexPath: codex ?? '', claudePath: claude ?? '', profiles: []);
     final key = GlobalKey();
     late BuildContext ctx;
-    await tester.pumpWidget(RepaintBoundary(
-      key: key,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light),
-        home: Builder(builder: (c) {
-          ctx = c;
-          return const Scaffold();
-        }),
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: key,
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: buildTheme(Brightness.light),
+          home: Builder(
+            builder: (c) {
+              ctx = c;
+              return const Scaffold();
+            },
+          ),
+        ),
       ),
-    ));
+    );
     showAccountsDialog(ctx, settings: settings, locked: false, onChanged: () {});
     // Let the real CLIs answer their status commands.
     for (var i = 0; i < 12; i++) {
@@ -292,7 +364,12 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final key = GlobalKey();
-      await tester.pumpWidget(RepaintBoundary(key: key, child: AutoLoopApp(engine: engine, prefs: prefs)));
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: key,
+          child: AutoLoopApp(engine: engine, prefs: prefs),
+        ),
+      );
       // Let version, account and catalog detection run against the real CLIs.
       for (var i = 0; i < 15; i++) {
         await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 1)));
@@ -323,17 +400,21 @@ void main() {
     addTearDown(tester.view.reset);
     final key = GlobalKey();
     late BuildContext ctx;
-    await tester.pumpWidget(RepaintBoundary(
-      key: key,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light),
-        home: Builder(builder: (c) {
-          ctx = c;
-          return const Scaffold();
-        }),
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: key,
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: buildTheme(Brightness.light),
+          home: Builder(
+            builder: (c) {
+              ctx = c;
+              return const Scaffold();
+            },
+          ),
+        ),
       ),
-    ));
+    );
     showChoiceDialog<AgentKind>(
       context: ctx,
       title: 'Agente',

@@ -68,37 +68,52 @@ testo
       final s = CodexBackend().newStream();
       s.handle('{"type":"thread.started","thread_id":"x"}', stderr: false);
       final logs = s.handle(
-          '{"type":"item.completed","item":{"id":"1","type":"agent_message","text":"fatto\\nAUTOLOOP_STATUS: DONE"}}',
-          stderr: false);
-      s.handle('{"type":"turn.completed","usage":{"input_tokens":50,"cached_input_tokens":10,"output_tokens":5}}',
-          stderr: false);
+        '{"type":"item.completed","item":{"id":"1","type":"agent_message","text":"fatto\\nAUTOLOOP_STATUS: DONE"}}',
+        stderr: false,
+      );
+      s.handle(
+        '{"type":"turn.completed","usage":{"input_tokens":50,"cached_input_tokens":10,"output_tokens":5}}',
+        stderr: false,
+      );
       expect(logs.single.kind, LogKind.agent);
       expect(s.finalText, contains('DONE'));
       expect((s.inputTokens, s.outputTokens, s.turnCompleted), (50, 5, true));
 
       final q = CodexBackend().newStream();
-      q.handle('{"type":"turn.failed","error":{"message":"You\'ve hit your usage limit. Try again later."}}',
-          stderr: false);
+      q.handle(
+        '{"type":"turn.failed","error":{"message":"You\'ve hit your usage limit. Try again later."}}',
+        stderr: false,
+      );
       expect(q.blocker, Blocker.usageLimit);
     });
 
     test('claude stream-json', () {
       final s = ClaudeBackend().newStream();
-      s.handle('{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}',
-          stderr: false);
-      s.handle('{"type":"result","subtype":"success","is_error":false,"result":"ok\\nAUTOLOOP_STATUS: CONTINUE",'
-          '"usage":{"input_tokens":3,"cache_read_input_tokens":7,"output_tokens":2}}', stderr: false);
+      s.handle(
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}',
+        stderr: false,
+      );
+      s.handle(
+        '{"type":"result","subtype":"success","is_error":false,"result":"ok\\nAUTOLOOP_STATUS: CONTINUE",'
+        '"usage":{"input_tokens":3,"cache_read_input_tokens":7,"output_tokens":2}}',
+        stderr: false,
+      );
       expect(parseVerdict(s.finalText).$1, AgentVerdict.continueWork);
       expect((s.inputTokens, s.outputTokens), (10, 2));
 
       final q = ClaudeBackend().newStream();
-      q.handle('{"type":"result","subtype":"success","is_error":true,"result":"Claude AI usage limit reached|1"}',
-          stderr: false);
+      q.handle(
+        '{"type":"result","subtype":"success","is_error":true,"result":"Claude AI usage limit reached|1"}',
+        stderr: false,
+      );
       expect(q.blocker, Blocker.usageLimit);
 
       final a = ClaudeBackend().newStream();
       const msg = 'Failed to authenticate: this login reached its time limit. Run `claude auth login`';
-      final logs = a.handle('{"type":"assistant","message":{"content":[{"type":"text","text":"$msg"}]}}', stderr: false);
+      final logs = a.handle(
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"$msg"}]}}',
+        stderr: false,
+      );
       expect(a.handle('{"type":"result","subtype":"success","is_error":true,"result":"$msg"}', stderr: false), isEmpty);
       expect(logs.single.kind, LogKind.error);
       expect(a.blocker, Blocker.authorization);
@@ -113,8 +128,10 @@ testo
 
     test('task text mentioning quota is not an error', () {
       final s = CodexBackend().newStream();
-      s.handle('{"type":"item.completed","item":{"type":"agent_message","text":"Implemento la quota utente"}}',
-          stderr: false);
+      s.handle(
+        '{"type":"item.completed","item":{"type":"agent_message","text":"Implemento la quota utente"}}',
+        stderr: false,
+      );
       expect(s.blocker, isNull);
     });
   });
@@ -156,12 +173,12 @@ testo
     });
 
     LoopSettings settings({QuotaBehavior quota = QuotaBehavior.wait}) => LoopSettings(
-          agent: AgentKind.claude,
-          claudePath: fake,
-          relaunchDelaySeconds: 0,
-          quotaBehavior: quota,
-          verifyCommand: 'if exist out1.txt (exit 0) else (exit 1)',
-        );
+      agent: AgentKind.claude,
+      claudePath: fake,
+      relaunchDelaySeconds: 0,
+      quotaBehavior: quota,
+      verifyCommand: 'if exist out1.txt (exit 0) else (exit 1)',
+    );
 
     test('continues, completes every block, verifies and commits', () async {
       final plan = File(p.join(dir.path, 'plan.md'))..writeAsStringSync('## Uno\nfai uno\n## Due\nfai due\n');
@@ -254,5 +271,45 @@ testo
       expect(engine.phase, LoopPhase.finished);
       expect(LoopState.load(dir.path, plan.path).runs, 5);
     });
+  });
+
+  test('commands and paths in the log are short', () {
+    const dir = r'C:\Users\me\AppData\Local\Temp\scenario\codex';
+    expect(
+      tidyCommand(
+        r'''"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -Command 'Get-Content -LiteralPath hello.txt' ''',
+        dir,
+      ),
+      'Get-Content -LiteralPath hello.txt',
+    );
+    expect(tidyCommand(r'''"C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -Command 'ls' ''', dir), 'ls');
+    expect(tidyCommand("bash -lc 'flutter test'", dir), 'flutter test');
+    expect(tidyCommand('cmd.exe /d /s /c "git status"', dir), 'git status');
+    expect(tidyCommand('cd "C:/Users/me/AppData/Local/Temp/scenario/codex" && cat hello.txt', dir), 'cat hello.txt');
+    expect(tidyCommand('git status', dir), 'git status');
+    // Codex's POSIX quoting of the script.
+    expect(
+      tidyCommand(r'''powershell.exe -Command 'Join-Path (Get-Location) '"'"'hello.txt'"'"'' ''', dir),
+      "Join-Path (Get-Location) 'hello.txt'",
+    );
+    expect(
+      tidyCommand(r'''powershell.exe -Command "[IO.File]::WriteAllText('a.txt', \"1"'`n2", $x)' ''', dir),
+      r'''[IO.File]::WriteAllText('a.txt', "1`n2", $x)''',
+    );
+    expect(relativePaths(r'C:\Users\me\AppData\Local\Temp\scenario\codex\lib\a.dart', dir), r'lib\a.dart');
+    expect(relativePaths('c:/users/me/appdata/local/temp/scenario/codex/hello.txt', dir), 'hello.txt');
+    expect(relativePaths(r'C:\Users\me\AppData\Local\Temp\scenario\codex', dir), '.');
+    // A sibling folder with a longer name stays as it is.
+    expect(
+      relativePaths(r'C:\Users\me\AppData\Local\Temp\scenario\codex2\x', dir),
+      r'C:\Users\me\AppData\Local\Temp\scenario\codex2\x',
+    );
+
+    final s = ClaudeBackend().newStream(workDir: dir);
+    final out = s.handle(
+      r'{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"C:\\Users\\me\\AppData\\Local\\Temp\\scenario\\codex\\hello.txt"}}]}}',
+      stderr: false,
+    );
+    expect(out.single.text, 'Read: hello.txt');
   });
 }

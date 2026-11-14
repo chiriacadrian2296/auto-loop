@@ -17,17 +17,26 @@ void main() {
   test('codex identity reads only the public token claims', () {
     final dir = Directory.systemTemp.createTempSync('al_auth_');
     String b64(Object o) => base64Url.encode(utf8.encode(jsonEncode(o))).replaceAll('=', '');
-    final token = '${b64({'alg': 'none'})}.${b64({
-      'email': 'x@y.z',
-      'https://api.openai.com/auth': {'chatgpt_plan_type': 'plus'},
-    })}.sig';
-    final f = File(p.join(dir.path, 'auth.json'))..writeAsStringSync(jsonEncode({'tokens': {'id_token': token}}));
+    final token =
+        '${b64({'alg': 'none'})}.${b64({
+          'email': 'x@y.z',
+          'https://api.openai.com/auth': {'chatgpt_plan_type': 'plus'},
+        })}.sig';
+    final f = File(p.join(dir.path, 'auth.json'))
+      ..writeAsStringSync(
+        jsonEncode({
+          'tokens': {'id_token': token},
+        }),
+      );
     expect(codexIdentity(f.path), ('x@y.z', 'plus'));
     expect(codexIdentity(p.join(dir.path, 'missing.json')), (null, null));
   });
 
   test('profiles round-trip and isolate config folders', () {
-    final s = LoopSettings(profileId: 'pabc', profiles: [const AccountProfile(id: 'pabc', name: 'Lavoro')]);
+    final s = LoopSettings(
+      profileId: 'pabc',
+      profiles: [const AccountProfile(id: 'pabc', name: 'Lavoro')],
+    );
     final back = LoopSettings.decode(s.encode());
     expect(back.profile.name, 'Lavoro');
     expect(back.allProfiles.first.isDefault, isTrue);
@@ -45,8 +54,10 @@ void main() {
       final empty = await accountStatus(kind, exe, 'ptest');
       deleteProfileData('ptest');
       // ignore: avoid_print
-      print('${kind.name}: system loggedIn=${system.loggedIn} method=${system.method} '
-          'plan=${system.plan} hasEmail=${system.email != null}; empty loggedIn=${empty.loggedIn}');
+      print(
+        '${kind.name}: system loggedIn=${system.loggedIn} method=${system.method} '
+        'plan=${system.plan} hasEmail=${system.email != null}; empty loggedIn=${empty.loggedIn}',
+      );
       expect(empty.loggedIn, isFalse);
     }, timeout: const Timeout(Duration(minutes: 1)));
   }

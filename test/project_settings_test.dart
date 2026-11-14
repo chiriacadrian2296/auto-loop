@@ -41,7 +41,10 @@ void main() {
 
   test('a profile deleted since falls back to the system one', () {
     final dir = Directory.systemTemp.createTempSync('al_proj_d_');
-    LoopSettings(profileId: 'gone', profiles: [const AccountProfile(id: 'gone', name: 'X')]).saveProject(dir.path);
+    LoopSettings(
+      profileId: 'gone',
+      profiles: [const AccountProfile(id: 'gone', name: 'X')],
+    ).saveProject(dir.path);
     final s = LoopSettings()..loadProject(dir.path);
     expect(s.profileId, AccountProfile.defaultId);
   });

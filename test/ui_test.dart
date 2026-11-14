@@ -13,7 +13,9 @@ void main() {
   testWidgets('main window renders a loaded plan without layout errors', (tester) async {
     final dir = Directory.systemTemp.createTempSync('autoloop_ui_');
     final plan = File(p.join(dir.path, 'piano.md'))
-      ..writeAsStringSync('# App\n\n## Setup del progetto\nfai x\n## Schermata login con un titolo molto lungo che va a capo\ny\n');
+      ..writeAsStringSync(
+        '# App\n\n## Setup del progetto\nfai x\n## Schermata login con un titolo molto lungo che va a capo\ny\n',
+      );
     SharedPreferences.setMockInitialValues({'workDir': dir.path, 'planPath': plan.path});
     final prefs = await SharedPreferences.getInstance();
     final engine = LoopEngine(LoopSettings());
@@ -59,13 +61,18 @@ void main() {
     expect(find.text('Richiamo dopo'), findsOneWidget);
 
     // Invalid numbers are reported instead of silently ignored; arrows step.
-    final attempts = find.descendant(of: find.byKey(const ValueKey('number-Tentativi per blocco')), matching: find.byType(TextField));
+    final attempts = find.descendant(
+      of: find.byKey(const ValueKey('number-Tentativi per blocco')),
+      matching: find.byType(TextField),
+    );
     await tester.enterText(attempts, '0');
     await tester.pumpAndSettle(); // the section resizes for the error text
     expect(find.text('Minimo 1'), findsOneWidget);
     expect(engine.settings.maxAttemptsPerBlock, 10);
     final up = find.descendant(
-        of: find.byKey(const ValueKey('number-Tentativi per blocco')), matching: find.byIcon(Icons.keyboard_arrow_up_rounded));
+      of: find.byKey(const ValueKey('number-Tentativi per blocco')),
+      matching: find.byIcon(Icons.keyboard_arrow_up_rounded),
+    );
     await tester.ensureVisible(up);
     await tester.pump();
     await tester.tap(up);
