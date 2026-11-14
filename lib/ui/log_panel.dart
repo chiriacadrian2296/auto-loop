@@ -756,11 +756,7 @@ class _BlockHeading extends StatelessWidget {
         onTap: onTap,
         badge: _badge(outcome, c),
         stats: [
-          IconStat(
-            Icons.replay_rounded,
-            '$invocations',
-            invocations == 1 ? '1 invocazione' : '$invocations invocazioni',
-          ),
+          IconStat(Icons.bolt_rounded, '$invocations', invocations == 1 ? '1 invocazione' : '$invocations invocazioni'),
           if (time.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(time), 'Durata totale'),
           if (tokensIn + tokensOut > 0)
             IconStat(Icons.toll_outlined, _k(tokensIn + tokensOut), 'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out'),
@@ -848,7 +844,7 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
                       alignment: Alignment.centerLeft,
                       child: SizedBox(
                         width: _arrow,
-                        child: Center(child: Icon(Icons.replay_rounded, size: 15, color: c.text)),
+                        child: Center(child: Icon(Icons.bolt_rounded, size: 15, color: c.text)),
                       ),
                     ),
                   ),
@@ -1490,7 +1486,7 @@ class _ActivityMapState extends State<ActivityMap> {
                                       message:
                                           'Invocazione ${RegExp(r'invocazione (\d+)').firstMatch(header.text)?.group(1) ?? ''}'
                                           ' · ${_clock(header.at)}',
-                                      child: Icon(Icons.replay_rounded, size: 9, color: c.muted),
+                                      child: Icon(Icons.bolt_rounded, size: 9, color: c.muted),
                                     ),
                                   ),
                                 for (final e in items)

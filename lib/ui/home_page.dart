@@ -748,7 +748,7 @@ class _BottomBar extends StatelessWidget {
                 iconColor: c.text,
               ),
             IconStat(
-              Icons.replay_rounded,
+              Icons.bolt_rounded,
               '${state.runs}',
               state.runs == 1 ? '1 invocazione' : '${state.runs} invocazioni',
               iconColor: c.text,

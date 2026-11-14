@@ -145,7 +145,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
             '${blocks.length}',
             blocks.length == 1 ? '1 blocco' : '${blocks.length} blocchi',
           ),
-          if (invocations > 0) IconStat(Icons.replay_rounded, '$invocations', _invocations(invocations)),
+          if (invocations > 0) IconStat(Icons.bolt_rounded, '$invocations', _invocations(invocations)),
           if (seconds > 0) IconStat(Icons.schedule_rounded, _duration(seconds), 'Durata totale'),
           if (input + output > 0)
             IconStat(
@@ -381,14 +381,13 @@ class _TimelineItemState extends State<_TimelineItem> {
     final c = context.colors;
     final state = engine.blockState(block);
     final current = engine.currentBlock == block.index && engine.isActive;
-    final running = current && engine.runStartedAt != null;
     final done = state.status == BlockStatus.done;
     final lineColor = done ? c.success.withValues(alpha: 0.45) : c.border;
     final seconds = _blockSeconds(engine, block);
-    // The same numbers for every block, as icons; the state in words only
-    // when the node alone does not say it.
+    // The same numbers for every block, as icons. No state in words: the
+    // disc, the numbers and the group the block sits in already say it.
     final stats = <IconStat>[
-      if (state.attempts > 0) IconStat(Icons.replay_rounded, '${state.attempts}', _invocations(state.attempts)),
+      if (state.attempts > 0) IconStat(Icons.bolt_rounded, '${state.attempts}', _invocations(state.attempts)),
       if (seconds > 0) IconStat(Icons.schedule_rounded, _duration(seconds), 'Durata'),
       if (state.totalTokens > 0)
         IconStat(
@@ -397,16 +396,8 @@ class _TimelineItemState extends State<_TimelineItem> {
           'Token: ${_tokens(state.inputTokens)} in / ${_tokens(state.outputTokens)} out',
         ),
     ];
-    final String? status = current
-        ? (running ? 'In corso' : 'In attesa del richiamo')
-        : switch (state.status) {
-            BlockStatus.pending => state.attempts > 0 ? 'Da riprendere' : null,
-            BlockStatus.done => state.attempts > 0 ? null : 'Segnato a mano',
-            BlockStatus.blocked => state.attempts > 0 ? null : 'Bloccato',
-            BlockStatus.skipped => null,
-          };
-    final subColor = current ? c.primary : c.muted;
-    final Widget? subtitle = status == null && stats.isEmpty
+    final subColor = current ? c.primary : null;
+    final Widget? subtitle = stats.isEmpty
         ? null
         // Fixed height: the tile measures its rows, and a LayoutBuilder
         // cannot be measured in advance.
@@ -414,10 +405,9 @@ class _TimelineItemState extends State<_TimelineItem> {
             height: 18,
             child: LayoutBuilder(
               builder: (context, box) {
-                // The state comes first; numbers that do not fit are left out,
-                // last first, instead of overflowing.
-                final style = TextStyle(fontSize: 11.5, color: subColor);
-                var used = status == null ? 0.0 : IconStat.textWidth(context, '$status –', style) + 16;
+                // Numbers that do not fit are left out, last first, instead
+                // of overflowing.
+                var used = 0.0;
                 final shown = <IconStat>[];
                 for (final s in stats) {
                   final w = s.width(context) + (shown.isEmpty ? 0 : 12);
@@ -427,16 +417,11 @@ class _TimelineItemState extends State<_TimelineItem> {
                 }
                 return Row(
                   children: [
-                    if (status != null)
-                      Flexible(
-                        child: Text(status, maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
-                      ),
-                    if (status != null && shown.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('–', style: style),
-                      ),
-                    for (final (i, w) in shown.indexed) ...[if (i > 0) const SizedBox(width: 12), w],
+                    for (final (i, w) in shown.indexed) ...[
+                      if (i > 0) const SizedBox(width: 12),
+                      // Blue while the block is being worked on.
+                      subColor == null ? w : IconStat(w.icon, w.value, w.tooltip, color: subColor),
+                    ],
                   ],
                 );
               },
