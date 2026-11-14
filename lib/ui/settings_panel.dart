@@ -406,7 +406,6 @@ class SettingsPanel extends StatelessWidget {
                       children: [
                         _Field(
                           label: 'Comando di verifica',
-                          hint: 'Deve terminare con exit 0 perché il blocco sia completato.',
                           child: TextFormField(
                             key: ValueKey('field-verify-$projectDir'),
                             initialValue: s.verifyCommand,
@@ -423,7 +422,6 @@ class SettingsPanel extends StatelessWidget {
                           children: [
                             _Toggle(
                               title: 'Commit git a ogni blocco',
-                              subtitle: 'Se la cartella è un repository',
                               value: s.gitCommit,
                               onChanged: (v) {
                                 s.gitCommit = v;
@@ -432,7 +430,6 @@ class SettingsPanel extends StatelessWidget {
                             ),
                             _Toggle(
                               title: 'Salta i blocchi bloccati',
-                              subtitle: 'Altrimenti il loop va in pausa',
                               value: s.skipBlocked,
                               onChanged: (v) {
                                 s.skipBlocked = v;
@@ -452,7 +449,6 @@ class SettingsPanel extends StatelessWidget {
                       children: [
                         _Field(
                           label: 'Regole per ogni blocco',
-                          hint: 'Aggiunte a ogni prompt, oltre al piano.',
                           child: TextFormField(
                             key: ValueKey('field-instructions-$projectDir'),
                             initialValue: s.extraInstructions,
@@ -517,9 +513,19 @@ const _fieldInfo = <String, String>{
   'Riprova ogni': 'Ogni quanto riprovare quando la CLI segnala che la quota è esaurita.',
   'Budget token': 'Il loop si ferma dopo aver consumato in totale questi token. 0 = nessun limite.',
   'Comando di verifica':
-      'Eseguito con cmd.exe nella cartella di lavoro quando l\'agente dichiara il blocco finito. '
-      'Se fallisce, l\'output torna all\'agente.',
-  'Regole per ogni blocco': 'Testo aggiunto a ogni prompt, utile per stack, stile e cose da non toccare.',
+      'Eseguito con cmd.exe nella cartella di lavoro quando l\'agente dichiara il blocco finito: deve '
+      'terminare con exit 0 perché il blocco sia completato. Se fallisce, l\'output torna all\'agente.',
+  'Regole per ogni blocco':
+      'Testo aggiunto a ogni prompt, oltre al piano: utile per stack, stile e cose da non toccare.',
+  'Commit git a ogni blocco':
+      'A ogni blocco completato registra le modifiche con un commit. Solo se la cartella di lavoro è un '
+      'repository git.',
+  'Salta i blocchi bloccati':
+      'Quando un blocco resta bloccato passa al successivo. Altrimenti il loop va in pausa e aspetta te.',
+  'File del piano':
+      'Il file di testo (.md o .txt) con il piano. Viene diviso in blocchi, che l\'agente svolge uno alla volta.',
+  'Agente': 'La CLI che svolge il piano, un blocco alla volta: Codex o Claude.',
+  'Modello': 'Il modello che l\'agente usa. "Predefinito della CLI" lascia quello configurato nella CLI stessa.',
   'Quando la quota finisce': 'Cosa fare quando la CLI segnala che il limite di utilizzo è stato raggiunto.',
   // Cards whose name alone does not say what they are for.
   'Cartella di lavoro':
@@ -926,10 +932,9 @@ class _PathCard extends StatelessWidget {
 }
 
 class _Field extends StatelessWidget {
-  const _Field({required this.label, required this.child, this.hint});
+  const _Field({required this.label, required this.child});
   final String label;
   final Widget child;
-  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -952,10 +957,6 @@ class _Field extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           child,
-          if (hint != null) ...[
-            const SizedBox(height: 6),
-            Text(hint!, style: TextStyle(fontSize: 11.5, height: 1.35, color: c.muted)),
-          ],
         ],
       ),
     );
@@ -1169,8 +1170,8 @@ class _NumberFieldState extends State<_NumberField> {
 }
 
 class _Toggle extends StatelessWidget {
-  const _Toggle({required this.title, required this.subtitle, required this.value, required this.onChanged});
-  final String title, subtitle;
+  const _Toggle({required this.title, required this.value, required this.onChanged});
+  final String title;
   final bool value;
   final ValueChanged<bool> onChanged;
 
@@ -1184,14 +1185,15 @@ class _Toggle extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text(
-                    title,
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
+                    ),
                   ),
-                  Text(subtitle, style: TextStyle(fontSize: 11.5, color: c.muted)),
+                  if (_infoIcon(title, c) case final info?) ...[const SizedBox(width: 4), info],
                 ],
               ),
             ),
