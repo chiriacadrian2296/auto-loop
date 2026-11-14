@@ -1,5 +1,5 @@
 name: auto_loop
-description: "A new Flutter project."
+description: "AutoLoop: porta avanti un piano di sviluppo un blocco alla volta con Codex CLI o Claude Code."
 publish_to: 'none'
 version: 0.1.0+1
 

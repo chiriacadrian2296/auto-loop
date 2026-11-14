@@ -50,3 +50,6 @@ app.*.map.json
 # Output of the lightweight test plan
 examples/prova/*
 !examples/prova/.gitkeep
+
+# Projects made by test runs of the example plans
+examples/todo_app/

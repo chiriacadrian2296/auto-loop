@@ -142,6 +142,39 @@ void main() {
     }, skip: out == null);
   }
 
+  // The window on the folder left by test/real_scenario_test.dart: real
+  // activity, real block states. Skipped unless AUTOLOOP_SCENARIO_DIR is set.
+  final scenario = Platform.environment['AUTOLOOP_SCENARIO_DIR'];
+  for (final agent in AgentKind.values) {
+    final dir = scenario == null ? null : p.join(scenario, agent.name);
+    testWidgets('screenshot scenario ${agent.name}', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'workDir': dir!,
+        'planPath': p.join(dir, 'piano-collaudo.md'),
+        'theme': 'dark',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final engine = LoopEngine(LoopSettings(agent: agent, verifyCommand: 'findstr /c:ciao hello.txt'));
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final key = GlobalKey();
+      await tester.pumpWidget(RepaintBoundary(key: key, child: AutoLoopApp(engine: engine, prefs: prefs)));
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      await tester.runAsync(() async {
+        final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+        final image = await boundary.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        Directory(out!).createSync(recursive: true);
+        File(p.join(out, 'scenario_${agent.name}.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(minutes: 5));
+    }, skip: out == null || dir == null || !Directory(dir).existsSync());
+  }
+
   testWidgets('screenshot empty', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

@@ -339,7 +339,9 @@ class LoopEngine extends ChangeNotifier {
           LogKind.success,
           blocked == 0
               ? 'Tutti i blocchi sono completati.'
-              : 'Nessun blocco da fare; $blocked bloccati richiedono attenzione.',
+              : blocked == 1
+              ? 'Nessun blocco da fare; 1 blocco bloccato richiede attenzione.'
+              : 'Nessun blocco da fare; $blocked blocchi bloccati richiedono attenzione.',
         );
         _setPhase(
           blocked == 0 ? LoopPhase.finished : LoopPhase.paused,
