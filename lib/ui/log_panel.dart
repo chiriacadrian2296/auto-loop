@@ -770,22 +770,19 @@ class _BlockHeading extends StatelessWidget {
   }
 }
 
-/// The outcome icon of a block or invocation; the word goes in the tooltip.
-Widget? _badge(_Outcome outcome, AppColors c) {
-  final (Widget? icon, String? label) = switch (outcome) {
-    _Outcome.done => (Icon(Icons.check_circle_rounded, size: 15, color: c.success), 'Completato'),
-    _Outcome.again => (Icon(Icons.replay_circle_filled_rounded, size: 15, color: c.muted), 'Continua'),
-    _Outcome.blocked => (Icon(Icons.error_rounded, size: 15, color: c.danger), 'Bloccato'),
-    _Outcome.interrupted => (Icon(Icons.warning_rounded, size: 15, color: c.warning), 'Interrotto'),
-    _Outcome.failed => (Icon(Icons.cancel_rounded, size: 15, color: c.danger), 'Problema'),
-    _Outcome.running => (
-      SizedBox.square(dimension: 12, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
-      'In corso',
-    ),
-    _Outcome.none => (null, null),
-  };
-  return icon == null ? null : Tooltip(message: label!, child: icon);
-}
+/// The outcome icon of a block or invocation.
+Widget? _badge(_Outcome outcome, AppColors c) => switch (outcome) {
+  _Outcome.done => Icon(Icons.check_circle_rounded, size: 15, color: c.success),
+  _Outcome.again => Icon(Icons.replay_circle_filled_rounded, size: 15, color: c.muted),
+  _Outcome.blocked => Icon(Icons.error_rounded, size: 15, color: c.danger),
+  _Outcome.interrupted => Icon(Icons.warning_rounded, size: 15, color: c.warning),
+  _Outcome.failed => Icon(Icons.cancel_rounded, size: 15, color: c.danger),
+  _Outcome.running => SizedBox.square(
+    dimension: 12,
+    child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
+  ),
+  _Outcome.none => null,
+};
 
 String _k(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(n >= 100000 ? 0 : 1)}k' : '$n';
 
@@ -1098,15 +1095,7 @@ class _BlockProgress extends StatelessWidget {
       BlockStatus.blocked => c.danger,
       _ => c.primary,
     };
-    return ProgressSummary(
-      title: '${block.index + 1}. ${block.title}',
-      ratio: ratio,
-      label: label,
-      color: color,
-      tooltip: steps
-          ? 'Passi segnalati dall\'agente'
-          : 'L\'agente non ha ancora segnalato i passi: invocazioni usate sul massimo consentito',
-    );
+    return ProgressSummary(title: '${block.index + 1}. ${block.title}', ratio: ratio, label: label, color: color);
   }
 }
 
@@ -1244,6 +1233,9 @@ class _ActivityMapState extends State<ActivityMap> {
   static const _icon = 22.0;
   static const _dot = 12.0;
 
+  static const _months = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+  static String _day(DateTime t) => '${t.day} ${_months[t.month - 1]}';
+
   static String _hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   @override
@@ -1308,7 +1300,10 @@ class _ActivityMapState extends State<ActivityMap> {
     final hm = TextStyle(fontSize: 11, color: c.muted, fontFeatures: const [FontFeature.tabularFigures()]);
     return Row(
       children: [
-        Text(_hm(t0), style: hm),
+        Tooltip(
+          message: 'Inizio: ${_day(t0)} alle ${_clock(t0)}',
+          child: Text(_hm(t0), style: hm),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: LayoutBuilder(
@@ -1562,7 +1557,10 @@ class _ActivityMapState extends State<ActivityMap> {
           ),
         ),
         const SizedBox(width: 10),
-        Text(engine.isActive ? 'adesso' : _hm(t1), style: hm),
+        Tooltip(
+          message: engine.isActive ? 'Il loop è in corso' : 'Fine: ${_day(t1)} alle ${_clock(t1)}',
+          child: Text(engine.isActive ? 'adesso' : _hm(t1), style: hm),
+        ),
       ],
     );
   }

@@ -119,25 +119,16 @@ class _BlocksPanelState extends State<BlocksPanel> {
     final running = blocks.any((b) => engine.currentBlock == b.index && engine.isActive);
     final blocked = blocks.any((b) => engine.blockState(b).status == BlockStatus.blocked);
     final Widget badge = switch (bucket) {
-      _Bucket.done => Tooltip(
-        message: 'Completati',
-        child: Icon(Icons.check_circle_rounded, size: 15, color: c.success),
+      _Bucket.done => Icon(Icons.check_circle_rounded, size: 15, color: c.success),
+      _Bucket.active when running => SizedBox.square(
+        dimension: 12,
+        child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
       ),
-      _Bucket.active when running => Tooltip(
-        message: 'In corso',
-        child: SizedBox.square(dimension: 12, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
-      ),
-      _Bucket.active when blocked => Tooltip(
-        message: 'C\'è un blocco fermo',
-        child: Icon(Icons.error_rounded, size: 15, color: c.danger),
-      ),
-      _Bucket.active => Tooltip(
-        message: 'Da riprendere',
-        child: Icon(Icons.play_circle_rounded, size: 15, color: c.primary),
-      ),
+      _Bucket.active when blocked => Icon(Icons.error_rounded, size: 15, color: c.danger),
+      _Bucket.active => Icon(Icons.play_circle_rounded, size: 15, color: c.primary),
       // On the same grey disc as the progress nodes still to do.
-      _Bucket.todo => Tooltip(message: 'Da fare', child: _greyDisc(c, Icons.more_horiz_rounded)),
-      _Bucket.skipped => Tooltip(message: 'Saltati', child: _greyDisc(c, Icons.redo_rounded)),
+      _Bucket.todo => _greyDisc(c, Icons.more_horiz_rounded),
+      _Bucket.skipped => _greyDisc(c, Icons.redo_rounded),
     };
     final open = !_closed.contains(bucket.label);
     return Padding(

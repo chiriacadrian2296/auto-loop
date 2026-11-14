@@ -119,7 +119,6 @@ class SettingsPanel extends StatelessWidget {
             ratio: ready / requirements.length,
             label: '$ready di ${requirements.length} requisiti pronti',
             color: missing.isEmpty ? context.colors.success : null,
-            tooltip: missing.isEmpty ? 'Piano, cartella, CLI e account sono a posto' : 'Manca: ${missing.join(', ')}',
           ),
         Expanded(
           child: Stack(
@@ -145,7 +144,6 @@ class SettingsPanel extends StatelessWidget {
                               icon: Icons.description_outlined,
                               title: planPath == null ? 'Scegli il file del piano' : p.basename(planPath!),
                               subtitle: planPath == null ? '.md o .txt' : _shortPath(p.dirname(planPath!)),
-                              tooltip: planPath,
                               highlighted: planPath == null,
                               onTap: onPickPlan,
                             ),
@@ -157,7 +155,6 @@ class SettingsPanel extends StatelessWidget {
                               subtitle: workDir == null
                                   ? 'Dove l\'agente crea e modifica i file'
                                   : _shortPath(workDir!),
-                              tooltip: workDir,
                               onTap: onPickWorkDir,
                             ),
                             _ChoiceCard<SplitStrategy>(
@@ -860,15 +857,12 @@ class _PathCard extends StatelessWidget {
     this.trailing = Icons.chevron_right_rounded,
     this.caption,
     this.inGroup = false,
-    this.tooltip,
     this.leading,
   });
 
   /// Replaces the icon tile (e.g. with the agent's logo).
   final Widget? leading;
 
-  /// Full text shown on hover (e.g. the complete path).
-  final String? tooltip;
   final IconData icon;
   final String title, subtitle;
   final VoidCallback onTap;
@@ -947,9 +941,7 @@ class _PathCard extends StatelessWidget {
         ),
       ),
     );
-    return tooltip == null
-        ? card
-        : Tooltip(message: tooltip!, waitDuration: const Duration(milliseconds: 600), child: card);
+    return card;
   }
 }
 
