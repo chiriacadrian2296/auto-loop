@@ -542,22 +542,31 @@ class _TimelineItemState extends State<_TimelineItem> {
                   right: 0,
                   top: 0,
                   bottom: 0,
-                  child: Container(
-                    padding: EdgeInsets.fromLTRB(24, 0, showActions ? 4 : 12, 0),
-                    decoration: BoxDecoration(
-                      borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
-                      gradient: LinearGradient(
-                        colors: [tileColor.withValues(alpha: 0), tileColor, tileColor],
-                        stops: const [0, 0.4, 1],
+                  // A fade, then the tile's colour all behind the hand and the
+                  // button: the text underneath is hidden well before them.
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: [tileColor.withValues(alpha: 0), tileColor]),
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (pause) pauseMark,
-                        if (showActions) ...[if (pause) const SizedBox(width: 10), more],
-                      ],
-                    ),
+                      Container(
+                        padding: EdgeInsets.fromLTRB(10, 0, showActions ? 4 : 12, 0),
+                        decoration: BoxDecoration(
+                          color: tileColor,
+                          borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (pause) pauseMark,
+                            if (showActions) ...[if (pause) const SizedBox(width: 10), more],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
             ],
