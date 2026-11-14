@@ -65,6 +65,7 @@ class BlocksPanel extends StatefulWidget {
 enum _Bucket {
   done('Completati'),
   active('In corso'),
+  blocked('Bloccati'),
   todo('Da fare'),
   skipped('Saltati');
 
@@ -97,7 +98,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
     if (engine.currentBlock == b.index && engine.isActive) return _Bucket.active;
     return switch (s.status) {
       BlockStatus.done => _Bucket.done,
-      BlockStatus.blocked => _Bucket.active,
+      BlockStatus.blocked => _Bucket.blocked,
       BlockStatus.skipped => _Bucket.skipped,
       BlockStatus.pending => s.attempts > 0 ? _Bucket.active : _Bucket.todo,
     };
@@ -117,16 +118,15 @@ class _BlocksPanelState extends State<BlocksPanel> {
       output += s.outputTokens;
     }
     final running = blocks.any((b) => engine.currentBlock == b.index && engine.isActive);
-    final blocked = blocks.any((b) => engine.blockState(b).status == BlockStatus.blocked);
     final Widget badge = switch (bucket) {
       _Bucket.done => Icon(Icons.check_circle_rounded, size: 15, color: c.success),
       _Bucket.active when running => SizedBox.square(
         dimension: 12,
         child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
       ),
-      _Bucket.active when blocked => Icon(Icons.error_rounded, size: 15, color: c.danger),
       _Bucket.active => Icon(Icons.play_circle_rounded, size: 15, color: c.primary),
       // On the same grey disc as the progress nodes still to do.
+      _Bucket.blocked => Icon(Icons.error_rounded, size: 15, color: c.danger),
       _Bucket.todo => _greyDisc(c, Icons.more_horiz_rounded),
       _Bucket.skipped => _greyDisc(c, Icons.redo_rounded),
     };
