@@ -924,7 +924,7 @@ class _WorkingLine extends StatelessWidget {
           ),
           Text(
             'Al lavoro · nessun output da ${_span(silent)} (limite $limitMinutes min)',
-            style: TextStyle(fontSize: 12.5, color: c.muted, fontStyle: FontStyle.italic),
+            style: TextStyle(fontSize: 13.5, height: 1.5, color: Color.lerp(c.muted, c.text, 0.55)),
           ),
         ],
       ),

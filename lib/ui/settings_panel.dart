@@ -48,6 +48,12 @@ class SettingsPanel extends StatelessWidget {
   /// What a start needs, and whether it is there: shown as a bar on top.
   final List<(String, bool)> requirements;
 
+  /// When the loop starts: Piano, Agente and Account cannot change, so they
+  /// close (they can still be opened to read them).
+  static void collapseLocked() {
+    _Collapsible.open.value = {..._Collapsible.open.value}..removeAll(const ['Piano', 'Agente', 'Account']);
+  }
+
   /// "Espandi tutto" / "Comprimi tutto" for the panel's title bar.
   static Widget expandAllButton() => ValueListenableBuilder<Set<String>>(
     valueListenable: _Collapsible.open,
@@ -294,6 +300,9 @@ class SettingsPanel extends StatelessWidget {
                       ],
                     ),
                   ),
+                  // While the loop runs: what can and cannot change, right after
+                  // the sections that are locked.
+                  if (locked) const Padding(padding: EdgeInsets.only(top: 14), child: _RunningBanner()),
                   // Read again at every invocation: safe to change while running.
                   _Collapsible(
                     title: 'Richiamo',
@@ -509,14 +518,6 @@ class SettingsPanel extends StatelessWidget {
               ),
               // While the loop runs, the notice floats in the middle, over
               // the dimmed sections; clicks go through to what can change.
-              if (locked)
-                const Positioned.fill(
-                  child: IgnorePointer(
-                    child: Center(
-                      child: Padding(padding: EdgeInsets.symmetric(horizontal: 24), child: _RunningBanner()),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -626,14 +627,8 @@ class _RunningBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        // Opaque: it sits on top of the sections.
-        color: Color.alphaBlend(c.primarySoft, c.surface),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.primary.withValues(alpha: 0.35)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 24, offset: const Offset(0, 6))],
-      ),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(12)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

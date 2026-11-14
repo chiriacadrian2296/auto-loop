@@ -77,7 +77,12 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  bool _wasActive = false;
+
   void _onEngine() {
+    // The loop has just started: close the sections that are now locked.
+    if (engine.isActive && !_wasActive) SettingsPanel.collapseLocked();
+    _wasActive = engine.isActive;
     // A plan edited while the loop was running is picked up once it stops.
     if (_planChanged && !engine.isActive) {
       _planChanged = false;
