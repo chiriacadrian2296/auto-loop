@@ -1469,20 +1469,6 @@ class _ActivityMapState extends State<ActivityMap> {
                                     ),
                                   ),
                                 ),
-                                // A small grey mark where the line breaks for a new invocation.
-                                for (final (x, header) in invocationMarks)
-                                  Positioned(
-                                    left: x - 7,
-                                    top: mid - 7,
-                                    width: 14,
-                                    height: 14,
-                                    child: Tooltip(
-                                      message:
-                                          'Invocazione ${RegExp(r'invocazione (\d+)').firstMatch(header.text)?.group(1) ?? ''}'
-                                          ' · ${_clock(header.at)}',
-                                      child: Icon(Icons.replay_rounded, size: 11, color: c.muted),
-                                    ),
-                                  ),
                                 // Block names on hover.
                                 for (final b in bands)
                                   Positioned(
@@ -1491,6 +1477,21 @@ class _ActivityMapState extends State<ActivityMap> {
                                     top: mid - 10,
                                     height: 20,
                                     child: Tooltip(message: b.$5, child: const SizedBox.expand()),
+                                  ),
+                                // A small grey mark where the line breaks for a new invocation (over the
+                                // block's own tooltip, so its own shows).
+                                for (final (x, header) in invocationMarks)
+                                  Positioned(
+                                    left: x - 6,
+                                    top: mid - 6,
+                                    width: 12,
+                                    height: 12,
+                                    child: Tooltip(
+                                      message:
+                                          'Invocazione ${RegExp(r'invocazione (\d+)').firstMatch(header.text)?.group(1) ?? ''}'
+                                          ' · ${_clock(header.at)}',
+                                      child: Icon(Icons.replay_rounded, size: 9, color: c.muted),
+                                    ),
                                   ),
                                 for (final e in items)
                                   if (!isHeader(e))
@@ -1634,7 +1635,7 @@ class _MapPainter extends CustomPainter {
     // The time line, broken where one invocation ends and the next begins.
     final cuts = [for (final b in bands) ...b.$3]..sort();
     // Room for the small mark in the break.
-    const gap = 9.0;
+    const gap = 7.0;
     var x = from;
     final paint = Paint()
       ..color = line
