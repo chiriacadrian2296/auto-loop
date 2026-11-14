@@ -117,13 +117,8 @@ class _BlocksPanelState extends State<BlocksPanel> {
       input += s.inputTokens;
       output += s.outputTokens;
     }
-    final running = blocks.any((b) => engine.currentBlock == b.index && engine.isActive);
     final Widget badge = switch (bucket) {
       _Bucket.done => Icon(Icons.check_circle_rounded, size: 15, color: c.success),
-      _Bucket.active when running => SizedBox.square(
-        dimension: 12,
-        child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
-      ),
       _Bucket.active => Icon(Icons.play_circle_rounded, size: 15, color: c.primary),
       // On the same grey disc as the progress nodes still to do.
       _Bucket.blocked => Icon(Icons.error_rounded, size: 15, color: c.danger),
