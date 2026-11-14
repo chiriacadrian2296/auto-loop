@@ -545,6 +545,8 @@ class _TimelineItemState extends State<_TimelineItem> {
                   // A fade, then the tile's colour all behind the hand and the
                   // button: the text underneath is hidden well before them.
                   child: Row(
+                    // Both parts cover the tile's whole height.
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Container(
                         width: 32,
