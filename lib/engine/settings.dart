@@ -16,7 +16,8 @@ enum AgentKind {
 
 enum QuotaBehavior {
   stop('Fermati'),
-  wait('Attendi e riprova');
+  // Name kept for saved settings: it now waits for the renewal when known.
+  wait('Riprendi da solo');
 
   const QuotaBehavior(this.label);
   final String label;
@@ -54,6 +55,7 @@ class LoopSettings {
     this.extraInstructions = '',
     this.skipBlocked = false,
     this.profileId = AccountProfile.defaultId,
+    this.keepAwake = true,
     List<AccountProfile>? profiles,
   }) : profiles = profiles ?? [];
 
@@ -104,6 +106,9 @@ class LoopSettings {
   /// Which set of CLI logins the agent runs with.
   String profileId;
 
+  /// While the loop works or waits, Windows does not go to sleep on its own.
+  bool keepAwake;
+
   /// User-created profiles (the built-in system profile is implicit).
   final List<AccountProfile> profiles;
 
@@ -135,6 +140,7 @@ class LoopSettings {
     'extraInstructions': extraInstructions,
     'skipBlocked': skipBlocked,
     'profileId': profileId,
+    'keepAwake': keepAwake,
     'profiles': [for (final x in profiles) x.toJson()],
   };
 
@@ -168,6 +174,7 @@ class LoopSettings {
       extraInstructions: j['extraInstructions'] as String? ?? '',
       skipBlocked: j['skipBlocked'] as bool? ?? false,
       profileId: j['profileId'] as String? ?? AccountProfile.defaultId,
+      keepAwake: j['keepAwake'] as bool? ?? true,
       profiles: [for (final x in (j['profiles'] as List? ?? const [])) ?AccountProfile.fromJson(x)],
     );
   }

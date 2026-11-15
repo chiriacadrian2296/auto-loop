@@ -504,7 +504,12 @@ class _HomePageState extends State<HomePage> {
     (
       'Quota esaurita, in attesa',
       Icons.update_rounded,
-      () => engine.demoShow(LoopPhase.quotaWait, block: 4, message: 'Quota esaurita: nuovo tentativo tra 30 min.'),
+      () => engine.demoShow(LoopPhase.quotaWait, block: 4, message: 'Quota esaurita: riprendo alle 15:01.'),
+    ),
+    (
+      'In attesa della rete',
+      Icons.wifi_off_rounded,
+      () => engine.demoShow(LoopPhase.offline, block: 4, message: 'Rete assente: riprendo appena torna.'),
     ),
     ('In pausa', Icons.pause_rounded, () => engine.demoShow(LoopPhase.paused, message: 'In pausa.')),
     (

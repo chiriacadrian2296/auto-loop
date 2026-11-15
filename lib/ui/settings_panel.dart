@@ -101,7 +101,8 @@ class SettingsPanel extends StatelessWidget {
         ? [account.email ?? 'Connesso', if (!s.profile.isDefault) s.profile.name].join(' · ')
         : 'Non connesso';
     final summaryQuota = [
-      s.quotaBehavior == QuotaBehavior.wait ? 'Riprova ogni ${s.quotaWaitMinutes} min' : 'Si ferma',
+      s.quotaBehavior == QuotaBehavior.wait ? 'Riprende da solo' : 'Si ferma',
+      if (s.keepAwake) 'PC acceso',
       s.maxTotalTokens == 0 ? 'budget illimitato' : 'budget ${_compactTokens(s.maxTotalTokens)} token',
     ].join(' · ');
     final summaryEnd = [
@@ -368,9 +369,10 @@ class SettingsPanel extends StatelessWidget {
                                 value: QuotaBehavior.wait,
                                 icon: Icons.update_rounded,
                                 label: QuotaBehavior.wait.label,
-                                short: 'Riprova ogni ${s.quotaWaitMinutes} min',
+                                short: 'Quando la quota si rinnova',
                                 description:
-                                    'Aspetta e riprova ogni ${s.quotaWaitMinutes} minuti, finché la quota non torna.',
+                                    'Riparte all\'ora in cui la quota si rinnova, se la CLI la indica; altrimenti '
+                                    'riprova ogni ${s.quotaWaitMinutes} minuti. Va avanti così finché il piano è finito.',
                               ),
                               Choice(
                                 value: QuotaBehavior.stop,
@@ -382,6 +384,37 @@ class SettingsPanel extends StatelessWidget {
                             ],
                             onChanged: (v) {
                               s.quotaBehavior = v;
+                              onChanged();
+                            },
+                          ),
+                        ),
+                        _Field(
+                          label: 'PC acceso',
+                          child: _ChoiceCard<bool>(
+                            icon: s.keepAwake ? Icons.coffee_outlined : Icons.bedtime_outlined,
+                            dialogTitle: 'Mentre il loop lavora',
+                            dialogSubtitle: 'Se Windows può andare in sospensione mentre il loop lavora o aspetta.',
+                            value: s.keepAwake,
+                            choices: const [
+                              Choice(
+                                value: true,
+                                icon: Icons.coffee_outlined,
+                                label: 'Tieni acceso il PC',
+                                short: 'Niente sospensione automatica',
+                                description:
+                                    'Finché il loop lavora o aspetta la quota, Windows non va in sospensione da solo. '
+                                    'Chiudere il coperchio o sospendere a mano lo ferma comunque.',
+                              ),
+                              Choice(
+                                value: false,
+                                icon: Icons.bedtime_outlined,
+                                label: 'Lascia decidere a Windows',
+                                short: 'Sospensione come sempre',
+                                description: 'Il PC va in sospensione secondo le impostazioni di Windows, e il loop si ferma con lui.',
+                              ),
+                            ],
+                            onChanged: (v) {
+                              s.keepAwake = v;
                               onChanged();
                             },
                           ),
@@ -551,7 +584,10 @@ const _fieldInfo = <String, String>{
       'Quante volte l\'agente viene richiamato sullo stesso blocco prima di segnarlo come bloccato.',
   'Silenzio max': 'Se l\'agente non scrive nulla per questo tempo, viene fermato e richiamato.',
   'Durata max': 'Tempo massimo di una singola invocazione: oltre, viene fermata e il blocco riprende.',
-  'Riprova ogni': 'Ogni quanto riprovare quando la CLI segnala che la quota è esaurita.',
+  'Riprova ogni': 'Quando la CLI non dice a che ora si rinnova la quota, ogni quanto riprovare.',
+  'PC acceso':
+      'Se il PC va in sospensione il loop si ferma con lui. Con "Tieni acceso il PC" Windows non si sospende da '
+      'solo finché il loop lavora o aspetta.',
   'Budget token': 'Il loop si ferma dopo aver consumato in totale questi token. 0 = nessun limite.',
   'Comando di verifica':
       'Eseguito con cmd.exe nella cartella di lavoro quando l\'agente dichiara il blocco finito: deve '
@@ -567,7 +603,9 @@ const _fieldInfo = <String, String>{
       'Il file di testo (.md o .txt) con il piano. Viene diviso in blocchi, che l\'agente svolge uno alla volta.',
   'Agente': 'La CLI che svolge il piano, un blocco alla volta: Codex o Claude.',
   'Modello': 'Il modello che l\'agente usa. "Predefinito della CLI" lascia quello configurato nella CLI stessa.',
-  'Quando la quota finisce': 'Cosa fare quando la CLI segnala che il limite di utilizzo è stato raggiunto.',
+  'Quando la quota finisce':
+      'Cosa fare quando la CLI segnala che il limite di utilizzo è stato raggiunto. "Riprendi da solo" riparte '
+      'all\'ora in cui la quota si rinnova: così il piano va avanti anche per giorni, finché il PC è acceso e c\'è rete.',
   // Cards whose name alone does not say what they are for.
   'Cartella di lavoro':
       'Dove l\'agente crea e modifica i file. Le impostazioni di questo pannello si salvano qui, '

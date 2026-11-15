@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import 'accounts.dart';
 import 'agents.dart';
+import 'keep_awake.dart';
 import 'loop_state.dart';
 import 'plan_parser.dart';
 import 'process_runner.dart';
@@ -18,6 +19,7 @@ enum LoopPhase {
   verifying('Verifica in corso'),
   waiting('In attesa del richiamo'),
   quotaWait('Quota esaurita, in attesa'),
+  offline('In attesa della rete'),
   stopping('Arresto…'),
   paused('In pausa'),
   finished('Piano completato');
@@ -60,6 +62,26 @@ class LoopEngine extends ChangeNotifier {
   String statusMessage = '';
   int? currentBlock;
   DateTime? waitUntil;
+
+  /// When the usage quota renews, as the CLI said at the last limit.
+  DateTime? quotaResetAt;
+
+  /// How long after the renewal the loop resumes, to be sure it happened.
+  @visibleForTesting
+  static Duration quotaMargin = const Duration(minutes: 1);
+
+  /// "alle 15:01", or "domani alle 9:01", or "il 17/11 alle 9:01".
+  static String _when(DateTime t) {
+    final now = DateTime.now();
+    final hm = '${t.hour}:${t.minute.toString().padLeft(2, '0')}';
+    final days = DateTime(t.year, t.month, t.day).difference(DateTime(now.year, now.month, now.day)).inDays;
+    return switch (days) {
+      0 => 'alle $hm',
+      1 => 'domani alle $hm',
+      _ => 'il ${t.day}/${t.month} alle $hm',
+    };
+  }
+
   DateTime? runStartedAt;
   String? currentLogDir;
 
@@ -196,6 +218,8 @@ class LoopEngine extends ChangeNotifier {
   void _setPhase(LoopPhase p, [String? message]) {
     phase = p;
     if (message != null) statusMessage = message;
+    // While the loop works or waits, the PC does not go to sleep on its own.
+    if (!demo) KeepAwake.set(isActive && settings.keepAwake);
     notifyListeners();
   }
 
@@ -310,18 +334,38 @@ class LoopEngine extends ChangeNotifier {
 
   bool get _halt => _stopRequested || _pauseRequested;
 
-  Future<void> _wait(Duration d, LoopPhase phase, String message) async {
-    if (d <= Duration.zero || _halt) return;
-    waitUntil = DateTime.now().add(d);
+  Future<void> _wait(Duration d, LoopPhase phase, String message) => _waitUntil(DateTime.now().add(d), phase, message);
+
+  /// Waits until the clock reads [until]. Checked every few seconds too, so
+  /// a wait of hours still ends on time after the PC wakes from sleep.
+  Future<void> _waitUntil(DateTime until, LoopPhase phase, String message) async {
+    if (!until.isAfter(DateTime.now()) || _halt) return;
+    waitUntil = until;
     _setPhase(phase, message);
     final c = _sleep = Completer<void>();
-    final t = Timer(d, () {
-      if (!c.isCompleted) c.complete();
-    });
+    void check() {
+      if (!c.isCompleted && !DateTime.now().isBefore(until)) c.complete();
+    }
+
+    final t = Timer(until.difference(DateTime.now()), check);
+    final tick = Timer.periodic(const Duration(seconds: 15), (_) => check());
     await c.future;
     t.cancel();
+    tick.cancel();
     _sleep = null;
     waitUntil = null;
+  }
+
+  /// Waits until a host of the agent's provider answers again.
+  Future<void> _waitForNetwork() async {
+    final host = settings.agent == AgentKind.codex ? 'api.openai.com' : 'api.anthropic.com';
+    while (!_halt) {
+      try {
+        final found = await InternetAddress.lookup(host).timeout(const Duration(seconds: 10));
+        if (found.isNotEmpty) return;
+      } catch (_) {}
+      await _wait(const Duration(seconds: 30), LoopPhase.offline, 'Rete assente: riprendo appena torna.');
+    }
   }
 
   // ------------------------------------------------------------ the loop
@@ -392,12 +436,27 @@ class LoopEngine extends ChangeNotifier {
             _attention('Quota esaurita', 'Il loop è in pausa: riprendilo quando la quota torna disponibile.');
             return;
           }
-          _attention('Quota esaurita', 'Nuovo tentativo tra ${settings.quotaWaitMinutes} minuti.');
-          await _wait(
-            Duration(minutes: settings.quotaWaitMinutes),
-            LoopPhase.quotaWait,
-            'Quota esaurita: nuovo tentativo tra ${settings.quotaWaitMinutes} min.',
-          );
+          // At the time the quota renews, when the CLI says it; a minute
+          // later, to be sure. Otherwise, at regular intervals.
+          final reset = quotaResetAt;
+          final now = DateTime.now();
+          if (reset != null && reset.isAfter(now) && reset.difference(now) < const Duration(days: 8)) {
+            final at = reset.add(quotaMargin);
+            final when = _when(at);
+            _log(LogKind.info, 'La quota si rinnova $when: il loop riprenderà da solo.');
+            _attention('Quota esaurita', 'Il loop riprenderà da solo $when.');
+            await _waitUntil(at, LoopPhase.quotaWait, 'Quota esaurita: riprendo $when.');
+          } else {
+            _attention('Quota esaurita', 'Nuovo tentativo tra ${settings.quotaWaitMinutes} minuti.');
+            await _wait(
+              Duration(minutes: settings.quotaWaitMinutes),
+              LoopPhase.quotaWait,
+              'Quota esaurita: nuovo tentativo tra ${settings.quotaWaitMinutes} min.',
+            );
+          }
+        case _RunResult.network:
+          _log(LogKind.warning, 'Connessione assente: il loop riprende appena torna la rete.');
+          await _waitForNetwork();
         case _RunResult.auth:
           _setPhase(LoopPhase.paused, 'Problema di autenticazione: esegui il login nella CLI.');
           _attention('Accesso richiesto', '${settings.agent.label}: rifai l\'accesso da Account e CLI.');
@@ -556,8 +615,15 @@ class LoopEngine extends ChangeNotifier {
 
     if (stream.blocker == Blocker.usageLimit) {
       _result(RunOutcome.interrupted, 'Limite di utilizzo raggiunto: ${stream.errorMessage ?? ''}'.trim());
+      quotaResetAt = stream.quotaResetAt;
       state.save(dir);
       return _RunResult.quota;
+    }
+    if (stream.blocker == Blocker.network) {
+      _result(RunOutcome.interrupted, 'Connessione non riuscita: ${stream.errorMessage ?? ''}'.trim());
+      bs.attempts--; // not the block's fault
+      state.save(dir);
+      return _RunResult.network;
     }
     if (stream.blocker == Blocker.authorization) {
       _result(RunOutcome.failed, 'Autenticazione richiesta: ${stream.errorMessage ?? ''}'.trim());
@@ -750,4 +816,4 @@ class LoopEngine extends ChangeNotifier {
   }
 }
 
-enum _RunResult { blockDone, again, blocked, quota, auth, fatal }
+enum _RunResult { blockDone, again, blocked, quota, network, auth, fatal }

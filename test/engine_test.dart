@@ -5,6 +5,7 @@ import 'package:auto_loop/engine/loop_engine.dart';
 import 'package:auto_loop/engine/loop_state.dart';
 import 'package:auto_loop/engine/plan_parser.dart';
 import 'package:auto_loop/engine/process_runner.dart';
+import 'package:auto_loop/engine/quota_reset.dart';
 import 'package:auto_loop/engine/settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -255,6 +256,36 @@ testo
       expect(engine.logs.map((e) => e.text), contains(startsWith('Commit saltato')));
     });
 
+    test('resumes by itself when the quota renews, at the time the CLI said', () async {
+      LoopEngine.quotaMargin = Duration.zero;
+      addTearDown(() => LoopEngine.quotaMargin = const Duration(minutes: 1));
+      final plan = File(p.join(dir.path, 'plan.md'))..writeAsStringSync('## Uno QUOTA SOON\nfai uno\n## Due\nx\n');
+      final engine = LoopEngine(settings())..load(workDir: dir.path, planPath: plan.path);
+      final phases = <LoopPhase>{};
+      DateTime? until;
+      engine.addListener(() {
+        phases.add(engine.phase);
+        if (engine.phase == LoopPhase.quotaWait) until ??= engine.waitUntil;
+      });
+      final started = DateTime.now();
+      await engine.start();
+      expect(engine.phase, LoopPhase.finished, reason: engine.logs.map((l) => l.text).join('\n'));
+      expect(phases, contains(LoopPhase.quotaWait));
+      // Waited for the renewal (about two seconds), not the 30-minute interval.
+      expect(until!.difference(started), lessThan(const Duration(seconds: 10)));
+      expect(engine.logs.map((l) => l.text), contains(startsWith('La quota si rinnova alle')));
+      expect(engine.blockState(engine.plan!.blocks[0]).attempts, 2);
+    });
+
+    test('waits for the network without consuming an attempt', () async {
+      final plan = File(p.join(dir.path, 'plan.md'))..writeAsStringSync('## Uno OFFLINE\nfai uno\n');
+      final engine = LoopEngine(settings())..load(workDir: dir.path, planPath: plan.path);
+      await engine.start();
+      expect(engine.phase, LoopPhase.finished, reason: engine.logs.map((l) => l.text).join('\n'));
+      expect(engine.logs.map((l) => l.text), contains(startsWith('Connessione assente')));
+      expect(engine.blockState(engine.plan!.blocks[0]).attempts, 2);
+    });
+
     test('quota stop pauses without consuming an attempt, then resumes', () async {
       final plan = File(p.join(dir.path, 'plan.md'))..writeAsStringSync('## Uno QUOTA\nfai uno\n## Due\nx\n');
       final alerts = <String>[];
@@ -311,5 +342,54 @@ testo
       stderr: false,
     );
     expect(out.single.text, 'Read: hello.txt');
+  });
+
+  test('reads when the quota renews from the CLI messages', () {
+    final now = DateTime(2026, 11, 15, 10, 30);
+    expect(
+      parseQuotaReset('Claude AI usage limit reached|1794683400', now: now),
+      DateTime.fromMillisecondsSinceEpoch(1794683400 * 1000),
+    );
+    expect(parseQuotaReset("You've hit your limit · resets 3pm (Europe/Rome)", now: now), DateTime(2026, 11, 15, 15));
+    expect(parseQuotaReset('5-hour limit reached ∙ resets 9:15am', now: now), DateTime(2026, 11, 16, 9, 15));
+    expect(parseQuotaReset('Usage limit. Try again at 15:05.', now: now), DateTime(2026, 11, 15, 15, 5));
+    expect(
+      parseQuotaReset(
+        "You've hit your usage limit. Upgrade to Pro or try again in 1 day 3 hours 12 minutes.",
+        now: now,
+      ),
+      now.add(const Duration(days: 1, hours: 3, minutes: 12)),
+    );
+    expect(parseQuotaReset('try again in 45 min', now: now), now.add(const Duration(minutes: 45)));
+    expect(
+      parseQuotaReset('Usage limit reached, try again at Nov 17th, 2026 4:05 PM.', now: now),
+      DateTime(2026, 11, 17, 16, 5),
+    );
+    expect(parseQuotaReset('Usage limit reached.', now: now), isNull);
+    expect(parseQuotaReset('rate limit: 429', now: now), isNull);
+  });
+
+  test('Claude rate-limit events say when the rejected window renews', () {
+    final s = ClaudeBackend().newStream();
+    s.handle(
+      '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1794683400,'
+      '"unifiedWindows":{"five_hour":{"status":"allowed","resetsAt":1794683400}}}}',
+      stderr: false,
+    );
+    expect(s.quotaResetAt, isNull);
+    s.handle(
+      '{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1794683400,'
+      '"unifiedWindows":{"five_hour":{"status":"rejected","resetsAt":1794683400},'
+      '"seven_day":{"status":"allowed","resetsAt":1794740400}}}}',
+      stderr: false,
+    );
+    expect(s.quotaResetAt, DateTime.fromMillisecondsSinceEpoch(1794683400 * 1000));
+  });
+
+  test('network failures are told apart from the agent and from the quota', () {
+    expect(classifyError('API Error: fetch failed (getaddrinfo ENOTFOUND api.anthropic.com)'), Blocker.network);
+    expect(classifyError('stream disconnected before completion: error sending request'), Blocker.network);
+    expect(classifyError('Claude AI usage limit reached|1794683400'), Blocker.usageLimit);
+    expect(classifyError('Implemento la gestione degli errori di rete'), isNull);
   });
 }

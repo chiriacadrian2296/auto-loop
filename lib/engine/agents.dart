@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'quota_reset.dart';
 import 'settings.dart';
 
 /// [task] opens a block in the log (what to do), [result] closes it when it
@@ -42,7 +43,7 @@ String fixMojibake(String text) {
 }
 
 /// Problems that are not the agent's fault and must not be retried blindly.
-enum Blocker { usageLimit, authorization }
+enum Blocker { usageLimit, authorization, network }
 
 /// Conservative classification of *error messages* (never of task text).
 Blocker? classifyError(String text) {
@@ -82,6 +83,27 @@ Blocker? classifyError(String text) {
   if (auth.any(v.contains) || RegExp(r'\b401\b').hasMatch(v)) {
     return Blocker.authorization;
   }
+  // The connection, not the agent: wait for the network and try again.
+  const network = [
+    'enotfound',
+    'econnrefused',
+    'econnreset',
+    'etimedout',
+    'eai_again',
+    'getaddrinfo',
+    'network error',
+    'network is unreachable',
+    'fetch failed',
+    'error sending request',
+    'stream disconnected',
+    'could not resolve host',
+    'failed to connect',
+    'unable to connect',
+    'connection error',
+    'connection refused',
+    'api connection',
+  ];
+  if (network.any(v.contains)) return Blocker.network;
   return null;
 }
 
@@ -95,6 +117,9 @@ abstract class AgentStream {
   int get inputTokens;
   int get outputTokens;
   Blocker? get blocker;
+
+  /// When the usage quota renews, when the CLI said so.
+  DateTime? get quotaResetAt;
   String? get errorMessage;
 
   /// The CLI reported a cleanly finished turn.
@@ -266,6 +291,8 @@ class _CodexStream implements AgentStream {
   @override
   Blocker? get blocker => _blocker;
   @override
+  DateTime? get quotaResetAt => _error == null ? null : parseQuotaReset(_error!);
+  @override
   String? get errorMessage => _error;
   @override
   bool get turnCompleted => _completed;
@@ -400,6 +427,9 @@ class _ClaudeStream implements AgentStream {
   int get outputTokens => _out;
   @override
   Blocker? get blocker => _blocker;
+  DateTime? _resetAt;
+  @override
+  DateTime? get quotaResetAt => _resetAt ?? (_error == null ? null : parseQuotaReset(_error!));
   @override
   String? get errorMessage => _error;
   @override
@@ -423,6 +453,18 @@ class _ClaudeStream implements AgentStream {
     }
     switch (e['type']) {
       case 'system':
+        return const [];
+      case 'rate_limit_event':
+        // Says when each usage window renews; the rejected one is the limit.
+        final info = (e['rate_limit_info'] as Map?)?.cast<String, Object?>() ?? const {};
+        DateTime? when(Object? v) => v is num ? DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000) : null;
+        final windows = (info['unifiedWindows'] as Map?)?.values.whereType<Map>() ?? const <Map>[];
+        final rejected = [
+          for (final w in windows)
+            if (w['status'] != null && w['status'] != 'allowed') ?when(w['resetsAt']),
+          if (info['status'] != null && info['status'] != 'allowed') ?when(info['resetsAt']),
+        ];
+        if (rejected.isNotEmpty) _resetAt = rejected.reduce((a, b) => a.isAfter(b) ? a : b);
         return const [];
       case 'assistant':
         final msg = (e['message'] as Map?)?.cast<String, Object?>() ?? const {};

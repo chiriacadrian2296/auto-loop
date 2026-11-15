@@ -1,6 +1,7 @@
 // Mimics `claude -p --output-format stream-json`. Behaviour depends on the prompt:
 // invocation 1 of a block answers CONTINUE, invocation 2 writes a file and answers DONE.
-// A block whose title contains QUOTA fails with a usage limit on its first call.
+// A block whose title contains QUOTA fails with a usage limit on its first call
+// (SOON: the limit renews in two seconds); OFFLINE: no network on its first call.
 const fs = require('fs');
 let input = '';
 process.stdin.on('data', d => (input += d));
@@ -13,7 +14,14 @@ process.stdin.on('end', () => {
   const quotaFlag = '.quota_seen';
   if (title.includes('QUOTA') && !fs.existsSync(quotaFlag)) {
     fs.writeFileSync(quotaFlag, '1');
-    emit({ type: 'result', subtype: 'success', is_error: true, result: "Claude AI usage limit reached|1731000000", usage: {} });
+    const reset = title.includes('SOON') ? Math.floor(Date.now() / 1000) + 2 : 1731000000;
+    emit({ type: 'result', subtype: 'success', is_error: true, result: `Claude AI usage limit reached|${reset}`, usage: {} });
+    process.exit(1);
+  }
+  const offlineFlag = '.offline_seen';
+  if (title.includes('OFFLINE') && !fs.existsSync(offlineFlag)) {
+    fs.writeFileSync(offlineFlag, '1');
+    emit({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'API Error: fetch failed (getaddrinfo ENOTFOUND api.anthropic.com)', usage: {} });
     process.exit(1);
   }
   emit({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write', input: { file_path: `out${block}.txt` } }] } });
