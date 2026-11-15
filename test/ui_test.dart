@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:auto_loop/engine/loop_engine.dart';
 import 'package:auto_loop/engine/settings.dart';
 import 'package:auto_loop/main.dart';
+import 'package:auto_loop/engine/accounts.dart';
+import 'package:auto_loop/ui/home_page.dart';
 import 'package:auto_loop/ui/settings_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,45 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('the first launch opens the guided setup; skipping it is remembered', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    HomePage.debugCliProbe = (kind) =>
+        kind == AgentKind.claude ? ('2.1.319', const AccountStatus(loggedIn: true, email: 'a@b.c')) : (null, null);
+    addTearDown(() => HomePage.debugCliProbe = null);
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(AutoLoopApp(engine: LoopEngine(LoopSettings()), prefs: prefs));
+    await tester.pumpAndSettle();
+    expect(find.text('Benvenuto in AutoLoop'), findsOneWidget);
+
+    // Choosing Claude, which is installed and signed in.
+    await tester.tap(find.text('Inizia'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Claude').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Avanti'));
+    await tester.pumpAndSettle();
+    expect(find.text('Trovata: versione 2.1.319'), findsOneWidget);
+    await tester.tap(find.text('Avanti'));
+    await tester.pumpAndSettle();
+    expect(find.text('a@b.c'), findsOneWidget);
+    await tester.tap(find.text('Finisco dopo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Benvenuto in AutoLoop'), findsNothing);
+    expect(prefs.getBool('setupDone'), isTrue);
+    expect(LoopSettings.decode(prefs.getString('settings')).agent, AgentKind.claude);
+
+    // It does not come back by itself; the rocket in the panel reopens it.
+    await tester.tap(find.byTooltip('Configurazione guidata'));
+    await tester.pumpAndSettle();
+    expect(find.text('Benvenuto in AutoLoop'), findsOneWidget);
+    await tester.tap(find.text('Salta, faccio da solo'));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('main window renders a loaded plan without layout errors', (tester) async {
     final dir = Directory.systemTemp.createTempSync('autoloop_ui_');
     final plan = File(p.join(dir.path, 'piano.md'))

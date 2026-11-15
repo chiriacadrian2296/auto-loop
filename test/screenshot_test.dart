@@ -235,6 +235,57 @@ void main() {
     }, skip: out == null || dir == null || !Directory(dir).existsSync());
   }
 
+  // The guided setup at the first launch, one picture per step: Claude is
+  // installed and signed in, Codex is not installed.
+  testWidgets('screenshot setup', (tester) async {
+    SharedPreferences.setMockInitialValues({'theme': 'dark'});
+    final prefs = await SharedPreferences.getInstance();
+    HomePage.debugCliProbe = (kind) => kind == AgentKind.claude
+        ? ('2.1.319', const AccountStatus(loggedIn: true, email: 'demo@autoloop.dev', plan: 'max'))
+        : (null, null);
+    addTearDown(() => HomePage.debugCliProbe = null);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final key = GlobalKey();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: key,
+        child: AutoLoopApp(engine: LoopEngine(LoopSettings()), prefs: prefs),
+      ),
+    );
+    Future<void> shot(String name) async {
+      for (var i = 0; i < 15; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      await tester.runAsync(() async {
+        final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+        final image = await boundary.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        Directory(out!).createSync(recursive: true);
+        File(p.join(out, 'setup_$name.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+    }
+
+    await shot('1_welcome');
+    await tester.tap(find.text('Inizia'));
+    await shot('2_agent');
+    await tester.tap(find.text('Avanti'));
+    await shot('3_cli_codex_missing');
+    await tester.tap(find.text('Indietro'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Claude').last);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Avanti'));
+    await shot('4_cli_claude_found');
+    await tester.tap(find.text('Avanti'));
+    await shot('5_login');
+    await tester.tap(find.text('Avanti'));
+    await shot('6_project');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(minutes: 5));
+  }, skip: out == null);
+
   testWidgets('screenshot empty', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

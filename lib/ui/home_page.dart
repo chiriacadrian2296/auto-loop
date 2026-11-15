@@ -22,6 +22,7 @@ import 'blocks_panel.dart';
 import 'log_panel.dart';
 import 'logo.dart';
 import 'section_title.dart';
+import 'setup_wizard.dart';
 import 'notifications.dart';
 import 'settings_panel.dart';
 import 'window_controls.dart';
@@ -39,7 +40,7 @@ class HomePage extends StatefulWidget {
   /// Screenshots only: what the probes of each CLI return, without running
   /// anything (version, account).
   @visibleForTesting
-  static (String, AccountStatus) Function(AgentKind kind)? debugCliProbe;
+  static (String?, AccountStatus?) Function(AgentKind kind)? debugCliProbe;
 }
 
 class _HomePageState extends State<HomePage> {
@@ -69,6 +70,12 @@ class _HomePageState extends State<HomePage> {
       if (engine.isActive && mounted) setState(() {});
     });
     if (_workDir != null && _planPath != null) _reload();
+    // The first launch: a guided setup instead of an empty window.
+    if (!engine.demo && widget.prefs.getBool('setupDone') != true && _planPath == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openSetup();
+      });
+    }
     _detectClis();
   }
 
@@ -167,6 +174,35 @@ class _HomePageState extends State<HomePage> {
       if (mounted) setState(() {});
     }
     _saveSettings();
+  }
+
+  /// The guided setup: agent, CLI, sign-in, plan.
+  Future<void> _openSetup() async {
+    await showSetupWizard(
+      context,
+      SetupHooks(
+        settings: engine.settings,
+        onSettingsChanged: () {
+          _saveSettings();
+          setState(() {});
+        },
+        pickPlan: _browsePlan,
+        pickWorkDir: _pickWorkDir,
+        planPath: () => _planPath,
+        workDir: () => _workDir,
+        probe: switch (HomePage.debugCliProbe) {
+          final probe? => (kind) {
+            final (version, account) = probe(kind);
+            return (version == null ? null : 'C:\\Users\\demo\\.local\\bin\\${kind.name}.exe', version, account);
+          },
+          null => null,
+        },
+      ),
+    );
+    await widget.prefs.setBool('setupDone', true);
+    if (!mounted) return;
+    setState(() {});
+    await _detectClis();
   }
 
   Future<void> _openAccounts() async {
@@ -468,6 +504,14 @@ class _HomePageState extends State<HomePage> {
   late final _demoStates = <(String, IconData, VoidCallback)>[
     ('Pronto', Icons.play_circle_outline_rounded, () => engine.demoShow(LoopPhase.idle)),
     (
+      'Primo avvio',
+      Icons.rocket_launch_outlined,
+      () {
+        engine.demoShow(LoopPhase.idle);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _openSetup());
+      },
+    ),
+    (
       'Manca qualcosa per partire',
       Icons.error_outline_rounded,
       () {
@@ -625,6 +669,12 @@ class _HomePageState extends State<HomePage> {
                                             'Pannello di controllo',
                                             titleActions: [SettingsPanel.expandAllButton()],
                                             actions: [
+                                              IconButton(
+                                                tooltip: 'Configurazione guidata',
+                                                onPressed: active ? null : _openSetup,
+                                                iconSize: 19,
+                                                icon: const Icon(Icons.rocket_launch_outlined),
+                                              ),
                                               IconButton(
                                                 tooltip: 'Ripristina predefiniti',
                                                 onPressed: active ? null : _resetDefaults,
