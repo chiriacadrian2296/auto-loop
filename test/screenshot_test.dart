@@ -183,7 +183,9 @@ void main() {
 
       await tester.runAsync(() async {
         final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-        final image = await boundary.toImage();
+        // SCREENSHOT_SCALE=2 renders at twice the size, for sharp crops.
+        final scale = double.tryParse(Platform.environment['SCREENSHOT_SCALE'] ?? '') ?? 1;
+        final image = await boundary.toImage(pixelRatio: scale);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
         Directory(out!).createSync(recursive: true);
         File(p.join(out, 'main_${dark ? 'dark' : 'light'}.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
