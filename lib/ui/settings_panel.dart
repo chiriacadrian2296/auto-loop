@@ -11,6 +11,7 @@ import 'section_title.dart';
 import 'accounts_dialog.dart';
 import 'agent_badge.dart';
 import 'choice_dialog.dart';
+import '../l10n.dart';
 
 class SettingsPanel extends StatelessWidget {
   const SettingsPanel({
@@ -51,7 +52,8 @@ class SettingsPanel extends StatelessWidget {
   /// When the loop starts: Piano, Agente and Account cannot change, so they
   /// close (they can still be opened to read them).
   static void collapseLocked() {
-    _Collapsible.open.value = {..._Collapsible.open.value}..removeAll(const ['Piano', 'Agente', 'Account']);
+    _Collapsible.open.value = {..._Collapsible.open.value}
+      ..removeAll([tr('Piano', 'Plan'), tr('Agente', 'Agent'), 'Account']);
   }
 
   /// "Espandi tutto" / "Comprimi tutto" for the panel's title bar.
@@ -77,41 +79,47 @@ class SettingsPanel extends StatelessWidget {
     final exe = s.executable;
     final version = versions[s.agent];
     final account = accounts[s.agent];
-    final catalog = catalogs[s.agent] ?? const AgentCatalog();
+    final catalog = catalogs[s.agent] ?? AgentCatalog();
     final efforts = catalog.effortsFor(s.model);
     final selectedModel = catalog.find(s.model);
-    final summaryRecall =
-        'Dopo ${s.relaunchDelaySeconds} s · ${s.maxAttemptsPerBlock} tentativi · max ${s.runTimeoutMinutes} min';
+    final summaryRecall = tr(
+      'Dopo ${s.relaunchDelaySeconds} s · ${s.maxAttemptsPerBlock} tentativi · max ${s.runTimeoutMinutes} min',
+      'After ${s.relaunchDelaySeconds} s · ${s.maxAttemptsPerBlock} attempts · max ${s.runTimeoutMinutes} min',
+    );
     final summaryPlan = [
-      planPath == null ? 'Nessun piano' : p.basename(planPath!),
+      planPath == null ? tr('Nessun piano', 'No plan') : p.basename(planPath!),
       if (workDir != null) p.basename(workDir!),
       s.strategy.label,
     ].join(' · ');
     final summaryAgent = [
       s.agent.label,
-      selectedModel?.label ?? (s.model.isEmpty ? 'modello predefinito' : s.model),
+      selectedModel?.label ?? (s.model.isEmpty ? tr('modello predefinito', 'default model') : s.model),
       if (s.effort.isNotEmpty) _effortName(s.effort).toLowerCase(),
-      s.autonomy == Autonomy.full ? 'accesso completo' : 'protetta',
+      s.autonomy == Autonomy.full ? tr('accesso completo', 'full access') : tr('protetta', 'protected'),
     ].join(' · ');
     final summaryAccount = version == null
-        ? 'CLI non trovata'
+        ? tr('CLI non trovata', 'CLI not found')
         : account == null
-        ? 'Controllo…'
+        ? tr('Controllo…', 'Checking…')
         : account.loggedIn
-        ? [account.email ?? 'Connesso', if (!s.profile.isDefault) s.profile.name].join(' · ')
-        : 'Non connesso';
+        ? [account.email ?? tr('Connesso', 'Signed in'), if (!s.profile.isDefault) s.profile.name].join(' · ')
+        : tr('Non connesso', 'Not signed in');
     final summaryQuota = [
-      s.quotaBehavior == QuotaBehavior.wait ? 'Riprende da solo' : 'Si ferma',
-      if (s.keepAwake) 'PC acceso',
-      s.maxTotalTokens == 0 ? 'budget illimitato' : 'budget ${_compactTokens(s.maxTotalTokens)} token',
+      s.quotaBehavior == QuotaBehavior.wait ? tr('Riprende da solo', 'Resumes by itself') : tr('Si ferma', 'Stops'),
+      if (s.keepAwake) tr('PC acceso', 'PC awake'),
+      s.maxTotalTokens == 0
+          ? tr('budget illimitato', 'no token budget')
+          : tr('budget ${_compactTokens(s.maxTotalTokens)} token', 'budget ${_compactTokens(s.maxTotalTokens)} tokens'),
     ].join(' · ');
     final summaryEnd = [
-      s.verifyCommand.trim().isEmpty ? 'Nessuna verifica' : 'Verifica: ${s.verifyCommand.trim()}',
-      s.gitCommit ? 'commit git' : 'senza commit',
-      if (s.skipBlocked) 'salta i bloccati',
+      s.verifyCommand.trim().isEmpty
+          ? tr('Nessuna verifica', 'No check')
+          : tr('Verifica: ${s.verifyCommand.trim()}', 'Check: ${s.verifyCommand.trim()}'),
+      s.gitCommit ? tr('commit git', 'git commit') : tr('senza commit', 'no commit'),
+      if (s.skipBlocked) tr('salta i bloccati', 'skips blocked ones'),
     ].join(' · ');
     final rules = s.extraInstructions.trim().replaceAll(RegExp(r'\s+'), ' ');
-    final summaryRules = rules.isEmpty ? 'Nessuna regola aggiuntiva' : rules;
+    final summaryRules = rules.isEmpty ? tr('Nessuna regola aggiuntiva', 'No extra rules') : rules;
     final ready = requirements.where((r) => r.$2).length;
     final missing = [
       for (final r in requirements)
@@ -122,23 +130,28 @@ class SettingsPanel extends StatelessWidget {
       children: [
         if (requirements.isNotEmpty)
           ProgressSummary(
-            title: missing.isEmpty ? 'Pronto per partire' : 'Prima di partire',
+            title: missing.isEmpty
+                ? tr('Pronto per partire', 'Ready to start')
+                : tr('Prima di partire', 'Before starting'),
             ratio: ready / requirements.length,
-            label: '$ready di ${requirements.length} requisiti pronti',
+            label: tr(
+              '$ready di ${requirements.length} requisiti pronti',
+              '$ready of ${requirements.length} requirements ready',
+            ),
             color: missing.isEmpty ? context.colors.success : null,
           ),
         Expanded(
           child: Stack(
             children: [
               ListView(
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
+                padding: EdgeInsets.fromLTRB(18, 10, 18, 24),
                 children: [
                   // Expand/collapse-all is hidden for now; the button is kept below.
                   // Piano, Agente and Account cannot change while the loop runs.
                   _Collapsible(
-                    title: 'Piano',
+                    title: tr('Piano', 'Plan'),
                     summary: summaryPlan,
-                    warning: issues.contains('Piano'),
+                    warning: issues.contains(tr('Piano', 'Plan')),
                     locked: locked,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -146,29 +159,41 @@ class SettingsPanel extends StatelessWidget {
                         _Group(
                           children: [
                             _PathCard(
-                              caption: 'File del piano',
+                              caption: tr('File del piano', 'Plan file'),
                               inGroup: true,
                               icon: Icons.description_outlined,
-                              title: planPath == null ? 'Scegli il file del piano' : p.basename(planPath!),
-                              subtitle: planPath == null ? '.md o .txt' : _shortPath(p.dirname(planPath!)),
+                              title: planPath == null
+                                  ? tr('Scegli il file del piano', 'Choose the plan file')
+                                  : p.basename(planPath!),
+                              subtitle: planPath == null
+                                  ? tr('.md o .txt', '.md or .txt')
+                                  : _shortPath(p.dirname(planPath!)),
                               highlighted: planPath == null,
                               onTap: onPickPlan,
                             ),
                             _PathCard(
-                              caption: 'Cartella di lavoro',
+                              caption: tr('Cartella di lavoro', 'Working folder'),
                               inGroup: true,
                               icon: Icons.folder_outlined,
-                              title: workDir == null ? 'Scegli la cartella' : p.basename(workDir!),
+                              title: workDir == null
+                                  ? tr('Scegli la cartella', 'Choose the folder')
+                                  : p.basename(workDir!),
                               subtitle: workDir == null
-                                  ? 'Dove l\'agente crea e modifica i file'
+                                  ? tr(
+                                      'Dove l\'agente crea e modifica i file',
+                                      'Where the agent creates and edits files',
+                                    )
                                   : _shortPath(workDir!),
                               onTap: onPickWorkDir,
                             ),
                             _ChoiceCard<SplitStrategy>(
-                              caption: 'Suddivisione in blocchi',
+                              caption: tr('Suddivisione in blocchi', 'Splitting into blocks'),
                               icon: Icons.view_agenda_outlined,
-                              dialogTitle: 'Suddivisione in blocchi',
-                              dialogSubtitle: 'Come dividere il piano: l\'agente svolge un blocco alla volta.',
+                              dialogTitle: tr('Suddivisione in blocchi', 'Splitting into blocks'),
+                              dialogSubtitle: tr(
+                                'Come dividere il piano: l\'agente svolge un blocco alla volta.',
+                                'How to split the plan: the agent works on one block at a time.',
+                              ),
                               value: s.strategy,
                               choices: [
                                 for (final v in SplitStrategy.values)
@@ -192,9 +217,9 @@ class SettingsPanel extends StatelessWidget {
                     ),
                   ),
                   _Collapsible(
-                    title: 'Agente',
+                    title: tr('Agente', 'Agent'),
                     summary: summaryAgent,
-                    warning: issues.contains('Agente'),
+                    warning: issues.contains(tr('Agente', 'Agent')),
                     locked: locked,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -210,7 +235,7 @@ class SettingsPanel extends StatelessWidget {
                               },
                             ),
                             _ModelPicker(
-                              caption: 'Modello',
+                              caption: tr('Modello', 'Model'),
                               catalog: catalog,
                               value: s.model,
                               onChanged: (v) {
@@ -222,7 +247,7 @@ class SettingsPanel extends StatelessWidget {
                             ),
                             if (efforts.isNotEmpty)
                               _EffortPicker(
-                                caption: 'Ragionamento',
+                                caption: tr('Ragionamento', 'Reasoning'),
                                 efforts: efforts,
                                 value: s.effort,
                                 defaultLevel: selectedModel?.defaultEffort,
@@ -232,31 +257,42 @@ class SettingsPanel extends StatelessWidget {
                                 },
                               ),
                             _ChoiceCard<Autonomy>(
-                              caption: 'Permessi',
+                              caption: tr('Permessi', 'Permissions'),
                               icon: s.autonomy == Autonomy.full ? Icons.lock_open_rounded : Icons.shield_outlined,
-                              dialogTitle: 'Permessi dell\'agente',
-                              dialogSubtitle: 'Quanta libertà ha ${s.agent.label} mentre lavora da solo.',
+                              dialogTitle: tr('Permessi dell\'agente', 'Agent permissions'),
+                              dialogSubtitle: tr(
+                                'Quanta libertà ha ${s.agent.label} mentre lavora da solo.',
+                                'How much freedom ${s.agent.label} has while it works on its own.',
+                              ),
                               value: s.autonomy,
                               choices: [
                                 Choice(
                                   value: Autonomy.sandboxed,
                                   icon: Icons.shield_outlined,
-                                  label: 'Protetta',
+                                  label: tr('Protetta', 'Protected'),
                                   short: s.agent == AgentKind.codex
-                                      ? 'Sandbox sulla cartella del progetto'
-                                      : 'Azioni rischiose bloccate',
+                                      ? tr('Sandbox sulla cartella del progetto', 'Sandbox on the project folder')
+                                      : tr('Azioni rischiose bloccate', 'Risky actions blocked'),
                                   description: s.agent == AgentKind.codex
-                                      ? 'Sandbox sulla cartella del progetto: modifica file ed esegue comandi al suo interno.'
-                                      : 'Le azioni sicure (modifiche, build, test) sono approvate in automatico, quelle rischiose bloccate.',
+                                      ? tr(
+                                          'Sandbox sulla cartella del progetto: modifica file ed esegue comandi al suo interno.',
+                                          'Sandbox on the project folder: it edits files and runs commands inside it.',
+                                        )
+                                      : tr(
+                                          'Le azioni sicure (modifiche, build, test) sono approvate in automatico, quelle rischiose bloccate.',
+                                          'Safe actions (edits, builds, tests) are approved automatically, risky ones are blocked.',
+                                        ),
                                 ),
-                                const Choice(
+                                Choice(
                                   value: Autonomy.full,
                                   icon: Icons.lock_open_rounded,
-                                  label: 'Accesso completo',
-                                  short: 'Nessuna sandbox né conferma',
-                                  description:
-                                      'Nessuna sandbox e nessuna conferma: può eseguire qualsiasi comando. '
-                                      'Adatto a progetti sotto git o con un backup.',
+                                  label: tr('Accesso completo', 'Full access'),
+                                  short: tr('Nessuna sandbox né conferma', 'No sandbox, no confirmation'),
+                                  description: tr(
+                                    'Nessuna sandbox e nessuna conferma: può eseguire qualsiasi comando. '
+                                        'Adatto a progetti sotto git o con un backup.',
+                                    'No sandbox and no confirmation: it can run any command. For projects under git or with a backup.',
+                                  ),
                                 ),
                               ],
                               onChanged: (v) {
@@ -278,23 +314,26 @@ class SettingsPanel extends StatelessWidget {
                       children: [
                         // One row: profile and account open the same panel.
                         _PathCard(
-                          caption: 'Account e CLI',
+                          caption: tr('Account e CLI', 'Accounts and CLIs'),
                           inGroup: true,
                           icon: account?.loggedIn == true ? Icons.account_circle_outlined : Icons.no_accounts_outlined,
                           highlighted: version == null || account?.loggedIn == false,
                           title: version == null
-                              ? (exe.isEmpty ? 'CLI non trovata' : 'CLI non avviabile')
+                              ? (exe.isEmpty
+                                    ? tr('CLI non trovata', 'CLI not found')
+                                    : tr('CLI non avviabile', 'CLI does not start'))
                               : account == null
-                              ? 'Controllo dell\'account…'
+                              ? tr('Controllo dell\'account…', 'Checking the account…')
                               : account.loggedIn
-                              ? (account.email ?? 'Connesso')
-                              : 'Non connesso',
+                              ? (account.email ?? tr('Connesso', 'Signed in'))
+                              : tr('Non connesso', 'Not signed in'),
                           subtitle: [
                             s.agent.label,
                             if (!s.profile.isDefault) s.profile.name,
                             if (account?.loggedIn == true && planLabel(account!.plan).isNotEmpty)
-                              'Piano ${planLabel(account.plan)}',
-                            if (version == null || account?.loggedIn == false) 'clicca per configurare',
+                              tr('Piano ${planLabel(account.plan)}', '${planLabel(account.plan)} plan'),
+                            if (version == null || account?.loggedIn == false)
+                              tr('clicca per configurare', 'click to set up'),
                           ].join(' · '),
                           onTap: onOpenAccounts,
                         ),
@@ -303,24 +342,24 @@ class SettingsPanel extends StatelessWidget {
                   ),
                   // While the loop runs: what can and cannot change, right after
                   // the sections that are locked.
-                  if (locked) const Padding(padding: EdgeInsets.only(top: 14), child: _RunningBanner()),
+                  if (locked) Padding(padding: EdgeInsets.only(top: 14), child: _RunningBanner()),
                   // Read again at every invocation: safe to change while running.
                   _Collapsible(
-                    title: 'Richiamo',
+                    title: tr('Richiamo', 'Relaunch'),
                     summary: summaryRecall,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _Pair(
                           _NumberField(
-                            'Richiamo dopo',
+                            tr('Richiamo dopo', 'Relaunch after'),
                             's',
                             s.relaunchDelaySeconds,
                             (v) => s.relaunchDelaySeconds = v,
                             onChanged,
                           ),
                           _NumberField(
-                            'Tentativi per blocco',
+                            tr('Tentativi per blocco', 'Attempts per block'),
                             '',
                             s.maxAttemptsPerBlock,
                             (v) => s.maxAttemptsPerBlock = v,
@@ -330,7 +369,7 @@ class SettingsPanel extends StatelessWidget {
                         ),
                         _Pair(
                           _NumberField(
-                            'Silenzio max',
+                            tr('Silenzio max', 'Max silence'),
                             'min',
                             s.idleTimeoutMinutes,
                             (v) => s.idleTimeoutMinutes = v,
@@ -338,7 +377,7 @@ class SettingsPanel extends StatelessWidget {
                             min: 1,
                           ),
                           _NumberField(
-                            'Durata max',
+                            tr('Durata max', 'Max duration'),
                             'min',
                             s.runTimeoutMinutes,
                             (v) => s.runTimeoutMinutes = v,
@@ -350,36 +389,44 @@ class SettingsPanel extends StatelessWidget {
                     ),
                   ),
                   _Collapsible(
-                    title: 'Quota e budget',
+                    title: tr('Quota e budget', 'Quota and budget'),
                     summary: summaryQuota,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _Field(
-                          label: 'Quando la quota finisce',
+                          label: tr('Quando la quota finisce', 'When the quota runs out'),
                           child: _ChoiceCard<QuotaBehavior>(
                             icon: s.quotaBehavior == QuotaBehavior.wait
                                 ? Icons.update_rounded
                                 : Icons.pause_circle_outline_rounded,
-                            dialogTitle: 'Quando la quota finisce',
-                            dialogSubtitle: 'Cosa fare quando la CLI segnala il limite di utilizzo.',
+                            dialogTitle: tr('Quando la quota finisce', 'When the quota runs out'),
+                            dialogSubtitle: tr(
+                              'Cosa fare quando la CLI segnala il limite di utilizzo.',
+                              'What to do when the CLI reports the usage limit.',
+                            ),
                             value: s.quotaBehavior,
                             choices: [
                               Choice(
                                 value: QuotaBehavior.wait,
                                 icon: Icons.update_rounded,
                                 label: QuotaBehavior.wait.label,
-                                short: 'Quando la quota si rinnova',
-                                description:
-                                    'Riparte all\'ora in cui la quota si rinnova, se la CLI la indica; altrimenti '
-                                    'riprova ogni ${s.quotaWaitMinutes} minuti. Va avanti così finché il piano è finito.',
+                                short: tr('Quando la quota si rinnova', 'When the quota renews'),
+                                description: tr(
+                                  'Riparte all\'ora in cui la quota si rinnova, se la CLI la indica; altrimenti '
+                                      'riprova ogni ${s.quotaWaitMinutes} minuti. Va avanti così finché il piano è finito.',
+                                  'Starts again at the time the quota renews, when the CLI says it; otherwise it tries again every ${s.quotaWaitMinutes} minutes. It goes on like this until the plan is done.',
+                                ),
                               ),
                               Choice(
                                 value: QuotaBehavior.stop,
                                 icon: Icons.pause_circle_outline_rounded,
                                 label: QuotaBehavior.stop.label,
-                                short: 'Il loop va in pausa',
-                                description: 'Mette il loop in pausa: lo riprendi tu quando vuoi.',
+                                short: tr('Il loop va in pausa', 'The loop pauses'),
+                                description: tr(
+                                  'Mette il loop in pausa: lo riprendi tu quando vuoi.',
+                                  'Pauses the loop: you resume it when you want.',
+                                ),
                               ),
                             ],
                             onChanged: (v) {
@@ -389,28 +436,36 @@ class SettingsPanel extends StatelessWidget {
                           ),
                         ),
                         _Field(
-                          label: 'PC acceso',
+                          label: tr('PC acceso', 'PC awake'),
                           child: _ChoiceCard<bool>(
                             icon: s.keepAwake ? Icons.coffee_outlined : Icons.bedtime_outlined,
-                            dialogTitle: 'Mentre il loop lavora',
-                            dialogSubtitle: 'Se Windows può andare in sospensione mentre il loop lavora o aspetta.',
+                            dialogTitle: tr('Mentre il loop lavora', 'While the loop works'),
+                            dialogSubtitle: tr(
+                              'Se Windows può andare in sospensione mentre il loop lavora o aspetta.',
+                              'Whether Windows may go to sleep while the loop works or waits.',
+                            ),
                             value: s.keepAwake,
-                            choices: const [
+                            choices: [
                               Choice(
                                 value: true,
                                 icon: Icons.coffee_outlined,
-                                label: 'Tieni acceso il PC',
-                                short: 'Niente sospensione automatica',
-                                description:
-                                    'Finché il loop lavora o aspetta la quota, Windows non va in sospensione da solo. '
-                                    'Chiudere il coperchio o sospendere a mano lo ferma comunque.',
+                                label: tr('Tieni acceso il PC', 'Keep the PC awake'),
+                                short: tr('Niente sospensione automatica', 'No automatic sleep'),
+                                description: tr(
+                                  'Finché il loop lavora o aspetta la quota, Windows non va in sospensione da solo. '
+                                      'Chiudere il coperchio o sospendere a mano lo ferma comunque.',
+                                  'While the loop works or waits for the quota, Windows does not go to sleep on its own. Closing the lid or putting it to sleep by hand still stops it.',
+                                ),
                               ),
                               Choice(
                                 value: false,
                                 icon: Icons.bedtime_outlined,
-                                label: 'Lascia decidere a Windows',
-                                short: 'Sospensione come sempre',
-                                description: 'Il PC va in sospensione secondo le impostazioni di Windows, e il loop si ferma con lui.',
+                                label: tr('Lascia decidere a Windows', 'Let Windows decide'),
+                                short: tr('Sospensione come sempre', 'Sleep as usual'),
+                                description: tr(
+                                  'Il PC va in sospensione secondo le impostazioni di Windows, e il loop si ferma con lui.',
+                                  'The PC sleeps according to the Windows settings, and the loop stops with it.',
+                                ),
                               ),
                             ],
                             onChanged: (v) {
@@ -421,7 +476,7 @@ class SettingsPanel extends StatelessWidget {
                         ),
                         _Pair(
                           _NumberField(
-                            'Riprova ogni',
+                            tr('Riprova ogni', 'Retry every'),
                             'min',
                             s.quotaWaitMinutes,
                             (v) => s.quotaWaitMinutes = v,
@@ -430,7 +485,7 @@ class SettingsPanel extends StatelessWidget {
                             enabled: s.quotaBehavior == QuotaBehavior.wait,
                           ),
                           _NumberField(
-                            'Budget token',
+                            tr('Budget token', 'Token budget'),
                             'token',
                             s.maxTotalTokens,
                             (v) => s.maxTotalTokens = v,
@@ -441,18 +496,18 @@ class SettingsPanel extends StatelessWidget {
                     ),
                   ),
                   _Collapsible(
-                    title: 'Fine blocco',
+                    title: tr('Fine blocco', 'End of block'),
                     summary: summaryEnd,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _Field(
-                          label: 'Comando di verifica',
+                          label: tr('Comando di verifica', 'Check command'),
                           child: TextFormField(
                             key: ValueKey('field-verify-$projectDir'),
                             initialValue: s.verifyCommand,
-                            style: const TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
-                            decoration: const InputDecoration(hintText: 'es. flutter test'),
+                            style: TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
+                            decoration: InputDecoration(hintText: tr('es. flutter test', 'e.g. flutter test')),
                             onChanged: (v) {
                               s.verifyCommand = v;
                               onChanged();
@@ -463,27 +518,35 @@ class SettingsPanel extends StatelessWidget {
                         _Group(
                           children: [
                             _ChoiceCard<bool>(
-                              caption: 'Commit git',
+                              caption: tr('Commit git', 'Git commit'),
                               icon: s.gitCommit ? Icons.commit_rounded : Icons.block_rounded,
-                              dialogTitle: 'Commit git',
-                              dialogSubtitle: 'Se registrare le modifiche di ogni blocco completato.',
+                              dialogTitle: tr('Commit git', 'Git commit'),
+                              dialogSubtitle: tr(
+                                'Se registrare le modifiche di ogni blocco completato.',
+                                'Whether to record the changes of every completed block.',
+                              ),
                               value: s.gitCommit,
-                              choices: const [
+                              choices: [
                                 Choice(
                                   value: true,
                                   icon: Icons.commit_rounded,
-                                  label: 'A ogni blocco',
-                                  short: 'Un commit per ogni blocco completato',
-                                  description:
-                                      'Quando un blocco è completato, le sue modifiche vengono registrate con un commit '
-                                      '(se la cartella di lavoro è un repository git).',
+                                  label: tr('A ogni blocco', 'Every block'),
+                                  short: tr('Un commit per ogni blocco completato', 'One commit per completed block'),
+                                  description: tr(
+                                    'Quando un blocco è completato, le sue modifiche vengono registrate con un commit '
+                                        '(se la cartella di lavoro è un repository git).',
+                                    'When a block is completed, its changes are recorded with a commit (if the working folder is a git repository).',
+                                  ),
                                 ),
                                 Choice(
                                   value: false,
                                   icon: Icons.block_rounded,
-                                  label: 'Mai',
-                                  short: 'Le modifiche restano da registrare',
-                                  description: 'Nessun commit automatico: le modifiche le registri tu quando vuoi.',
+                                  label: tr('Mai', 'Never'),
+                                  short: tr('Le modifiche restano da registrare', 'Changes are left to record'),
+                                  description: tr(
+                                    'Nessun commit automatico: le modifiche le registri tu quando vuoi.',
+                                    'No automatic commit: you record the changes when you want.',
+                                  ),
                                 ),
                               ],
                               onChanged: (v) {
@@ -492,25 +555,34 @@ class SettingsPanel extends StatelessWidget {
                               },
                             ),
                             _ChoiceCard<bool>(
-                              caption: 'Blocchi bloccati',
+                              caption: tr('Blocchi bloccati', 'Blocked blocks'),
                               icon: s.skipBlocked ? Icons.redo_rounded : Icons.pause_circle_outline_rounded,
-                              dialogTitle: 'Quando un blocco è bloccato',
-                              dialogSubtitle: 'Cosa fare se l\'agente non riesce a proseguire su un blocco.',
+                              dialogTitle: tr('Quando un blocco è bloccato', 'When a block is blocked'),
+                              dialogSubtitle: tr(
+                                'Cosa fare se l\'agente non riesce a proseguire su un blocco.',
+                                'What to do if the agent cannot go on with a block.',
+                              ),
                               value: s.skipBlocked,
-                              choices: const [
+                              choices: [
                                 Choice(
                                   value: false,
                                   icon: Icons.pause_circle_outline_rounded,
-                                  label: 'Metti in pausa',
-                                  short: 'Aspetta il tuo intervento',
-                                  description: 'Il loop si ferma su quel blocco e aspetta che tu lo risolva.',
+                                  label: tr('Metti in pausa', 'Pause'),
+                                  short: tr('Aspetta il tuo intervento', 'Waits for you'),
+                                  description: tr(
+                                    'Il loop si ferma su quel blocco e aspetta che tu lo risolva.',
+                                    'The loop stops on that block and waits for you to sort it out.',
+                                  ),
                                 ),
                                 Choice(
                                   value: true,
                                   icon: Icons.redo_rounded,
-                                  label: 'Passa al successivo',
-                                  short: 'Continua con gli altri blocchi',
-                                  description: 'Il blocco resta bloccato e il loop va avanti con quelli dopo.',
+                                  label: tr('Passa al successivo', 'Move to the next'),
+                                  short: tr('Continua con gli altri blocchi', 'Goes on with the other blocks'),
+                                  description: tr(
+                                    'Il blocco resta bloccato e il loop va avanti con quelli dopo.',
+                                    'The block stays blocked and the loop goes on with the next ones.',
+                                  ),
                                 ),
                               ],
                               onChanged: (v) {
@@ -524,20 +596,22 @@ class SettingsPanel extends StatelessWidget {
                     ),
                   ),
                   _Collapsible(
-                    title: 'Istruzioni',
+                    title: tr('Istruzioni', 'Instructions'),
                     summary: summaryRules,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _Field(
-                          label: 'Regole per ogni blocco',
+                          label: tr('Regole per ogni blocco', 'Rules for every block'),
                           child: TextFormField(
                             key: ValueKey('field-instructions-$projectDir'),
                             initialValue: s.extraInstructions,
                             minLines: 3,
                             maxLines: 8,
-                            style: const TextStyle(fontSize: 13, height: 1.4),
-                            decoration: const InputDecoration(hintText: 'Stack, stile, cosa non toccare…'),
+                            style: TextStyle(fontSize: 13, height: 1.4),
+                            decoration: InputDecoration(
+                              hintText: tr('Stack, stile, cosa non toccare…', 'Stack, style, what not to touch…'),
+                            ),
                             onChanged: (v) {
                               s.extraInstructions = v;
                               onChanged();
@@ -568,54 +642,104 @@ String _shortPath(String path) {
 
 /// How far one click on a number field's arrows moves, chosen from the values
 /// people typically use for that field.
-const _fieldStep = <String, int>{
-  'Richiamo dopo': 10,
-  'Tentativi per blocco': 5,
-  'Silenzio max': 5,
-  'Durata max': 15,
-  'Riprova ogni': 15,
-  'Budget token': 500000,
+final _fieldStep = <String, int>{
+  tr('Richiamo dopo', 'Relaunch after'): 10,
+  tr('Tentativi per blocco', 'Attempts per block'): 5,
+  tr('Silenzio max', 'Max silence'): 5,
+  tr('Durata max', 'Max duration'): 15,
+  tr('Riprova ogni', 'Retry every'): 15,
+  tr('Budget token', 'Token budget'): 500000,
 };
 
 /// What the less obvious fields do, shown from the "i" next to their name.
-const _fieldInfo = <String, String>{
-  'Richiamo dopo': 'Pausa tra la fine di un\'invocazione dell\'agente e la successiva.',
-  'Tentativi per blocco':
-      'Quante volte l\'agente viene richiamato sullo stesso blocco prima di segnarlo come bloccato.',
-  'Silenzio max': 'Se l\'agente non scrive nulla per questo tempo, viene fermato e richiamato.',
-  'Durata max': 'Tempo massimo di una singola invocazione: oltre, viene fermata e il blocco riprende.',
-  'Riprova ogni': 'Quando la CLI non dice a che ora si rinnova la quota, ogni quanto riprovare.',
-  'PC acceso':
-      'Se il PC va in sospensione il loop si ferma con lui. Con "Tieni acceso il PC" Windows non si sospende da '
-      'solo finché il loop lavora o aspetta.',
-  'Budget token': 'Il loop si ferma dopo aver consumato in totale questi token. 0 = nessun limite.',
-  'Comando di verifica':
-      'Eseguito con cmd.exe nella cartella di lavoro quando l\'agente dichiara il blocco finito: deve '
-      'terminare con exit 0 perché il blocco sia completato. Se fallisce, l\'output torna all\'agente.',
-  'Regole per ogni blocco':
-      'Testo aggiunto a ogni prompt, oltre al piano: utile per stack, stile e cose da non toccare.',
-  'Commit git':
-      'A ogni blocco completato registra le modifiche con un commit. Solo se la cartella di lavoro è un '
-      'repository git.',
-  'Blocchi bloccati':
-      'Quando un blocco resta bloccato passa al successivo. Altrimenti il loop va in pausa e aspetta te.',
-  'File del piano':
-      'Il file di testo (.md o .txt) con il piano. Viene diviso in blocchi, che l\'agente svolge uno alla volta.',
-  'Agente': 'La CLI che svolge il piano, un blocco alla volta: Codex o Claude.',
-  'Modello': 'Il modello che l\'agente usa. "Predefinito della CLI" lascia quello configurato nella CLI stessa.',
-  'Quando la quota finisce':
-      'Cosa fare quando la CLI segnala che il limite di utilizzo è stato raggiunto. "Riprendi da solo" riparte '
-      'all\'ora in cui la quota si rinnova: così il piano va avanti anche per giorni, finché il PC è acceso e c\'è rete.',
+final _fieldInfo = <String, String>{
+  tr('Richiamo dopo', 'Relaunch after'): tr(
+    'Pausa tra la fine di un\'invocazione dell\'agente e la successiva.',
+    'Pause between the end of one agent invocation and the next.',
+  ),
+  tr('Tentativi per blocco', 'Attempts per block'): tr(
+    'Quante volte l\'agente viene richiamato sullo stesso blocco prima di segnarlo come bloccato.',
+    'How many times the agent is relaunched on the same block before it is marked blocked.',
+  ),
+  tr('Silenzio max', 'Max silence'): tr(
+    'Se l\'agente non scrive nulla per questo tempo, viene fermato e richiamato.',
+    'If the agent writes nothing for this long, it is stopped and relaunched.',
+  ),
+  tr('Durata max', 'Max duration'): tr(
+    'Tempo massimo di una singola invocazione: oltre, viene fermata e il blocco riprende.',
+    'Longest time for one invocation: beyond it, it is stopped and the block starts again.',
+  ),
+  tr('Riprova ogni', 'Retry every'): tr(
+    'Quando la CLI non dice a che ora si rinnova la quota, ogni quanto riprovare.',
+    'When the CLI does not say when the quota renews, how often to try again.',
+  ),
+  tr('PC acceso', 'PC awake'): tr(
+    'Se il PC va in sospensione il loop si ferma con lui. Con "Tieni acceso il PC" Windows non si sospende da '
+        'solo finché il loop lavora o aspetta.',
+    'If the PC goes to sleep the loop stops with it. With "Keep the PC awake" Windows does not sleep on its own while the loop works or waits.',
+  ),
+  tr('Budget token', 'Token budget'): tr(
+    'Il loop si ferma dopo aver consumato in totale questi token. 0 = nessun limite.',
+    'The loop stops after using this many tokens in total. 0 = no limit.',
+  ),
+  tr('Comando di verifica', 'Check command'): tr(
+    'Eseguito con cmd.exe nella cartella di lavoro quando l\'agente dichiara il blocco finito: deve '
+        'terminare con exit 0 perché il blocco sia completato. Se fallisce, l\'output torna all\'agente.',
+    'Run with cmd.exe in the working folder when the agent says the block is done: it must end with exit 0 for the block to be completed. If it fails, the output goes back to the agent.',
+  ),
+  tr('Regole per ogni blocco', 'Rules for every block'): tr(
+    'Testo aggiunto a ogni prompt, oltre al piano: utile per stack, stile e cose da non toccare.',
+    'Text added to every prompt, besides the plan: useful for stack, style and things not to touch.',
+  ),
+  tr('Commit git', 'Git commit'): tr(
+    'A ogni blocco completato registra le modifiche con un commit. Solo se la cartella di lavoro è un '
+        'repository git.',
+    'Records the changes of every completed block with a commit. Only if the working folder is a git repository.',
+  ),
+  tr('Blocchi bloccati', 'Blocked blocks'): tr(
+    'Quando un blocco resta bloccato passa al successivo. Altrimenti il loop va in pausa e aspetta te.',
+    'When a block stays blocked, moves on to the next one. Otherwise the loop pauses and waits for you.',
+  ),
+  tr('File del piano', 'Plan file'): tr(
+    'Il file di testo (.md o .txt) con il piano. Viene diviso in blocchi, che l\'agente svolge uno alla volta.',
+    'The text file (.md or .txt) with the plan. It is split into blocks, which the agent works on one at a time.',
+  ),
+  tr('Agente', 'Agent'): tr(
+    'La CLI che svolge il piano, un blocco alla volta: Codex o Claude.',
+    'The CLI that carries out the plan, one block at a time: Codex or Claude.',
+  ),
+  tr('Modello', 'Model'): tr(
+    'Il modello che l\'agente usa. "Predefinito della CLI" lascia quello configurato nella CLI stessa.',
+    'The model the agent uses. "CLI default" keeps the one set in the CLI itself.',
+  ),
+  tr('Quando la quota finisce', 'When the quota runs out'): tr(
+    'Cosa fare quando la CLI segnala che il limite di utilizzo è stato raggiunto. "Riprendi da solo" riparte '
+        'all\'ora in cui la quota si rinnova: così il piano va avanti anche per giorni, finché il PC è acceso e c\'è rete.',
+    'What to do when the CLI reports that the usage limit has been reached. "Resume by itself" starts again at the time the quota renews: so the plan goes on even for days, as long as the PC is on and online.',
+  ),
   // Cards whose name alone does not say what they are for.
-  'Cartella di lavoro':
-      'Dove l\'agente crea e modifica i file. Le impostazioni di questo pannello si salvano qui, '
-      'in .autoloop/settings.json, e tornano quando riapri il progetto. Percorsi delle CLI e set di '
-      'account restano invece uguali per tutti i progetti.',
-  'Suddivisione in blocchi':
-      'Come il piano viene diviso in blocchi. L\'agente ne svolge uno alla volta, e ogni blocco ha il suo esito.',
-  'Ragionamento': 'Quanto l\'agente ragiona prima di agire: più alto dà risultati migliori, ma usa più tempo e token.',
-  'Permessi': 'Cosa l\'agente può fare da solo, senza chiedere conferma, mentre lavora sul piano.',
-  'Account e CLI': 'Con quale account lavora la CLI dell\'agente. Si possono tenere più set di account, per esempio di persone diverse.',
+  tr('Cartella di lavoro', 'Working folder'): tr(
+    'Dove l\'agente crea e modifica i file. Le impostazioni di questo pannello si salvano qui, '
+        'in .autoloop/settings.json, e tornano quando riapri il progetto. Percorsi delle CLI e set di '
+        'account restano invece uguali per tutti i progetti.',
+    'Where the agent creates and edits files. The settings of this panel are saved here, in .autoloop/settings.json, and come back when you reopen the project. CLI paths and account sets stay the same for every project.',
+  ),
+  tr('Suddivisione in blocchi', 'Splitting into blocks'): tr(
+    'Come il piano viene diviso in blocchi. L\'agente ne svolge uno alla volta, e ogni blocco ha il suo esito.',
+    'How the plan is split into blocks. The agent works on one at a time, and every block has its own outcome.',
+  ),
+  tr('Ragionamento', 'Reasoning'): tr(
+    'Quanto l\'agente ragiona prima di agire: più alto dà risultati migliori, ma usa più tempo e token.',
+    'How much the agent thinks before acting: higher gives better results, but uses more time and tokens.',
+  ),
+  tr('Permessi', 'Permissions'): tr(
+    'Cosa l\'agente può fare da solo, senza chiedere conferma, mentre lavora sul piano.',
+    'What the agent can do on its own, without asking, while it works on the plan.',
+  ),
+  tr('Account e CLI', 'Accounts and CLIs'): tr(
+    'Con quale account lavora la CLI dell\'agente. Si possono tenere più set di account, per esempio di persone diverse.',
+    'Which account the agent\'s CLI works with. You can keep several account sets, for example for different people.',
+  ),
 };
 
 /// The ⓘ next to a field's name, when the name needs explaining.
@@ -638,7 +762,7 @@ class _Group extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: ColoredBox(
@@ -665,17 +789,20 @@ class _RunningBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(12)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.lock_outline_rounded, size: 18, color: c.primary),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Loop in esecuzione: piano, agente e account sono bloccati. '
-              'Le altre impostazioni si possono cambiare e valgono dalla prossima invocazione.',
+              tr(
+                'Loop in esecuzione: piano, agente e account sono bloccati. '
+                    'Le altre impostazioni si possono cambiare e valgono dalla prossima invocazione.',
+                'Loop running: plan, agent and account are locked. The other settings can change and apply from the next invocation.',
+              ),
               style: TextStyle(fontSize: 12, height: 1.4, color: c.text),
             ),
           ),
@@ -710,7 +837,15 @@ class _Collapsible extends StatefulWidget {
   /// The running loop cannot pick up changes here: shown dimmed, not editable.
   final bool locked;
 
-  static const all = ['Piano', 'Agente', 'Account', 'Richiamo', 'Quota e budget', 'Fine blocco', 'Istruzioni'];
+  static final all = [
+    tr('Piano', 'Plan'),
+    tr('Agente', 'Agent'),
+    'Account',
+    tr('Richiamo', 'Relaunch'),
+    tr('Quota e budget', 'Quota and budget'),
+    tr('Fine blocco', 'End of block'),
+    tr('Istruzioni', 'Instructions'),
+  ];
 
   // Shared by every section (and the expand/collapse-all button); survives
   // the list recycling sections that scroll out of view. Every section
@@ -800,7 +935,7 @@ class _CollapsibleState extends State<_Collapsible> {
                             child: Align(
                               alignment: Alignment.centerRight,
                               child: ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 170),
+                                constraints: BoxConstraints(maxWidth: 170),
                                 child: Tooltip(
                                   message: widget.summary,
                                   child: Text(
@@ -824,22 +959,22 @@ class _CollapsibleState extends State<_Collapsible> {
           ),
         ),
         AnimatedSize(
-          duration: const Duration(milliseconds: 220),
+          duration: Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
           child: open
               ? Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: EdgeInsets.only(top: 8),
                   child: AbsorbPointer(
                     absorbing: widget.locked,
                     child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 200),
+                      duration: Duration(milliseconds: 200),
                       opacity: widget.locked ? 0.5 : 1,
                       child: widget.child,
                     ),
                   ),
                 )
-              : const SizedBox(width: double.infinity),
+              : SizedBox(width: double.infinity),
         ),
       ],
     );
@@ -855,34 +990,42 @@ class _AgentPicker extends StatelessWidget {
   static String? _short(String? version) =>
       version == null ? null : RegExp(r'\d+\.\d+\.\d+').firstMatch(version)?.group(0) ?? version;
 
-  static const _about = {
-    AgentKind.codex: 'L\'agente di OpenAI, con il tuo account ChatGPT.',
-    AgentKind.claude: 'L\'agente di Anthropic, con il tuo account Claude.',
+  static final _about = {
+    AgentKind.codex: tr(
+      'L\'agente di OpenAI, con il tuo account ChatGPT.',
+      'OpenAI\'s agent, with your ChatGPT account.',
+    ),
+    AgentKind.claude: tr(
+      'L\'agente di Anthropic, con il tuo account Claude.',
+      'Anthropic\'s agent, with your Claude account.',
+    ),
   };
 
   @override
   Widget build(BuildContext context) {
     final version = _short(versions[value]);
     return _PathCard(
-      caption: 'Agente',
+      caption: tr('Agente', 'Agent'),
       inGroup: true,
       icon: Icons.smart_toy_outlined,
       leading: AgentBadge(kind: value, size: 34),
       title: value.label,
-      subtitle: version == null ? 'Non trovato su questo computer' : 'Versione $version',
+      subtitle: version == null
+          ? tr('Non trovato su questo computer', 'Not found on this computer')
+          : tr('Versione $version', 'Version $version'),
       trailing: Icons.unfold_more_rounded,
       onTap: () async {
         final picked = await showChoiceDialog<AgentKind>(
           context: context,
-          title: 'Agente',
-          subtitle: 'Chi svolge il piano, un blocco alla volta.',
+          title: tr('Agente', 'Agent'),
+          subtitle: tr('Chi svolge il piano, un blocco alla volta.', 'Who carries out the plan, one block at a time.'),
           selected: value,
           choices: [
             for (final k in AgentKind.values)
               Choice(
                 value: k,
                 label: k.label,
-                tag: _short(versions[k]) == null ? 'non trovato' : 'v${_short(versions[k])}',
+                tag: _short(versions[k]) == null ? tr('non trovato', 'not found') : 'v${_short(versions[k])}',
                 description: _about[k]!,
                 leading: AgentBadge(kind: k, size: 32, selected: k == value, background: context.colors.field),
               ),
@@ -946,7 +1089,7 @@ class _PathCard extends StatelessWidget {
                     ),
                     child: Icon(icon, size: 18, color: highlighted ? Colors.white : c.primary),
                   ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -967,7 +1110,7 @@ class _PathCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (_infoIcon(caption, c) case final info?) ...[const SizedBox(width: 4), info],
+                          if (_infoIcon(caption, c) case final info?) ...[SizedBox(width: 4), info],
                         ],
                       ),
                     Text(
@@ -980,7 +1123,7 @@ class _PathCard extends StatelessWidget {
                         color: highlighted ? c.primary : c.text,
                       ),
                     ),
-                    if (subtitle.isNotEmpty) const SizedBox(height: 1),
+                    if (subtitle.isNotEmpty) SizedBox(height: 1),
                     if (subtitle.isNotEmpty)
                       Text(
                         subtitle,
@@ -1010,7 +1153,7 @@ class _Field extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1022,10 +1165,10 @@ class _Field extends StatelessWidget {
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text),
                 ),
               ),
-              if (_infoIcon(label, c) case final info?) ...[const SizedBox(width: 4), info],
+              if (_infoIcon(label, c) case final info?) ...[SizedBox(width: 4), info],
             ],
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           child,
         ],
       ),
@@ -1076,7 +1219,7 @@ class _ChoiceCard<T> extends StatelessWidget {
   }
 }
 
-const _strategyIcon = {
+final _strategyIcon = {
   SplitStrategy.auto: Icons.auto_awesome_outlined,
   SplitStrategy.headings: Icons.title_rounded,
   SplitStrategy.numbered: Icons.format_list_numbered_rounded,
@@ -1085,19 +1228,46 @@ const _strategyIcon = {
   SplitStrategy.whole: Icons.article_outlined,
 };
 
-const _strategyInfo = <SplitStrategy, (String, String)>{
+final _strategyInfo = <SplitStrategy, (String, String)>{
   SplitStrategy.auto: (
-    'Riconosce la struttura del file',
-    'Sceglie da solo la struttura del file: titoli, elenchi o checkbox.',
+    tr('Riconosce la struttura del file', 'Detects the file\'s structure'),
+    tr(
+      'Sceglie da solo la struttura del file: titoli, elenchi o checkbox.',
+      'Picks the file\'s structure by itself: headings, lists or checkboxes.',
+    ),
   ),
-  SplitStrategy.headings: ('Un blocco per titolo', 'Un blocco per ogni titolo Markdown (## Titolo).'),
-  SplitStrategy.numbered: ('Un blocco per voce numerata', 'Un blocco per ogni voce di un elenco numerato (1. 2. 3.).'),
+  SplitStrategy.headings: (
+    tr('Un blocco per titolo', 'One block per heading'),
+    tr('Un blocco per ogni titolo Markdown (## Titolo).', 'One block for every Markdown heading (## Heading).'),
+  ),
+  SplitStrategy.numbered: (
+    tr('Un blocco per voce numerata', 'One block per numbered item'),
+    tr(
+      'Un blocco per ogni voce di un elenco numerato (1. 2. 3.).',
+      'One block for every item of a numbered list (1. 2. 3.).',
+    ),
+  ),
   SplitStrategy.checkboxes: (
-    'Un blocco per casella',
-    'Un blocco per ogni casella (- [ ]); quelle spuntate sono già fatte.',
+    tr('Un blocco per casella', 'One block per checkbox'),
+    tr(
+      'Un blocco per ogni casella (- [ ]); quelle spuntate sono già fatte.',
+      'One block for every checkbox (- [ ]); ticked ones are already done.',
+    ),
   ),
-  SplitStrategy.bullets: ('Un blocco per voce', 'Un blocco per ogni voce di un elenco puntato (- voce).'),
-  SplitStrategy.whole: ('Tutto in un blocco', 'Tutto il piano come un unico blocco: l\'agente decide come procedere.'),
+  SplitStrategy.bullets: (
+    tr('Un blocco per voce', 'One block per item'),
+    tr(
+      'Un blocco per ogni voce di un elenco puntato (- voce).',
+      'One block for every item of a bulleted list (- item).',
+    ),
+  ),
+  SplitStrategy.whole: (
+    tr('Tutto in un blocco', 'All in one block'),
+    tr(
+      'Tutto il piano come un unico blocco: l\'agente decide come procedere.',
+      'The whole plan as a single block: the agent decides how to proceed.',
+    ),
+  ),
 };
 
 class _Pair extends StatelessWidget {
@@ -1109,7 +1279,7 @@ class _Pair extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(child: a),
-      const SizedBox(width: 10),
+      SizedBox(width: 10),
       Expanded(child: b),
     ],
   );
@@ -1154,9 +1324,9 @@ class _NumberFieldState extends State<_NumberField> {
     final n = int.tryParse(text);
     setState(() {
       if (n == null) {
-        _error = 'Inserisci un numero';
+        _error = tr('Inserisci un numero', 'Enter a number');
       } else if (n < widget.min) {
-        _error = 'Minimo ${widget.min}';
+        _error = tr('Minimo ${widget.min}', 'Minimum ${widget.min}');
       } else {
         _error = null;
         widget.set(n);
@@ -1196,7 +1366,7 @@ class _NumberFieldState extends State<_NumberField> {
     Widget arrow(IconData icon, int direction) => ExcludeSemantics(
       child: Tooltip(
         message: '${direction > 0 ? '+' : '−'}$_stepLabel',
-        waitDuration: const Duration(milliseconds: 400),
+        waitDuration: Duration(milliseconds: 400),
         child: InkWell(
           onTap: widget.enabled ? () => _step(direction) : null,
           borderRadius: BorderRadius.circular(4),
@@ -1211,18 +1381,18 @@ class _NumberFieldState extends State<_NumberField> {
         enabled: widget.enabled,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        style: const TextStyle(fontSize: 13.5, fontFeatures: [FontFeature.tabularFigures()]),
+        style: TextStyle(fontSize: 13.5, fontFeatures: [FontFeature.tabularFigures()]),
         decoration: InputDecoration(
           errorText: _error,
           errorStyle: TextStyle(fontSize: 11, color: c.danger),
           suffixIcon: Padding(
-            padding: const EdgeInsets.only(right: 6),
+            padding: EdgeInsets.only(right: 6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget.unit.isNotEmpty) ...[
                   Text(widget.unit, style: TextStyle(color: c.muted, fontSize: 12)),
-                  const SizedBox(width: 4),
+                  SizedBox(width: 4),
                 ],
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1231,7 +1401,7 @@ class _NumberFieldState extends State<_NumberField> {
               ],
             ),
           ),
-          suffixIconConstraints: const BoxConstraints(minHeight: 36),
+          suffixIconConstraints: BoxConstraints(minHeight: 36),
         ),
         onChanged: _apply,
       ),
@@ -1249,17 +1419,20 @@ class _ModelPicker extends StatelessWidget {
   Future<void> _pick(BuildContext context) async {
     final picked = await showChoiceDialog<String>(
       context: context,
-      title: 'Modello',
+      title: tr('Modello', 'Model'),
       subtitle: catalog.isEmpty
-          ? 'Elenco non rilevato: resta disponibile il modello predefinito.'
+          ? tr(
+              'Elenco non rilevato: resta disponibile il modello predefinito.',
+              'List not found: the default model is still available.',
+            )
           : '${catalog.models.length} modelli dal ${catalog.source}',
       selected: value,
       choices: [
-        const Choice(
+        Choice(
           value: '',
           icon: Icons.tune_rounded,
-          label: 'Predefinito della CLI',
-          description: 'Il modello configurato nella CLI.',
+          label: tr('Predefinito della CLI', 'CLI default'),
+          description: tr('Il modello configurato nella CLI.', 'The model set in the CLI.'),
           dividerAfter: true,
         ),
         for (final m in catalog.models)
@@ -1281,10 +1454,14 @@ class _ModelPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = catalog.find(value);
-    final title = value.isEmpty ? 'Predefinito della CLI' : (m?.label ?? value);
+    final title = value.isEmpty ? tr('Predefinito della CLI', 'CLI default') : (m?.label ?? value);
     final subtitle = value.isEmpty
-        ? (catalog.isEmpty ? 'Clicca per scegliere' : '${catalog.models.length} modelli disponibili')
-        : (m?.description.isNotEmpty == true ? m!.description : (m == null ? 'Modello personalizzato' : value));
+        ? (catalog.isEmpty
+              ? tr('Clicca per scegliere', 'Click to choose')
+              : '${catalog.models.length} modelli disponibili')
+        : (m?.description.isNotEmpty == true
+              ? m!.description
+              : (m == null ? tr('Modello personalizzato', 'Custom model') : value));
     return _PathCard(
       caption: caption,
       inGroup: caption != null,
@@ -1298,14 +1475,20 @@ class _ModelPicker extends StatelessWidget {
 }
 
 /// Plain-language meaning of each reasoning level, shared by both CLIs.
-const _effortInfo = <String, (String, String)>{
-  'minimal': ('Minimo', 'Quasi nessun ragionamento: il più veloce.'),
-  'low': ('Basso', 'Risposte rapide, ragionamento leggero.'),
-  'medium': ('Medio', 'Equilibrio tra velocità e profondità.'),
-  'high': ('Alto', 'Più ragionamento per problemi complessi.'),
-  'xhigh': ('Molto alto', 'Ragionamento esteso, più lento.'),
-  'max': ('Massimo', 'Il ragionamento più approfondito.'),
-  'ultra': ('Ultra', 'Il livello più alto disponibile: lento e costoso.'),
+final _effortInfo = <String, (String, String)>{
+  'minimal': (
+    tr('Minimo', 'Minimal'),
+    tr('Quasi nessun ragionamento: il più veloce.', 'Almost no reasoning: the fastest.'),
+  ),
+  'low': (tr('Basso', 'Low'), tr('Risposte rapide, ragionamento leggero.', 'Quick answers, light reasoning.')),
+  'medium': (tr('Medio', 'Medium'), tr('Equilibrio tra velocità e profondità.', 'Balance between speed and depth.')),
+  'high': (tr('Alto', 'High'), tr('Più ragionamento per problemi complessi.', 'More reasoning for complex problems.')),
+  'xhigh': (tr('Molto alto', 'Very high'), tr('Ragionamento esteso, più lento.', 'Extended reasoning, slower.')),
+  'max': (tr('Massimo', 'Maximum'), tr('Il ragionamento più approfondito.', 'The deepest reasoning.')),
+  'ultra': (
+    'Ultra',
+    tr('Il livello più alto disponibile: lento e costoso.', 'The highest level available: slow and expensive.'),
+  ),
 };
 
 String _effortName(String id) => _effortInfo[id]?.$1 ?? id;
@@ -1327,19 +1510,25 @@ class _EffortPicker extends StatelessWidget {
   Future<void> _pick(BuildContext context) async {
     final picked = await showChoiceDialog<String>(
       context: context,
-      title: 'Livello di ragionamento',
-      subtitle: 'Più ragionamento: risultati migliori, ma più tempo e token.',
+      title: tr('Livello di ragionamento', 'Reasoning level'),
+      subtitle: tr(
+        'Più ragionamento: risultati migliori, ma più tempo e token.',
+        'More reasoning: better results, but more time and tokens.',
+      ),
       selected: value,
       choices: [
         Choice(
           value: '',
           icon: Icons.tune_rounded,
-          label: 'Predefinito',
+          label: tr('Predefinito', 'Default'),
           dividerAfter: true,
           tag: defaultLevel ?? '',
           description: defaultLevel == null
-              ? 'Il livello configurato nella CLI.'
-              : 'Il livello consigliato per questo modello: ${_effortName(defaultLevel!).toLowerCase()}.',
+              ? tr('Il livello configurato nella CLI.', 'The level set in the CLI.')
+              : tr(
+                  'Il livello consigliato per questo modello: ${_effortName(defaultLevel!).toLowerCase()}.',
+                  'The level advised for this model: ${_effortName(defaultLevel!).toLowerCase()}.',
+                ),
         ),
         // Levels go from least to most reasoning: numbered in that order.
         for (final (i, e) in efforts.indexed)
@@ -1352,9 +1541,16 @@ class _EffortPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = value.isEmpty
-        ? (defaultLevel == null ? 'Predefinito' : 'Predefinito · ${_effortName(defaultLevel!).toLowerCase()}')
+        ? (defaultLevel == null
+              ? tr('Predefinito', 'Default')
+              : tr(
+                  'Predefinito · ${_effortName(defaultLevel!).toLowerCase()}',
+                  'Default · ${_effortName(defaultLevel!).toLowerCase()}',
+                ))
         : _effortName(value);
-    final subtitle = value.isEmpty ? '${efforts.length} livelli disponibili' : (_effortInfo[value]?.$2 ?? value);
+    final subtitle = value.isEmpty
+        ? tr('${efforts.length} livelli disponibili', '${efforts.length} levels available')
+        : (_effortInfo[value]?.$2 ?? value);
     return _PathCard(
       caption: caption,
       inGroup: caption != null,

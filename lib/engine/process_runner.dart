@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../l10n.dart';
+
 enum KillReason { idleTimeout, timeout, stopped }
 
 class ProcessOutcome {
@@ -142,7 +144,12 @@ Future<(int, String)> runShell(
   );
   final outcome = await done;
   if (outcome.killReason == KillReason.timeout) {
-    buffer.writeln('[AutoLoop] Comando interrotto: superato il timeout di ${timeout.inMinutes} minuti.');
+    buffer.writeln(
+      tr(
+        '[AutoLoop] Comando interrotto: superato il timeout di ${timeout.inMinutes} minuti.',
+        '[AutoLoop] Command stopped: went over the ${timeout.inMinutes}-minute timeout.',
+      ),
+    );
   }
   return (outcome.killReason == null ? outcome.exitCode : -1, buffer.toString());
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
+import '../l10n.dart';
 
 /// Width of the open/close arrow; line icons in the activity log are
 /// centred on it.
@@ -85,7 +86,7 @@ class SectionTitle extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: split
             ? Tooltip(
-                message: open ? 'Chiudi' : 'Apri',
+                message: open ? tr('Chiudi', 'Close') : tr('Apri', 'Open'),
                 waitDuration: const Duration(milliseconds: 600),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(6),
@@ -330,7 +331,7 @@ class ExpandAllButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => IconButton(
-    tooltip: allOpen ? 'Comprimi tutto' : 'Espandi tutto',
+    tooltip: allOpen ? tr('Comprimi tutto', 'Collapse all') : tr('Espandi tutto', 'Expand all'),
     onPressed: onPressed,
     iconSize: 19,
     icon: Icon(allOpen ? Icons.unfold_less_rounded : Icons.unfold_more_rounded),

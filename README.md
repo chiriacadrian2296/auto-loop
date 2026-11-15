@@ -113,6 +113,9 @@ Il loop usa sempre il profilo selezionato, e il registro attività lo indica all
   controllare il lavoro prima di riprendere.
 - **Attività** (a destra): per ogni blocco le invocazioni, con messaggi dell'agente, comandi, verifiche, commit ed
   esito. I filtri in alto scelgono cosa mostrare.
+- **Lingua**: italiano o inglese, dal pulsante IT/EN in alto o al primo avvio (all'inizio quella di Windows). Anche le
+  istruzioni all'agente seguono la lingua, quindi i suoi messaggi nell'Attività arrivano in quella lingua; il piano
+  può essere scritto in qualsiasi lingua.
 - **Barra in basso**: *Avvia*, *Pausa* e *Ferma*; i totali dell'esecuzione; la **mappa** dell'attività nel tempo, dove
   un clic su un punto porta alla riga corrispondente.
 

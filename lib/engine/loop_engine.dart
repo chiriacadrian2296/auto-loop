@@ -12,20 +12,24 @@ import 'plan_parser.dart';
 import 'process_runner.dart';
 import 'prompt.dart';
 import 'settings.dart';
+import '../l10n.dart';
 
 enum LoopPhase {
-  idle('Pronto'),
-  running('Agente al lavoro'),
-  verifying('Verifica in corso'),
-  waiting('In attesa del richiamo'),
-  quotaWait('Quota esaurita, in attesa'),
-  offline('In attesa della rete'),
-  stopping('Arresto…'),
-  paused('In pausa'),
-  finished('Piano completato');
+  idle('Pronto', 'Ready'),
+  running('Agente al lavoro', 'Agent at work'),
+  verifying('Verifica in corso', 'Checking'),
+  waiting('In attesa del richiamo', 'Waiting to relaunch'),
+  quotaWait('Quota esaurita, in attesa', 'Quota used up, waiting'),
+  offline('In attesa della rete', 'Waiting for the network'),
+  stopping('Arresto…', 'Stopping…'),
+  paused('In pausa', 'Paused'),
+  finished('Piano completato', 'Plan completed');
 
-  const LoopPhase(this.label);
-  final String label;
+  const LoopPhase(this._it, this._en);
+  final String _it, _en;
+
+  /// The label in the language in use.
+  String get label => tr(_it, _en);
 }
 
 /// Outcome the agent declares on the last line of its final message.
@@ -76,9 +80,9 @@ class LoopEngine extends ChangeNotifier {
     final hm = '${t.hour}:${t.minute.toString().padLeft(2, '0')}';
     final days = DateTime(t.year, t.month, t.day).difference(DateTime(now.year, now.month, now.day)).inDays;
     return switch (days) {
-      0 => 'alle $hm',
-      1 => 'domani alle $hm',
-      _ => 'il ${t.day}/${t.month} alle $hm',
+      0 => tr('alle $hm', 'at $hm'),
+      1 => tr('domani alle $hm', 'tomorrow at $hm'),
+      _ => tr('il ${t.day}/${t.month} alle $hm', 'on ${t.day}/${t.month} at $hm'),
     };
   }
 
@@ -106,15 +110,15 @@ class LoopEngine extends ChangeNotifier {
 
   /// Loads (or reloads) a plan for a project folder, restoring saved progress.
   String? load({required String workDir, required String planPath}) {
-    if (isActive) return 'Ferma il loop prima di cambiare piano.';
+    if (isActive) return tr('Ferma il loop prima di cambiare piano.', 'Stop the loop before changing plan.');
     final file = File(planPath);
-    if (!file.existsSync()) return 'File del piano non trovato.';
-    if (!Directory(workDir).existsSync()) return 'Cartella di progetto non trovata.';
+    if (!file.existsSync()) return tr('File del piano non trovato.', 'Plan file not found.');
+    if (!Directory(workDir).existsSync()) return tr('Cartella di progetto non trovata.', 'Project folder not found.');
     final String raw;
     try {
       raw = file.readAsStringSync();
     } catch (e) {
-      return 'Impossibile leggere il piano: $e';
+      return tr('Impossibile leggere il piano: $e', 'Cannot read the plan: $e');
     }
     this.workDir = workDir;
     this.planPath = planPath;
@@ -129,12 +133,15 @@ class LoopEngine extends ChangeNotifier {
       final s = state!.of(b.id);
       if (b.preChecked && s.status == BlockStatus.pending && s.attempts == 0) {
         s.status = BlockStatus.done;
-        s.note = 'Già spuntato nel piano.';
+        s.note = tr('Già spuntato nel piano.', 'Already ticked in the plan.');
       }
     }
     final allDone = doneCount == plan!.blocks.length;
     phase = allDone ? LoopPhase.finished : LoopPhase.idle;
-    statusMessage = '${plan!.blocks.length} blocchi (${plan!.strategy.label}), $doneCount completati.';
+    statusMessage = tr(
+      '${plan!.blocks.length} blocchi (${plan!.strategy.label}), $doneCount completati.',
+      '${plan!.blocks.length} blocks (${plan!.strategy.label}), $doneCount completed.',
+    );
     notifyListeners();
     return null;
   }
@@ -272,13 +279,22 @@ class LoopEngine extends ChangeNotifier {
     if (demo) {
       _log(
         LogKind.warning,
-        'Modalità dimostrazione: l\'avvio è disattivato. Apri AutoLoop senza --demo per lavorare davvero.',
+        tr(
+          'Modalità dimostrazione: l\'avvio è disattivato. Apri AutoLoop senza --demo per lavorare davvero.',
+          'Demo mode: starting is turned off. Open AutoLoop without --demo to work for real.',
+        ),
       );
       return;
     }
     final exe = settings.executable;
     if (exe.isEmpty || !File(exe).existsSync()) {
-      _log(LogKind.error, 'Eseguibile di ${settings.agent.label} non trovato. Impostalo nelle impostazioni.');
+      _log(
+        LogKind.error,
+        tr(
+          'Eseguibile di ${settings.agent.label} non trovato. Impostalo nelle impostazioni.',
+          '${settings.agent.label} executable not found. Set it in the settings.',
+        ),
+      );
       return;
     }
     _stopRequested = false;
@@ -287,10 +303,10 @@ class LoopEngine extends ChangeNotifier {
     try {
       await _loop();
     } catch (e, st) {
-      _log(LogKind.error, 'Errore interno: $e');
+      _log(LogKind.error, tr('Errore interno: $e', 'Internal error: $e'));
       debugPrint('$st');
-      _setPhase(LoopPhase.paused, 'Interrotto da un errore interno.');
-      _attention('Loop interrotto', 'Errore interno: $e');
+      _setPhase(LoopPhase.paused, tr('Interrotto da un errore interno.', 'Stopped by an internal error.'));
+      _attention(tr('Loop interrotto', 'Loop stopped'), tr('Errore interno: $e', 'Internal error: $e'));
     } finally {
       _process = null;
       currentBlock = null;
@@ -314,7 +330,13 @@ class LoopEngine extends ChangeNotifier {
     if (!isActive) return;
     _pauseRequested = true;
     _wake();
-    _log(LogKind.info, 'Pausa richiesta: il loop si fermerà al termine del passo corrente.');
+    _log(
+      LogKind.info,
+      tr(
+        'Pausa richiesta: il loop si fermerà al termine del passo corrente.',
+        'Pause requested: the loop will stop at the end of the current step.',
+      ),
+    );
   }
 
   /// Kill the agent now. Its partial work stays on disk and is picked up on
@@ -364,7 +386,11 @@ class LoopEngine extends ChangeNotifier {
         final found = await InternetAddress.lookup(host).timeout(const Duration(seconds: 10));
         if (found.isNotEmpty) return;
       } catch (_) {}
-      await _wait(const Duration(seconds: 30), LoopPhase.offline, 'Rete assente: riprendo appena torna.');
+      await _wait(
+        const Duration(seconds: 30),
+        LoopPhase.offline,
+        tr('Rete assente: riprendo appena torna.', 'No network: resuming as soon as it is back.'),
+      );
     }
   }
 
@@ -382,48 +408,89 @@ class LoopEngine extends ChangeNotifier {
         _log(
           LogKind.success,
           blocked == 0
-              ? 'Tutti i blocchi sono completati.'
+              ? tr('Tutti i blocchi sono completati.', 'All blocks are completed.')
               : blocked == 1
-              ? 'Nessun blocco da fare; 1 blocco bloccato richiede attenzione.'
-              : 'Nessun blocco da fare; $blocked blocchi bloccati richiedono attenzione.',
+              ? tr(
+                  'Nessun blocco da fare; 1 blocco bloccato richiede attenzione.',
+                  'No blocks left to do; 1 blocked block needs attention.',
+                )
+              : tr(
+                  'Nessun blocco da fare; $blocked blocchi bloccati richiedono attenzione.',
+                  'No blocks left to do; $blocked blocked blocks need attention.',
+                ),
         );
         _setPhase(
           blocked == 0 ? LoopPhase.finished : LoopPhase.paused,
-          blocked == 0 ? 'Piano completato.' : 'Ci sono blocchi bloccati.',
+          blocked == 0
+              ? tr('Piano completato.', 'Plan completed.')
+              : tr('Ci sono blocchi bloccati.', 'Some blocks are blocked.'),
         );
         _attention(
-          blocked == 0 ? 'Piano completato' : 'Serve il tuo intervento',
+          blocked == 0 ? tr('Piano completato', 'Plan completed') : tr('Serve il tuo intervento', 'You are needed'),
           blocked == 0
-              ? '${p.basename(planPath!)}: tutti i blocchi sono completati.'
-              : '${p.basename(planPath!)}: $blocked blocchi sono bloccati.',
+              ? tr(
+                  '${p.basename(planPath!)}: tutti i blocchi sono completati.',
+                  '${p.basename(planPath!)}: all blocks are completed.',
+                )
+              : tr(
+                  '${p.basename(planPath!)}: $blocked blocchi sono bloccati.',
+                  '${p.basename(planPath!)}: $blocked blocks are blocked.',
+                ),
         );
         return;
       }
 
       if (settings.maxTotalTokens > 0 && state.totalTokens >= settings.maxTotalTokens) {
-        _log(LogKind.warning, 'Budget di token raggiunto (${state.totalTokens}).');
-        _setPhase(LoopPhase.paused, 'Budget di token esaurito.');
-        _attention('Budget di token esaurito', 'Il loop si è fermato dopo ${state.totalTokens} token.');
+        _log(
+          LogKind.warning,
+          tr('Budget di token raggiunto (${state.totalTokens}).', 'Token budget reached (${state.totalTokens}).'),
+        );
+        _setPhase(LoopPhase.paused, tr('Budget di token esaurito.', 'Token budget used up.'));
+        _attention(
+          tr('Budget di token esaurito', 'Token budget used up'),
+          tr(
+            'Il loop si è fermato dopo ${state.totalTokens} token.',
+            'The loop stopped after ${state.totalTokens} tokens.',
+          ),
+        );
         return;
       }
 
       final bs = state.of(next.id);
       if (bs.attempts >= settings.maxAttemptsPerBlock) {
         bs.status = BlockStatus.blocked;
-        bs.note = 'Superato il limite di ${settings.maxAttemptsPerBlock} invocazioni.';
+        bs.note = tr(
+          'Superato il limite di ${settings.maxAttemptsPerBlock} invocazioni.',
+          'Went over the limit of ${settings.maxAttemptsPerBlock} invocations.',
+        );
         state.save(dir);
-        _log(LogKind.error, 'Blocco ${next.index + 1}: ${bs.note}');
+        _log(LogKind.error, tr('Blocco ${next.index + 1}: ${bs.note}', 'Block ${next.index + 1}: ${bs.note}'));
         if (settings.skipBlocked) continue;
-        _setPhase(LoopPhase.paused, 'Blocco ${next.index + 1} fermo: troppi tentativi.');
-        _attention('Serve il tuo intervento', 'Blocco ${next.index + 1} «${next.title}»: troppi tentativi.');
+        _setPhase(
+          LoopPhase.paused,
+          tr('Blocco ${next.index + 1} fermo: troppi tentativi.', 'Block ${next.index + 1} stuck: too many attempts.'),
+        );
+        _attention(
+          tr('Serve il tuo intervento', 'You are needed'),
+          tr(
+            'Blocco ${next.index + 1} «${next.title}»: troppi tentativi.',
+            'Block ${next.index + 1} «${next.title}»: too many attempts.',
+          ),
+        );
         return;
       }
 
       currentBlock = next.index;
       final result = await _invoke(next, bs);
       if (_stopRequested) {
-        _log(LogKind.warning, 'Agente interrotto manualmente. Il lavoro parziale resta su disco.');
-        _setPhase(LoopPhase.paused, 'Fermato.');
+        _log(
+          LogKind.warning,
+          tr(
+            'Agente interrotto manualmente. Il lavoro parziale resta su disco.',
+            'Agent stopped by hand. The partial work stays on disk.',
+          ),
+        );
+        _setPhase(LoopPhase.paused, tr('Fermato.', 'Stopped.'));
         return;
       }
 
@@ -432,8 +499,14 @@ class LoopEngine extends ChangeNotifier {
           bs.attempts--; // a quota stop is not the block's fault
           state.save(dir);
           if (settings.quotaBehavior == QuotaBehavior.stop) {
-            _setPhase(LoopPhase.paused, 'Quota esaurita.');
-            _attention('Quota esaurita', 'Il loop è in pausa: riprendilo quando la quota torna disponibile.');
+            _setPhase(LoopPhase.paused, tr('Quota esaurita.', 'Quota used up.'));
+            _attention(
+              tr('Quota esaurita', 'Quota used up'),
+              tr(
+                'Il loop è in pausa: riprendilo quando la quota torna disponibile.',
+                'The loop is paused: resume it when the quota is available again.',
+              ),
+            );
             return;
           }
           // At the time the quota renews, when the CLI says it; a minute
@@ -443,42 +516,112 @@ class LoopEngine extends ChangeNotifier {
           if (reset != null && reset.isAfter(now) && reset.difference(now) < const Duration(days: 8)) {
             final at = reset.add(quotaMargin);
             final when = _when(at);
-            _log(LogKind.info, 'La quota si rinnova $when: il loop riprenderà da solo.');
-            _attention('Quota esaurita', 'Il loop riprenderà da solo $when.');
-            await _waitUntil(at, LoopPhase.quotaWait, 'Quota esaurita: riprendo $when.');
+            _log(
+              LogKind.info,
+              tr(
+                'La quota si rinnova $when: il loop riprenderà da solo.',
+                'The quota renews $when: the loop will resume by itself.',
+              ),
+            );
+            _attention(
+              tr('Quota esaurita', 'Quota used up'),
+              tr('Il loop riprenderà da solo $when.', 'The loop will resume by itself $when.'),
+            );
+            await _waitUntil(
+              at,
+              LoopPhase.quotaWait,
+              tr('Quota esaurita: riprendo $when.', 'Quota used up: resuming $when.'),
+            );
           } else {
-            _attention('Quota esaurita', 'Nuovo tentativo tra ${settings.quotaWaitMinutes} minuti.');
+            _attention(
+              tr('Quota esaurita', 'Quota used up'),
+              tr(
+                'Nuovo tentativo tra ${settings.quotaWaitMinutes} minuti.',
+                'Trying again in ${settings.quotaWaitMinutes} minutes.',
+              ),
+            );
             await _wait(
               Duration(minutes: settings.quotaWaitMinutes),
               LoopPhase.quotaWait,
-              'Quota esaurita: nuovo tentativo tra ${settings.quotaWaitMinutes} min.',
+              tr(
+                'Quota esaurita: nuovo tentativo tra ${settings.quotaWaitMinutes} min.',
+                'Quota used up: trying again in ${settings.quotaWaitMinutes} min.',
+              ),
             );
           }
         case _RunResult.network:
-          _log(LogKind.warning, 'Connessione assente: il loop riprende appena torna la rete.');
+          _log(
+            LogKind.warning,
+            tr(
+              'Connessione assente: il loop riprende appena torna la rete.',
+              'No connection: the loop resumes as soon as the network is back.',
+            ),
+          );
           await _waitForNetwork();
         case _RunResult.auth:
-          _setPhase(LoopPhase.paused, 'Problema di autenticazione: esegui il login nella CLI.');
-          _attention('Accesso richiesto', '${settings.agent.label}: rifai l\'accesso da Account e CLI.');
+          _setPhase(
+            LoopPhase.paused,
+            tr('Problema di autenticazione: esegui il login nella CLI.', 'Sign-in problem: sign in again in the CLI.'),
+          );
+          _attention(
+            tr('Accesso richiesto', 'Sign-in needed'),
+            tr(
+              '${settings.agent.label}: rifai l\'accesso da Account e CLI.',
+              '${settings.agent.label}: sign in again from Accounts and CLIs.',
+            ),
+          );
           return;
         case _RunResult.blocked:
           if (!settings.skipBlocked) {
-            _setPhase(LoopPhase.paused, 'Blocco ${next.index + 1} bloccato: serve il tuo intervento.');
-            _attention('Serve il tuo intervento', 'Blocco ${next.index + 1} «${next.title}»: l\'agente si è bloccato.');
+            _setPhase(
+              LoopPhase.paused,
+              tr(
+                'Blocco ${next.index + 1} bloccato: serve il tuo intervento.',
+                'Block ${next.index + 1} blocked: you are needed.',
+              ),
+            );
+            _attention(
+              tr('Serve il tuo intervento', 'You are needed'),
+              tr(
+                'Blocco ${next.index + 1} «${next.title}»: l\'agente si è bloccato.',
+                'Block ${next.index + 1} «${next.title}»: the agent got stuck.',
+              ),
+            );
             return;
           }
         case _RunResult.fatal:
-          _setPhase(LoopPhase.paused, 'Impossibile avviare l\'agente.');
-          _attention('Loop interrotto', 'Impossibile avviare ${settings.agent.label}.');
+          _setPhase(LoopPhase.paused, tr('Impossibile avviare l\'agente.', 'Cannot start the agent.'));
+          _attention(
+            tr('Loop interrotto', 'Loop stopped'),
+            tr('Impossibile avviare ${settings.agent.label}.', 'Cannot start ${settings.agent.label}.'),
+          );
           return;
         case _RunResult.blockDone:
           // A stop the user asked for: once, then the loop can be resumed.
           if (bs.pauseAfter) {
             bs.pauseAfter = false;
             state.save(dir);
-            _log(LogKind.info, 'In pausa dopo il blocco ${next.index + 1}, come richiesto: controlla e riprendi.');
-            _setPhase(LoopPhase.paused, 'In pausa dopo il blocco ${next.index + 1}: controlla e riprendi.');
-            _attention('In pausa per un controllo', 'Blocco ${next.index + 1} «${next.title}» completato.');
+            _log(
+              LogKind.info,
+              tr(
+                'In pausa dopo il blocco ${next.index + 1}, come richiesto: controlla e riprendi.',
+                'Paused after block ${next.index + 1}, as asked: review and resume.',
+              ),
+            );
+            _setPhase(
+              LoopPhase.paused,
+              tr(
+                'In pausa dopo il blocco ${next.index + 1}: controlla e riprendi.',
+                'Paused after block ${next.index + 1}: review and resume.',
+              ),
+            );
+            _attention(
+              tr('In pausa per un controllo', 'Paused for a review'),
+              tr(
+                'Blocco ${next.index + 1} «${next.title}» completato.',
+                'Block ${next.index + 1} «${next.title}» completed.',
+              ),
+            );
             return;
           }
         case _RunResult.again:
@@ -490,10 +633,10 @@ class LoopEngine extends ChangeNotifier {
       await _wait(
         Duration(seconds: settings.relaunchDelaySeconds),
         LoopPhase.waiting,
-        'Richiamo tra ${settings.relaunchDelaySeconds}s.',
+        tr('Richiamo tra ${settings.relaunchDelaySeconds}s.', 'Relaunch in ${settings.relaunchDelaySeconds}s.'),
       );
     }
-    _setPhase(LoopPhase.paused, _stopRequested ? 'Fermato.' : 'In pausa.');
+    _setPhase(LoopPhase.paused, _stopRequested ? tr('Fermato.', 'Stopped.') : tr('In pausa.', 'Paused.'));
   }
 
   Future<_RunResult> _invoke(PlanBlock block, BlockState bs) async {
@@ -512,7 +655,12 @@ class LoopEngine extends ChangeNotifier {
     currentLogDir = logDir.path;
     final progressFile = File(LoopState.progressFileOf(dir));
     if (!progressFile.existsSync()) {
-      progressFile.writeAsStringSync('# Progresso AutoLoop\n\nPiano: ${p.basename(planPath!)}\n');
+      progressFile.writeAsStringSync(
+        tr(
+          '# Progresso AutoLoop\n\nPiano: ${p.basename(planPath!)}\n',
+          '# AutoLoop progress\n\nPlan: ${p.basename(planPath!)}\n',
+        ),
+      );
     }
 
     final prompt = buildPrompt(
@@ -535,7 +683,10 @@ class LoopEngine extends ChangeNotifier {
 
     _log(
       LogKind.info,
-      '▶ Blocco ${block.index + 1}/${plan.blocks.length} «${block.title}» — invocazione ${bs.attempts}',
+      tr(
+        '▶ Blocco ${block.index + 1}/${plan.blocks.length} «${block.title}» — invocazione ${bs.attempts}',
+        '▶ Block ${block.index + 1}/${plan.blocks.length} «${block.title}» — invocation ${bs.attempts}',
+      ),
     );
     if (bs.attempts == 1) {
       // The block's own heading repeats the title shown in the header.
@@ -546,7 +697,10 @@ class LoopEngine extends ChangeNotifier {
     }
     runStartedAt = DateTime.now();
     lastOutputAt = runStartedAt;
-    _setPhase(LoopPhase.running, 'Blocco ${block.index + 1}: ${block.title}');
+    _setPhase(
+      LoopPhase.running,
+      tr('Blocco ${block.index + 1}: ${block.title}', 'Block ${block.index + 1}: ${block.title}'),
+    );
 
     final stream = backend.newStream(workDir: dir);
     final raw = File(p.join(logDir.path, 'output.jsonl')).openWrite();
@@ -575,7 +729,7 @@ class LoopEngine extends ChangeNotifier {
       outcome = await done;
     } on ProcessException catch (e) {
       await raw.close();
-      _result(RunOutcome.failed, 'Avvio fallito: ${e.message}');
+      _result(RunOutcome.failed, tr('Avvio fallito: ${e.message}', 'Start failed: ${e.message}'));
       bs.attempts--;
       state.runs--;
       state.save(dir);
@@ -607,26 +761,53 @@ class LoopEngine extends ChangeNotifier {
     }
 
     if (outcome.killReason == KillReason.stopped) {
-      bs.feedback = 'L\'invocazione precedente è stata interrotta dall\'utente. Riprendi dal lavoro su disco.';
-      _result(RunOutcome.interrupted, 'Fermata da te: alla ripresa continuerà dal lavoro su disco.');
+      bs.feedback = tr(
+        'L\'invocazione precedente è stata interrotta dall\'utente. Riprendi dal lavoro su disco.',
+        'The previous invocation was interrupted by the user. Pick up from the work on disk.',
+      );
+      _result(
+        RunOutcome.interrupted,
+        tr(
+          'Fermata da te: alla ripresa continuerà dal lavoro su disco.',
+          'Stopped by you: when resumed it goes on from the work on disk.',
+        ),
+      );
       state.save(dir);
       return _RunResult.again;
     }
 
     if (stream.blocker == Blocker.usageLimit) {
-      _result(RunOutcome.interrupted, 'Limite di utilizzo raggiunto: ${stream.errorMessage ?? ''}'.trim());
+      _result(
+        RunOutcome.interrupted,
+        tr(
+          'Limite di utilizzo raggiunto: ${stream.errorMessage ?? ''}',
+          'Usage limit reached: ${stream.errorMessage ?? ''}',
+        ).trim(),
+      );
       quotaResetAt = stream.quotaResetAt;
       state.save(dir);
       return _RunResult.quota;
     }
     if (stream.blocker == Blocker.network) {
-      _result(RunOutcome.interrupted, 'Connessione non riuscita: ${stream.errorMessage ?? ''}'.trim());
+      _result(
+        RunOutcome.interrupted,
+        tr(
+          'Connessione non riuscita: ${stream.errorMessage ?? ''}',
+          'Connection failed: ${stream.errorMessage ?? ''}',
+        ).trim(),
+      );
       bs.attempts--; // not the block's fault
       state.save(dir);
       return _RunResult.network;
     }
     if (stream.blocker == Blocker.authorization) {
-      _result(RunOutcome.failed, 'Autenticazione richiesta: ${stream.errorMessage ?? ''}'.trim());
+      _result(
+        RunOutcome.failed,
+        tr(
+          'Autenticazione richiesta: ${stream.errorMessage ?? ''}',
+          'Sign-in needed: ${stream.errorMessage ?? ''}',
+        ).trim(),
+      );
       bs.attempts--;
       state.save(dir);
       return _RunResult.auth;
@@ -634,13 +815,21 @@ class LoopEngine extends ChangeNotifier {
 
     if (outcome.killReason != null) {
       final why = outcome.killReason == KillReason.idleTimeout
-          ? 'nessun output per ${settings.idleTimeoutMinutes} minuti'
-          : 'superato il limite di ${settings.runTimeoutMinutes} minuti';
-      _result(RunOutcome.interrupted, 'Terminata dal supervisore: $why.');
-      bs.feedback =
-          'L\'invocazione precedente è stata terminata dal supervisore ($why). '
-          'Il lavoro parziale è su disco: controllalo e procedi a passi più brevi, '
-          'aggiornando .autoloop/PROGRESS.md più spesso.';
+          ? tr(
+              'nessun output per ${settings.idleTimeoutMinutes} minuti',
+              'no output for ${settings.idleTimeoutMinutes} minutes',
+            )
+          : tr(
+              'superato il limite di ${settings.runTimeoutMinutes} minuti',
+              'went over the limit of ${settings.runTimeoutMinutes} minutes',
+            );
+      _result(RunOutcome.interrupted, tr('Terminata dal supervisore: $why.', 'Stopped by the supervisor: $why.'));
+      bs.feedback = tr(
+        'L\'invocazione precedente è stata terminata dal supervisore ($why). '
+            'Il lavoro parziale è su disco: controllalo e procedi a passi più brevi, '
+            'aggiornando .autoloop/PROGRESS.md più spesso.',
+        'The previous invocation was stopped by the supervisor ($why). The partial work is on disk: check it and go on in shorter steps, updating .autoloop/PROGRESS.md more often.',
+      );
       state.save(dir);
       return _RunResult.again;
     }
@@ -649,10 +838,18 @@ class LoopEngine extends ChangeNotifier {
       case AgentVerdict.done:
         final verifyError = await _verify(block);
         if (verifyError != null) {
-          bs.feedback =
-              'Hai dichiarato DONE ma la verifica `${settings.verifyCommand}` è fallita. '
-              'Correggi il problema. Output (ultima parte):\n$verifyError';
-          _result(RunOutcome.again, 'La verifica non è passata: l\'agente la correggerà nella prossima invocazione.');
+          bs.feedback = tr(
+            'Hai dichiarato DONE ma la verifica `${settings.verifyCommand}` è fallita. '
+                'Correggi il problema. Output (ultima parte):\n$verifyError',
+            'You declared DONE but the check `${settings.verifyCommand}` failed. Fix the problem. Output (last part):\n$verifyError',
+          );
+          _result(
+            RunOutcome.again,
+            tr(
+              'La verifica non è passata: l\'agente la correggerà nella prossima invocazione.',
+              'The check did not pass: the agent will fix it in the next invocation.',
+            ),
+          );
           state.save(dir);
           return _RunResult.again;
         }
@@ -664,27 +861,45 @@ class LoopEngine extends ChangeNotifier {
         state.save(dir);
         // Says what was done, like the task says what to do.
         final what = _whatWasDone(summary);
-        _result(RunOutcome.done, what.isEmpty ? 'Blocco completato.' : what);
+        _result(RunOutcome.done, what.isEmpty ? tr('Blocco completato.', 'Block completed.') : what);
         return _RunResult.blockDone;
       case AgentVerdict.blocked:
         bs.status = BlockStatus.blocked;
         bs.note = reason.isEmpty ? summary : reason;
         state.save(dir);
         // Just the reason: the header already says it is blocked.
-        _result(RunOutcome.blocked, bs.note.isEmpty ? 'L\'agente non riesce a proseguire.' : bs.note);
+        _result(
+          RunOutcome.blocked,
+          bs.note.isEmpty ? tr('L\'agente non riesce a proseguire.', 'The agent cannot go on.') : bs.note,
+        );
         return _RunResult.blocked;
       case AgentVerdict.continueWork:
-        bs.feedback = 'Nell\'invocazione precedente hai risposto CONTINUE. Tuo riepilogo:\n$summary';
-        _result(RunOutcome.again, 'Il blocco continua nella prossima invocazione.');
+        bs.feedback = tr(
+          'Nell\'invocazione precedente hai risposto CONTINUE. Tuo riepilogo:\n$summary',
+          'In the previous invocation you answered CONTINUE. Your summary:\n$summary',
+        );
+        _result(
+          RunOutcome.again,
+          tr('Il blocco continua nella prossima invocazione.', 'The block goes on in the next invocation.'),
+        );
       case AgentVerdict.missing:
         final err = stream.errorMessage;
         bs.feedback = err != null
-            ? 'L\'invocazione precedente è terminata con un errore: $err'
-            : 'L\'invocazione precedente è terminata senza la riga AUTOLOOP_STATUS '
-                  '(exit ${outcome.exitCode}). Ultimo messaggio:\n$summary';
+            ? tr(
+                'L\'invocazione precedente è terminata con un errore: $err',
+                'The previous invocation ended with an error: $err',
+              )
+            : tr(
+                'L\'invocazione precedente è terminata senza la riga AUTOLOOP_STATUS '
+                    '(exit ${outcome.exitCode}). Ultimo messaggio:\n$summary',
+                'The previous invocation ended without the AUTOLOOP_STATUS line (exit ${outcome.exitCode}). Last message:\n$summary',
+              );
         _result(
           err != null ? RunOutcome.failed : RunOutcome.interrupted,
-          'Fermata senza esito (exit ${outcome.exitCode}): verrà richiamata.',
+          tr(
+            'Fermata senza esito (exit ${outcome.exitCode}): verrà richiamata.',
+            'Stopped without an outcome (exit ${outcome.exitCode}): it will be relaunched.',
+          ),
         );
     }
     state.save(dir);
@@ -742,18 +957,24 @@ class LoopEngine extends ChangeNotifier {
   Future<String?> _verify(PlanBlock block) async {
     final cmd = settings.verifyCommand.trim();
     if (cmd.isEmpty) return null;
-    _setPhase(LoopPhase.verifying, 'Verifica: $cmd');
-    _log(LogKind.tool, 'Verifica: $cmd');
+    _setPhase(LoopPhase.verifying, tr('Verifica: $cmd', 'Check: $cmd'));
+    _log(LogKind.tool, tr('Verifica: $cmd', 'Check: $cmd'));
     final watch = Stopwatch()..start();
     final (code, output) = await runShell(cmd, workDir!);
     if (code == 0) {
       // The last line of the output usually says it all ("All tests passed!").
       final last = output.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).lastOrNull;
       final tail = last == null ? '' : ' · ${last.length > 120 ? '${last.substring(0, 120)}…' : last}';
-      _log(LogKind.success, 'Verifica superata in ${_span(watch.elapsed.inSeconds)}$tail');
+      _log(
+        LogKind.success,
+        tr(
+          'Verifica superata in ${_span(watch.elapsed.inSeconds)}$tail',
+          'Check passed in ${_span(watch.elapsed.inSeconds)}$tail',
+        ),
+      );
       return null;
     }
-    _log(LogKind.warning, 'Verifica fallita (exit $code).');
+    _log(LogKind.warning, tr('Verifica fallita (exit $code).', 'Check failed (exit $code).'));
     return output.length > 8000 ? output.substring(output.length - 8000) : output;
   }
 
@@ -769,14 +990,17 @@ class LoopEngine extends ChangeNotifier {
       if (!p.equals(p.normalize(top.stdout.toString().trim()), p.normalize(dir))) {
         _log(
           LogKind.warning,
-          'Commit saltato: la cartella di lavoro è dentro un altro repository (${top.stdout.toString().trim()}).',
+          tr(
+            'Commit saltato: la cartella di lavoro è dentro un altro repository (${top.stdout.toString().trim()}).',
+            'Commit skipped: the working folder is inside another repository (${top.stdout.toString().trim()}).',
+          ),
         );
         return;
       }
       await git(['add', '-A'], dir);
       final staged = await git(['diff', '--cached', '--quiet'], dir);
       if (staged.exitCode == 0) {
-        _log(LogKind.system, 'Nessuna modifica da committare.');
+        _log(LogKind.system, tr('Nessuna modifica da committare.', 'Nothing to commit.'));
         return;
       }
       final title = block.title.length > 60 ? '${block.title.substring(0, 60)}…' : block.title;
@@ -785,7 +1009,10 @@ class LoopEngine extends ChangeNotifier {
         '-m',
         'autoloop: $title',
         '-m',
-        'Blocco ${block.index + 1} del piano ${p.basename(planPath!)}.',
+        tr(
+          'Blocco ${block.index + 1} del piano ${p.basename(planPath!)}.',
+          'Block ${block.index + 1} of the plan ${p.basename(planPath!)}.',
+        ),
       ], dir);
       if (r.exitCode == 0) {
         state!.commits++;
@@ -797,15 +1024,18 @@ class LoopEngine extends ChangeNotifier {
           LogKind.success,
           [
             'Commit ${out.first.trim()}',
-            if (files > 0) files == 1 ? '1 file' : '$files file',
+            if (files > 0) files == 1 ? '1 file' : tr('$files file', '$files files'),
             if (out.length > 1) '+${n('insertion')} −${n('deletion')}',
           ].join(' · '),
         );
       } else {
-        _log(LogKind.warning, 'Commit non riuscito: ${r.stderr.toString().trim()}');
+        _log(
+          LogKind.warning,
+          tr('Commit non riuscito: ${r.stderr.toString().trim()}', 'Commit failed: ${r.stderr.toString().trim()}'),
+        );
       }
     } catch (e) {
-      _log(LogKind.warning, 'Git non disponibile: $e');
+      _log(LogKind.warning, tr('Git non disponibile: $e', 'Git not available: $e'));
     }
   }
 

@@ -4,15 +4,19 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'agents.dart';
+import '../l10n.dart';
 
 enum BlockStatus {
-  pending('Da fare'),
-  done('Completato'),
-  blocked('Bloccato'),
-  skipped('Saltato');
+  pending('Da fare', 'To do'),
+  done('Completato', 'Done'),
+  blocked('Bloccato', 'Blocked'),
+  skipped('Saltato', 'Skipped');
 
-  const BlockStatus(this.label);
-  final String label;
+  BlockStatus(this._it, this._en);
+  final String _it, _en;
+
+  /// The label in the language in use.
+  String get label => tr(_it, _en);
 }
 
 class BlockState {
@@ -121,7 +125,7 @@ class LoopState {
       state.activeSeconds = j['activeSeconds'] as int? ?? 0;
       state.commits = j['commits'] as int? ?? 0;
       if (samePlan) {
-        final b = (j['blocks'] as Map?)?.cast<String, Object?>() ?? const {};
+        final b = (j['blocks'] as Map?)?.cast<String, Object?>() ?? {};
         for (final e in b.entries) {
           state.blocks[e.key] = BlockState.fromJson((e.value as Map).cast<String, Object?>());
         }
@@ -140,7 +144,7 @@ class LoopState {
     final file = File(fileOf(workDir));
     final tmp = File('${file.path}.tmp');
     tmp.writeAsStringSync(
-      const JsonEncoder.withIndent('  ').convert({
+      JsonEncoder.withIndent('  ').convert({
         'planPath': planPath,
         'runs': runs,
         'inputTokens': inputTokens,
@@ -218,18 +222,18 @@ class ActivityLog {
     String two(int n) => n.toString().padLeft(2, '0');
     String stamp(DateTime t) =>
         '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
-    const label = {
-      LogKind.agent: 'AGENTE ',
-      LogKind.tool: 'COMANDO',
-      LogKind.system: 'SISTEMA',
+    final label = {
+      LogKind.agent: tr('AGENTE ', 'AGENT  '),
+      LogKind.tool: tr('COMANDO', 'COMMAND'),
+      LogKind.system: tr('SISTEMA', 'SYSTEM '),
       LogKind.info: 'INFO   ',
       LogKind.success: 'OK     ',
-      LogKind.warning: 'AVVISO ',
-      LogKind.error: 'ERRORE ',
-      LogKind.task: 'COMPITO',
-      LogKind.result: 'ESITO  ',
+      LogKind.warning: tr('AVVISO ', 'WARNING'),
+      LogKind.error: tr('ERRORE ', 'ERROR  '),
+      LogKind.task: tr('COMPITO', 'TASK   '),
+      LogKind.result: tr('ESITO  ', 'RESULT '),
     };
-    final b = StringBuffer('Attività di AutoLoop · $title\n\n');
+    final b = StringBuffer(tr('Attività di AutoLoop · $title\n\n', 'AutoLoop activity · $title\n\n'));
     for (final e in entries) {
       if (e.kind == LogKind.info && e.text.startsWith('▶')) {
         b.writeln('\n── ${e.text.substring(1).trim()} ── ${stamp(e.at)}');

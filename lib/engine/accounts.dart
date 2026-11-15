@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'settings.dart';
+import '../l10n.dart';
 
 /// A set of CLI logins. The default profile uses the accounts already set up
 /// on this computer; every other profile gets its own configuration folders
@@ -13,7 +14,7 @@ class AccountProfile {
   const AccountProfile({required this.id, required this.name});
 
   static const defaultId = 'default';
-  static const builtIn = AccountProfile(id: defaultId, name: 'Questo computer');
+  static AccountProfile get builtIn => AccountProfile(id: defaultId, name: tr('Questo computer', 'This computer'));
 
   final String id;
   final String name;
@@ -59,7 +60,7 @@ void deleteProfileData(String profileId) {
 class AccountStatus {
   const AccountStatus({required this.loggedIn, this.email, this.plan, this.method, this.error});
 
-  static const unknown = AccountStatus(loggedIn: false, error: 'CLI non disponibile');
+  static final unknown = AccountStatus(loggedIn: false, error: tr('CLI non disponibile', 'CLI not available'));
 
   final bool loggedIn;
   final String? email;
@@ -121,7 +122,7 @@ AccountStatus parseClaudeStatus(String json) {
       method: j['authMethod'] == 'none' ? null : j['authMethod'] as String?,
     );
   } catch (_) {
-    return const AccountStatus(loggedIn: false, error: 'Stato non leggibile');
+    return AccountStatus(loggedIn: false, error: tr('Stato non leggibile', 'Status not readable'));
   }
 }
 
@@ -156,13 +157,19 @@ Future<void> startLogin(AgentKind kind, String exe, String profileId) async {
     [
       '@echo off',
       'chcp 65001 >nul',
-      'title Accesso a $name - AutoLoop',
+      tr('title Accesso a $name - AutoLoop', 'title Sign in to $name - AutoLoop'),
       sets,
-      'echo Accesso a $name: completa la procedura nel browser che si apre.',
+      tr(
+        'echo Accesso a $name: completa la procedura nel browser che si apre.',
+        'echo Sign in to $name: finish in the browser that opens.',
+      ),
       'echo.',
       '"$exe" $command',
       'echo.',
-      'echo Fatto. Premi un tasto per chiudere questa finestra e tornare ad AutoLoop.',
+      tr(
+        'echo Fatto. Premi un tasto per chiudere questa finestra e tornare ad AutoLoop.',
+        'echo Done. Press a key to close this window and go back to AutoLoop.',
+      ),
       'pause >nul',
     ].where((l) => l.isNotEmpty).join('\r\n'),
   );

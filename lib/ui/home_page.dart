@@ -26,6 +26,7 @@ import 'setup_wizard.dart';
 import 'notifications.dart';
 import 'settings_panel.dart';
 import 'window_controls.dart';
+import '../l10n.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.engine, required this.prefs, required this.themeMode});
@@ -62,7 +63,7 @@ class _HomePageState extends State<HomePage> {
     engine.onAttention = (title, body) {
       Notifier.show(title, body);
       // The plan's summary opens as a popup over the window.
-      if (title == 'Piano completato' && mounted) showPlanCompleted(context, engine);
+      if (title == tr('Piano completato', 'Plan completed') && mounted) showPlanCompleted(context, engine);
     };
     HardwareKeyboard.instance.addHandler(_onKey);
     // Re-render once a second for countdowns and elapsed time.
@@ -101,7 +102,12 @@ class _HomePageState extends State<HomePage> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _reload();
-        engine.note('Piano ricaricato: il file era stato modificato durante l\'esecuzione.');
+        engine.note(
+          tr(
+            'Piano ricaricato: il file era stato modificato durante l\'esecuzione.',
+            'Plan reloaded: the file was changed while the loop ran.',
+          ),
+        );
       });
     }
     if (mounted) setState(() {});
@@ -130,11 +136,18 @@ class _HomePageState extends State<HomePage> {
         _planDebounce = Timer(const Duration(milliseconds: 600), () {
           if (!mounted || !File(plan).existsSync()) return;
           if (engine.isActive) {
-            if (!_planChanged) engine.note('Il piano è stato modificato: verrà ricaricato quando il loop si ferma.');
+            if (!_planChanged) {
+              engine.note(
+                tr(
+                  'Il piano è stato modificato: verrà ricaricato quando il loop si ferma.',
+                  'The plan was changed: it will be reloaded when the loop stops.',
+                ),
+              );
+            }
             _planChanged = true;
           } else {
             _reload();
-            engine.note('Piano ricaricato: il file è stato modificato.');
+            engine.note(tr('Piano ricaricato: il file è stato modificato.', 'Plan reloaded: the file was changed.'));
           }
         });
       });
@@ -220,15 +233,18 @@ class _HomePageState extends State<HomePage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Ripristinare le impostazioni predefinite?'),
+        title: Text(tr('Ripristinare le impostazioni predefinite?', 'Restore the default settings?')),
         content: Text(
-          'Modello, ragionamento, permessi, richiamo, quota, verifica, commit, suddivisione e istruzioni '
-          'tornano ai valori di partenza per questo progetto. Agente e account restano '
-          '${engine.settings.agent.label} e il profilo scelto.',
+          tr(
+            'Modello, ragionamento, permessi, richiamo, quota, verifica, commit, suddivisione e istruzioni '
+                'tornano ai valori di partenza per questo progetto. Agente e account restano '
+                '${engine.settings.agent.label} e il profilo scelto.',
+            'Model, reasoning, permissions, relaunch, quota, check, commit, splitting and instructions go back to their starting values for this project. Agent and account stay ${engine.settings.agent.label} and the chosen profile.',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ripristina')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Annulla', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Ripristina', 'Restore'))),
         ],
       ),
     );
@@ -305,7 +321,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _openPlan(String plan, {String? dir}) async {
     if (engine.isActive) {
-      _toast('Ferma il loop prima di cambiare piano.');
+      _toast(tr('Ferma il loop prima di cambiare piano.', 'Stop the loop before changing plan.'));
       return;
     }
     _planPath = plan;
@@ -318,7 +334,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _browsePlan() async {
     final file = await FilePicker.pickFile(
-      dialogTitle: 'Scegli il piano',
+      dialogTitle: tr('Scegli il piano', 'Choose the plan'),
       type: FileType.custom,
       allowedExtensions: _planExtensions,
       initialDirectory: _planPath == null ? _workDir : p.dirname(_planPath!),
@@ -338,8 +354,11 @@ class _HomePageState extends State<HomePage> {
 
     final picked = await showChoiceDialog<String>(
       context: context,
-      title: 'Piano',
-      subtitle: 'Riapri un piano recente o scegline uno nuovo. Ogni progetto ritrova le sue impostazioni.',
+      title: tr('Piano', 'Plan'),
+      subtitle: tr(
+        'Riapri un piano recente o scegline uno nuovo. Ogni progetto ritrova le sue impostazioni.',
+        'Reopen a recent plan or choose a new one. Every project finds its settings again.',
+      ),
       selected: '${recent.indexWhere((r) => _planPath != null && p.equals(r.$1, _planPath!))}',
       // Choosing a new file comes first, like the default choice of the other
       // popups; the recent plans follow.
@@ -347,8 +366,8 @@ class _HomePageState extends State<HomePage> {
         Choice(
           value: _browse,
           icon: Icons.folder_open_outlined,
-          label: 'Sfoglia…',
-          description: 'Scegli un file .md o .txt dal computer.',
+          label: tr('Sfoglia…', 'Browse…'),
+          description: tr('Scegli un file .md o .txt dal computer.', 'Choose a .md or .txt file on this computer.'),
           dividerAfter: recent.isNotEmpty,
         ),
         for (final (i, r) in recent.indexed)
@@ -356,7 +375,7 @@ class _HomePageState extends State<HomePage> {
             value: '$i',
             icon: Icons.description_outlined,
             label: p.basename(r.$1),
-            description: 'Cartella di lavoro: ${short(r.$2)}',
+            description: tr('Cartella di lavoro: ${short(r.$2)}', 'Working folder: ${short(r.$2)}'),
           ),
       ],
     );
@@ -377,21 +396,23 @@ class _HomePageState extends State<HomePage> {
     for (final item in details.files) {
       final path = item.path;
       if (Directory(path).existsSync()) {
-        if (engine.isActive) return _toast('Ferma il loop prima di cambiare cartella.');
+        if (engine.isActive) {
+          return _toast(tr('Ferma il loop prima di cambiare cartella.', 'Stop the loop before changing folder.'));
+        }
         _workDir = path;
         await widget.prefs.setString('workDir', path);
         _reload();
-        return _toast('Cartella di lavoro: ${p.basename(path)}');
+        return _toast(tr('Cartella di lavoro: ${p.basename(path)}', 'Working folder: ${p.basename(path)}'));
       }
       final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
       if (_planExtensions.contains(ext)) return _openPlan(path);
     }
-    _toast('Trascina un file .md o .txt, oppure una cartella.');
+    _toast(tr('Trascina un file .md o .txt, oppure una cartella.', 'Drop a .md or .txt file, or a folder.'));
   }
 
   Future<void> _pickWorkDir() async {
     final dir = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Cartella in cui l\'agente lavora',
+      dialogTitle: tr('Cartella in cui l\'agente lavora', 'Folder the agent works in'),
       initialDirectory: _workDir,
     );
     if (dir == null) return;
@@ -413,7 +434,10 @@ class _HomePageState extends State<HomePage> {
     final f = File(LoopState.progressFileOf(_workDir!));
     if (!f.existsSync()) {
       f.writeAsStringSync(
-        '# Progresso AutoLoop\n\nL\'agente annota qui cosa ha fatto e cosa resta, tra un\'invocazione e l\'altra.\n',
+        tr(
+          '# Progresso AutoLoop\n\nL\'agente annota qui cosa ha fatto e cosa resta, tra un\'invocazione e l\'altra.\n',
+          '# AutoLoop progress\n\nThe agent notes here what it did and what is left, from one invocation to the next.\n',
+        ),
       );
     }
     _openInEditor(f.path);
@@ -450,18 +474,21 @@ class _HomePageState extends State<HomePage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Fermare l\'agente adesso?'),
-        content: const Text(
-          'L\'invocazione in corso viene interrotta. Il lavoro fatto finora resta su disco '
-          'e riprende dal punto in cui era al prossimo avvio.\n\n'
-          'Per fermarti senza interrompere, usa Pausa: aspetta la fine del passo.',
+        title: Text(tr('Fermare l\'agente adesso?', 'Stop the agent now?')),
+        content: Text(
+          tr(
+            'L\'invocazione in corso viene interrotta. Il lavoro fatto finora resta su disco '
+                'e riprende dal punto in cui era al prossimo avvio.\n\n'
+                'Per fermarti senza interrompere, usa Pausa: aspetta la fine del passo.',
+            'The running invocation is interrupted. The work done so far stays on disk and picks up where it was at the next start.\n\nTo stop without interrupting, use Pause: it waits for the end of the step.',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Annulla', 'Cancel'))),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: context.colors.danger),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Ferma'),
+            child: Text(tr('Ferma', 'Stop')),
           ),
         ],
       ),
@@ -498,13 +525,13 @@ class _HomePageState extends State<HomePage> {
   (String, String, VoidCallback)? _demoBlocker;
 
   /// Demo only: the state chosen in the demo menu.
-  String _demoState = 'Pronto';
+  String _demoState = tr('Pronto', 'Ready');
 
   /// The states the demo menu can show, all made up: nothing runs.
   late final _demoStates = <(String, IconData, VoidCallback)>[
-    ('Pronto', Icons.play_circle_outline_rounded, () => engine.demoShow(LoopPhase.idle)),
+    (tr('Pronto', 'Ready'), Icons.play_circle_outline_rounded, () => engine.demoShow(LoopPhase.idle)),
     (
-      'Primo avvio',
+      tr('Primo avvio', 'First launch'),
       Icons.rocket_launch_outlined,
       () {
         engine.demoShow(LoopPhase.idle);
@@ -512,57 +539,80 @@ class _HomePageState extends State<HomePage> {
       },
     ),
     (
-      'Manca qualcosa per partire',
+      tr('Manca qualcosa per partire', 'Something is missing to start'),
       Icons.error_outline_rounded,
       () {
         engine.demoShow(LoopPhase.idle);
-        _demoBlocker = ('Account', 'Accedi a ${engine.settings.agent.label}', _openAccounts);
+        _demoBlocker = (
+          'Account',
+          tr('Accedi a ${engine.settings.agent.label}', 'Sign in to ${engine.settings.agent.label}'),
+          _openAccounts,
+        );
       },
     ),
     (
-      'Agente al lavoro',
+      tr('Agente al lavoro', 'Agent at work'),
       Icons.bolt_rounded,
-      () => engine.demoShow(LoopPhase.running, block: 4, message: 'Blocco 5: Tema scuro'),
+      () => engine.demoShow(LoopPhase.running, block: 4, message: tr('Blocco 5: Tema scuro', 'Block 5: Dark theme')),
     ),
     (
-      'Agente in silenzio da un po\'',
+      tr('Agente in silenzio da un po\'', 'Agent silent for a while'),
       Icons.hourglass_bottom_rounded,
       () => engine.demoShow(
         LoopPhase.running,
         block: 4,
-        message: 'Blocco 5: Tema scuro',
+        message: tr('Blocco 5: Tema scuro', 'Block 5: Dark theme'),
         quiet: const Duration(minutes: 4, seconds: 10),
       ),
     ),
     (
-      'Pausa richiesta',
+      tr('Pausa richiesta', 'Pause requested'),
       Icons.pause_circle_outline_rounded,
       () => engine.demoShow(LoopPhase.running, block: 4, pauseRequested: true),
     ),
-    ('Verifica in corso', Icons.fact_check_outlined, () => engine.demoShow(LoopPhase.verifying, block: 4)),
     (
-      'In attesa del richiamo',
+      tr('Verifica in corso', 'Checking'),
+      Icons.fact_check_outlined,
+      () => engine.demoShow(LoopPhase.verifying, block: 4),
+    ),
+    (
+      tr('In attesa del richiamo', 'Waiting to relaunch'),
       Icons.schedule_rounded,
-      () => engine.demoShow(LoopPhase.waiting, block: 4, message: 'Richiamo tra 30s.'),
+      () => engine.demoShow(LoopPhase.waiting, block: 4, message: tr('Richiamo tra 30s.', 'Relaunch in 30s.')),
     ),
     (
-      'Quota esaurita, in attesa',
+      tr('Quota esaurita, in attesa', 'Quota used up, waiting'),
       Icons.update_rounded,
-      () => engine.demoShow(LoopPhase.quotaWait, block: 4, message: 'Quota esaurita: riprendo alle 15:01.'),
+      () => engine.demoShow(
+        LoopPhase.quotaWait,
+        block: 4,
+        message: tr('Quota esaurita: riprendo alle 15:01.', 'Quota used up: resuming at 15:01.'),
+      ),
     ),
     (
-      'In attesa della rete',
+      tr('In attesa della rete', 'Waiting for the network'),
       Icons.wifi_off_rounded,
-      () => engine.demoShow(LoopPhase.offline, block: 4, message: 'Rete assente: riprendo appena torna.'),
+      () => engine.demoShow(
+        LoopPhase.offline,
+        block: 4,
+        message: tr('Rete assente: riprendo appena torna.', 'No network: resuming as soon as it is back.'),
+      ),
     ),
-    ('In pausa', Icons.pause_rounded, () => engine.demoShow(LoopPhase.paused, message: 'In pausa.')),
     (
-      'In pausa per un controllo',
+      tr('In pausa', 'Paused'),
+      Icons.pause_rounded,
+      () => engine.demoShow(LoopPhase.paused, message: tr('In pausa.', 'Paused.')),
+    ),
+    (
+      tr('In pausa per un controllo', 'Paused for a review'),
       Icons.pan_tool_outlined,
-      () => engine.demoShow(LoopPhase.paused, message: 'In pausa dopo il blocco 5: controlla e riprendi.'),
+      () => engine.demoShow(
+        LoopPhase.paused,
+        message: tr('In pausa dopo il blocco 5: controlla e riprendi.', 'Paused after block 5: review and resume.'),
+      ),
     ),
     (
-      'Piano completato',
+      tr('Piano completato', 'Plan completed'),
       Icons.check_circle_outline_rounded,
       () {
         engine.demoShow(LoopPhase.finished, allDone: true);
@@ -583,18 +633,24 @@ class _HomePageState extends State<HomePage> {
   (String, String, VoidCallback)? _blocker() {
     if (_demoBlocker != null) return _demoBlocker;
     final s = engine.settings;
-    if (_loadError != null) return ('Piano', _loadError!, _pickPlan);
-    if (_planPath == null || engine.plan == null) return ('Piano', 'Scegli un file di piano', _pickPlan);
+    if (_loadError != null) return (tr('Piano', 'Plan'), _loadError!, _pickPlan);
+    if (_planPath == null || engine.plan == null) {
+      return (tr('Piano', 'Plan'), tr('Scegli un file di piano', 'Choose a plan file'), _pickPlan);
+    }
     if (_workDir == null || !Directory(_workDir!).existsSync()) {
-      return ('Piano', 'Scegli la cartella di lavoro', _pickWorkDir);
+      return (tr('Piano', 'Plan'), tr('Scegli la cartella di lavoro', 'Choose the working folder'), _pickWorkDir);
     }
     final exe = s.executable;
     if (exe.isEmpty || !File(exe).existsSync()) {
-      return ('Agente', '${s.agent.label}: CLI non trovata', _openAccounts);
+      return (
+        tr('Agente', 'Agent'),
+        tr('${s.agent.label}: CLI non trovata', '${s.agent.label}: CLI not found'),
+        _openAccounts,
+      );
     }
     final account = _accounts[s.agent];
     if (account != null && !account.loggedIn) {
-      return ('Account', 'Accedi a ${s.agent.label}', _openAccounts);
+      return ('Account', tr('Accedi a ${s.agent.label}', 'Sign in to ${s.agent.label}'), _openAccounts);
     }
     return null;
   }
@@ -604,10 +660,10 @@ class _HomePageState extends State<HomePage> {
     final s = engine.settings;
     final exe = s.executable;
     return [
-      ('il file del piano', _planPath != null && engine.plan != null && _loadError == null),
-      ('la cartella di lavoro', _workDir != null && Directory(_workDir!).existsSync()),
-      ('la CLI di ${s.agent.label}', exe.isNotEmpty && File(exe).existsSync()),
-      ('l\'accesso a ${s.agent.label}', _accounts[s.agent]?.loggedIn ?? false),
+      (tr('il file del piano', 'the plan file'), _planPath != null && engine.plan != null && _loadError == null),
+      (tr('la cartella di lavoro', 'the working folder'), _workDir != null && Directory(_workDir!).existsSync()),
+      (tr('la CLI di ${s.agent.label}', 'the ${s.agent.label} CLI'), exe.isNotEmpty && File(exe).existsSync()),
+      (tr('l\'accesso a ${s.agent.label}', 'signing in to ${s.agent.label}'), _accounts[s.agent]?.loggedIn ?? false),
     ];
   }
 
@@ -666,17 +722,17 @@ class _HomePageState extends State<HomePage> {
                                         crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
                                           PanelHeader(
-                                            'Pannello di controllo',
+                                            tr('Pannello di controllo', 'Control panel'),
                                             titleActions: [SettingsPanel.expandAllButton()],
                                             actions: [
                                               IconButton(
-                                                tooltip: 'Configurazione guidata',
+                                                tooltip: tr('Configurazione guidata', 'Guided setup'),
                                                 onPressed: active ? null : _openSetup,
                                                 iconSize: 19,
                                                 icon: const Icon(Icons.rocket_launch_outlined),
                                               ),
                                               IconButton(
-                                                tooltip: 'Ripristina predefiniti',
+                                                tooltip: tr('Ripristina predefiniti', 'Restore defaults'),
                                                 onPressed: active ? null : _resetDefaults,
                                                 iconSize: 19,
                                                 icon: const Icon(Icons.settings_backup_restore_rounded),
@@ -721,11 +777,11 @@ class _HomePageState extends State<HomePage> {
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   PanelHeader(
-                                    'Avanzamento',
+                                    tr('Avanzamento', 'Progress'),
                                     titleActions: [if (engine.plan != null) BlocksPanel.expandAllButton()],
                                     actions: [
                                       IconButton(
-                                        tooltip: 'Apri il piano nell\'editor',
+                                        tooltip: tr('Apri il piano nell\'editor', 'Open the plan in the editor'),
                                         onPressed: _planPath == null ? null : _openPlanInEditor,
                                         iconSize: 19,
                                         icon: const Icon(Icons.edit_note_rounded),
@@ -736,20 +792,22 @@ class _HomePageState extends State<HomePage> {
                                     child: _loadError != null
                                         ? _EmptyState(
                                             icon: Icons.error_outline_rounded,
-                                            title: 'Piano non caricato',
+                                            title: tr('Piano non caricato', 'Plan not loaded'),
                                             text: _loadError!,
                                           )
                                         : engine.plan == null
                                         ? _EmptyState(
                                             icon: Icons.description_outlined,
-                                            title: 'Nessun piano',
-                                            text:
-                                                'Scegli un file .md o .txt: verrà diviso in blocchi '
-                                                'che l\'agente svolge uno alla volta.',
+                                            title: tr('Nessun piano', 'No plan'),
+                                            text: tr(
+                                              'Scegli un file .md o .txt: verrà diviso in blocchi '
+                                                  'che l\'agente svolge uno alla volta.',
+                                              'Choose a .md or .txt file: it will be split into blocks that the agent works on one at a time.',
+                                            ),
                                             action: FilledButton.icon(
                                               onPressed: _pickPlan,
                                               icon: const Icon(Icons.upload_file_rounded, size: 18),
-                                              label: const Text('Scegli piano'),
+                                              label: Text(tr('Scegli piano', 'Choose plan')),
                                             ),
                                           )
                                         : BlocksPanel(
@@ -783,13 +841,15 @@ class _HomePageState extends State<HomePage> {
                     engine: engine,
                     onStart: blocker != null || active || engine.phase == LoopPhase.finished
                         ? null
-                        : (engine.demo ? () => _showDemoState('Agente al lavoro') : engine.start),
+                        : (engine.demo ? () => _showDemoState(tr('Agente al lavoro', 'Agent at work')) : engine.start),
                     blocker: blocker == null ? null : (blocker.$2, blocker.$3),
                     onPause: active && !engine.pauseRequested
-                        ? (engine.demo ? () => _showDemoState('Pausa richiesta') : engine.requestPause)
+                        ? (engine.demo
+                              ? () => _showDemoState(tr('Pausa richiesta', 'Pause requested'))
+                              : engine.requestPause)
                         : null,
                     onStop: active && engine.phase != LoopPhase.stopping
-                        ? (engine.demo ? () => _showDemoState('In pausa') : _confirmStop)
+                        ? (engine.demo ? () => _showDemoState(tr('In pausa', 'Paused')) : _confirmStop)
                         : null,
                     selection: _selection,
                   ),
@@ -840,7 +900,10 @@ class _TopBar extends StatelessWidget {
         ),
         // Window frame: the theme switch sits with the window buttons.
         WindowButtons(
-          leading: [ThemeCaptionButton(mode: themeMode, onChanged: onThemeChanged)],
+          leading: [
+            const LanguageCaptionButton(),
+            ThemeCaptionButton(mode: themeMode, onChanged: onThemeChanged),
+          ],
         ),
       ],
     );
@@ -884,47 +947,72 @@ class _BottomBar extends StatelessWidget {
     final (IconData icon, String label, String tooltip, VoidCallback? action) = active
         ? (
             Icons.pause_rounded,
-            engine.pauseRequested ? 'Pausa richiesta' : 'Pausa',
-            engine.pauseRequested ? 'Si ferma alla fine del passo' : 'Pausa alla fine del passo (Spazio)',
+            engine.pauseRequested ? tr('Pausa richiesta', 'Pause requested') : tr('Pausa', 'Pause'),
+            engine.pauseRequested
+                ? tr('Si ferma alla fine del passo', 'Stops at the end of the step')
+                : tr('Pausa alla fine del passo (Spazio)', 'Pause at the end of the step (Space)'),
             onPause,
           )
         : finished
-        ? (Icons.check_rounded, 'Piano completato', 'Riepilogo del piano', () => showPlanCompleted(context, engine))
+        ? (
+            Icons.check_rounded,
+            tr('Piano completato', 'Plan completed'),
+            tr('Riepilogo del piano', 'Plan summary'),
+            () => showPlanCompleted(context, engine),
+          )
         : blocker != null
         // Cannot start yet: the tooltip says why, a click goes to fix it.
-        ? (Icons.play_arrow_rounded, 'Avvia', 'Non si può avviare: ${blocker!.$1}. Clicca per risolvere.', blocker!.$2)
+        ? (
+            Icons.play_arrow_rounded,
+            tr('Avvia', 'Start'),
+            tr(
+              'Non si può avviare: ${blocker!.$1}. Clicca per risolvere.',
+              'Cannot start: ${blocker!.$1}. Click to fix it.',
+            ),
+            blocker!.$2,
+          )
         : paused
-        ? (Icons.play_arrow_rounded, 'Riprendi', 'Riprendi (Spazio)', onStart)
-        : (Icons.play_arrow_rounded, 'Avvia', 'Avvia (Spazio)', onStart);
+        ? (Icons.play_arrow_rounded, tr('Riprendi', 'Resume'), tr('Riprendi (Spazio)', 'Resume (Space)'), onStart)
+        : (Icons.play_arrow_rounded, tr('Avvia', 'Start'), tr('Avvia (Spazio)', 'Start (Space)'), onStart);
 
     final plan = engine.plan;
     final stats = state == null
         ? <IconStat>[]
         : [
-            IconStat(Icons.schedule_rounded, _fmt(engine.totalTime), 'Tempo di lavoro', iconColor: c.text),
+            IconStat(
+              Icons.schedule_rounded,
+              _fmt(engine.totalTime),
+              tr('Tempo di lavoro', 'Working time'),
+              iconColor: c.text,
+            ),
             IconStat(
               Icons.toll_outlined,
               _compact(state.totalTokens),
-              'Token: ${_compact(state.inputTokens)} in / ${_compact(state.outputTokens)} out',
+              tr(
+                'Token: ${_compact(state.inputTokens)} in / ${_compact(state.outputTokens)} out',
+                'Tokens: ${_compact(state.inputTokens)} in / ${_compact(state.outputTokens)} out',
+              ),
               iconColor: c.text,
             ),
             if (plan != null)
               IconStat(
                 Icons.view_day_outlined,
                 '${engine.doneCount}/${plan.blocks.length}',
-                'Blocchi completati',
+                tr('Blocchi completati', 'Blocks completed'),
                 iconColor: c.text,
               ),
             IconStat(
               Icons.bolt_rounded,
               '${state.runs}',
-              state.runs == 1 ? '1 invocazione' : '${state.runs} invocazioni',
+              state.runs == 1
+                  ? tr('1 invocazione', '1 invocation')
+                  : tr('${state.runs} invocazioni', '${state.runs} invocations'),
               iconColor: c.text,
             ),
             IconStat(
               Icons.commit_rounded,
               '${state.commits}',
-              state.commits == 1 ? '1 commit' : '${state.commits} commit',
+              state.commits == 1 ? '1 commit' : tr('${state.commits} commit', '${state.commits} commits'),
               iconColor: c.text,
             ),
           ];
@@ -958,8 +1046,8 @@ class _BottomBar extends StatelessWidget {
                         const SizedBox(width: 24),
                         _MainAction(
                           icon: Icons.stop_rounded,
-                          label: 'Ferma',
-                          tooltip: 'Ferma ora (Maiusc+Spazio)',
+                          label: tr('Ferma', 'Stop'),
+                          tooltip: tr('Ferma ora (Maiusc+Spazio)', 'Stop now (Shift+Space)'),
                           onTap: onStop,
                         ),
                       ],
@@ -1060,7 +1148,7 @@ class _SidebarRail extends StatelessWidget {
           height: 54,
           child: Center(
             child: IconButton(
-              tooltip: 'Apri il pannello di controllo',
+              tooltip: tr('Apri il pannello di controllo', 'Open the control panel'),
               onPressed: onOpen,
               iconSize: 20,
               icon: const Icon(Icons.keyboard_double_arrow_right_rounded),
@@ -1094,12 +1182,15 @@ class _DropOverlay extends StatelessWidget {
               Icon(Icons.file_download_outlined, size: 44, color: c.primary),
               const SizedBox(height: 10),
               Text(
-                'Rilascia per aprire',
+                tr('Rilascia per aprire', 'Drop to open'),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.primary),
               ),
               const SizedBox(height: 4),
               Text(
-                'Un file .md o .txt diventa il piano, una cartella diventa la cartella di lavoro.',
+                tr(
+                  'Un file .md o .txt diventa il piano, una cartella diventa la cartella di lavoro.',
+                  'A .md or .txt file becomes the plan, a folder becomes the working folder.',
+                ),
                 style: TextStyle(fontSize: 13, color: c.text),
               ),
             ],

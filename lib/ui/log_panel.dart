@@ -13,6 +13,7 @@ import 'agent_badge.dart';
 import 'app_theme.dart';
 import 'markdown_text.dart';
 import 'section_title.dart';
+import '../l10n.dart';
 
 /// The line (or invocation start) chosen in the activity panel or in the
 /// strip at the bottom: both show it, and it stays chosen until something
@@ -62,13 +63,16 @@ class ActivitySelection extends ChangeNotifier {
 
 /// The kinds of lines one can filter on.
 enum _Kind {
-  messages('Messaggi', Icons.chat_bubble_outline_rounded),
-  commands('Comandi', Icons.terminal_rounded),
+  messages('Messaggi', 'Messages', Icons.chat_bubble_outline_rounded),
+  commands('Comandi', 'Commands', Icons.terminal_rounded),
   // Everything AutoLoop itself reports: checks, commits, warnings, errors.
-  events('Eventi', Icons.flag_outlined);
+  events('Eventi', 'Events', Icons.flag_outlined);
 
-  const _Kind(this.label, this.icon);
-  final String label;
+  const _Kind(this._it, this._en, this.icon);
+  final String _it, _en;
+
+  /// The label in the language in use.
+  String get label => tr(_it, _en);
   final IconData icon;
 
   bool has(LogEntry e) => switch (this) {
@@ -144,26 +148,43 @@ class _Group {
     }
     if (live) return _Outcome.running;
     // Logs written before result lines existed.
-    if (entries.any((e) => e.kind == LogKind.result || (e.kind == LogKind.success && e.text.contains('completato')))) {
+    if (entries.any(
+      (e) =>
+          e.kind == LogKind.result ||
+          (e.kind == LogKind.success && (e.text.contains('completato') || e.text.contains('completed'))),
+    )) {
       return _Outcome.done;
     }
     if (entries.any((e) => e.kind == LogKind.error)) return _Outcome.failed;
     if (entries.any((e) => e.kind == LogKind.warning)) return _Outcome.interrupted;
-    if (entries.any((e) => e.text.contains('continuare'))) return _Outcome.again;
+    if (entries.any((e) => e.text.contains('continuare') || e.text.contains('continue'))) return _Outcome.again;
     return _Outcome.none;
   }
 
-  /// "Blocco 3/6", the block title and the invocation number, from the header.
+  /// "Blocco 3/6", the block title and the invocation number, from the header
+  /// (written in either language: logs keep the one they were written in).
   (String, String?, String?) get parts {
     final raw = header!.text.substring(1).trim();
-    final m = RegExp(r'^(Blocco \d+/\d+) «(.*)» — invocazione (\d+)$').firstMatch(raw);
-    return m == null ? (raw, null, null) : (m.group(1)!, m.group(2), m.group(3));
+    final m = _headerLine.firstMatch(raw);
+    return m == null
+        ? (raw, null, null)
+        : (tr('Blocco ${m.group(1)}/${m.group(2)}', 'Block ${m.group(1)}/${m.group(2)}'), m.group(3), m.group(4));
   }
 }
 
+/// An invocation's header line, in Italian or English:
+/// "Blocco 3/6 «Titolo» — invocazione 2" / "Block 3/6 «Title» — invocation 2".
+final _headerLine = RegExp(r'^(?:Blocco|Block) (\d+)/(\d+) «(.*)» — (?:invocazione|invocation) (\d+)$');
+
+/// The block number and title in a header line, in either language.
+final _headerBlock = RegExp(r'(?:Blocco|Block) (\d+)/\d+ «(.*)»');
+
 /// System lines (token counts, and in older logs the session start and the
 /// CLI's echoed output) and the loop-start notice are not shown as lines.
-bool _shown(LogEntry e) => e.kind != LogKind.system && !e.text.startsWith('Avvio del loop con');
+bool _shown(LogEntry e) =>
+    e.kind != LogKind.system &&
+    !e.text.startsWith('Avvio del loop con') &&
+    !e.text.startsWith('Starting the loop with');
 
 /// Consecutive invocations of the same block, shown under one heading.
 List<List<_Group>> _runs(List<_Group> groups) {
@@ -330,7 +351,7 @@ class _LogPanelState extends State<LogPanel> {
   final _rowIndex = <LogEntry, int>{};
   int _rowCount = 0;
 
-  bool _isHeaderOf(LogEntry h, int block) => h.text.contains('Blocco ${block + 1}/');
+  bool _isHeaderOf(LogEntry h, int block) => _headerBlock.firstMatch(h.text)?.group(1) == '${block + 1}';
 
   void _onReveal() {
     final request = widget.reveal?.value;
@@ -342,8 +363,8 @@ class _LogPanelState extends State<LogPanel> {
     ];
     if (headers.isEmpty) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(
-          content: Text('Nessuna attività registrata per questo blocco.'),
+        SnackBar(
+          content: Text(tr('Nessuna attività registrata per questo blocco.', 'No activity recorded for this block.')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -413,16 +434,19 @@ class _LogPanelState extends State<LogPanel> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Svuotare l\'attività?'),
-        content: const Text(
-          'Toglie le righe da questo pannello e cancella la loro copia salvata, quindi non '
-          'ricompariranno alla riapertura.\n\n'
-          'Restano: i log completi di ogni invocazione (.autoloop/logs), PROGRESS.md e '
-          'l\'avanzamento dei blocchi.',
+        title: Text(tr('Svuotare l\'attività?', 'Clear the activity?')),
+        content: Text(
+          tr(
+            'Toglie le righe da questo pannello e cancella la loro copia salvata, quindi non '
+                'ricompariranno alla riapertura.\n\n'
+                'Restano: i log completi di ogni invocazione (.autoloop/logs), PROGRESS.md e '
+                'l\'avanzamento dei blocchi.',
+            'Removes the lines from this panel and deletes their saved copy, so they will not come back when you reopen it.\n\nKept: the full logs of every invocation (.autoloop/logs), PROGRESS.md and the blocks\' progress.',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Svuota')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Annulla', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Svuota', 'Clear'))),
         ],
       ),
     );
@@ -572,24 +596,24 @@ class _LogPanelState extends State<LogPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         PanelHeader(
-          'Attività',
+          tr('Attività', 'Activity'),
           titleActions: [ExpandAllButton(allOpen: allOpen, onPressed: heads.isEmpty ? null : () => setAll(!allOpen))],
           actions: [
             _FilterBar(value: _filter, onChanged: (f) => setState(() => _filter = f)),
             IconButton(
-              tooltip: 'Vedi progresso',
+              tooltip: tr('Vedi progresso', 'View progress'),
               onPressed: widget.onOpenProgress,
               iconSize: 19,
               icon: const Icon(Icons.sticky_note_2_outlined),
             ),
             IconButton(
-              tooltip: 'Vedi log completi',
+              tooltip: tr('Vedi log completi', 'View full logs'),
               onPressed: widget.onOpenLogs,
               iconSize: 19,
               icon: const Icon(Icons.receipt_long_outlined),
             ),
             IconButton(
-              tooltip: 'Svuota attività',
+              tooltip: tr('Svuota attività', 'Clear activity'),
               onPressed: logs.isEmpty ? null : _confirmClear,
               iconSize: 19,
               icon: const Icon(Icons.delete_sweep_outlined),
@@ -606,7 +630,9 @@ class _LogPanelState extends State<LogPanel> {
                       Icon(Icons.terminal_rounded, size: 28, color: c.muted.withValues(alpha: 0.5)),
                       const SizedBox(height: 8),
                       Text(
-                        logs.isEmpty ? 'L\'attività dell\'agente apparirà qui' : 'Nessuna riga per questo filtro',
+                        logs.isEmpty
+                            ? tr('L\'attività dell\'agente apparirà qui', 'The agent\'s activity will show here')
+                            : tr('Nessuna riga per questo filtro', 'No lines for this filter'),
                         style: TextStyle(color: c.muted),
                       ),
                     ],
@@ -641,7 +667,7 @@ class _LogPanelState extends State<LogPanel> {
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             ),
                             icon: const Icon(Icons.arrow_downward_rounded, size: 17),
-                            label: const Text('Nuove attività'),
+                            label: Text(tr('Nuove attività', 'New activity')),
                           ),
                         ),
                       ),
@@ -694,7 +720,12 @@ class _FilterBar extends StatelessWidget {
         ),
       ),
       menuChildren: [
-        item(icon: Icons.filter_list_rounded, label: 'Tutto', on: value.isAll, onTap: () => onChanged(_Filter.all)),
+        item(
+          icon: Icons.filter_list_rounded,
+          label: tr('Tutto', 'All'),
+          on: value.isAll,
+          onTap: () => onChanged(_Filter.all),
+        ),
         for (final k in _Kind.values)
           item(
             icon: k.icon,
@@ -705,7 +736,12 @@ class _FilterBar extends StatelessWidget {
           ),
       ],
       builder: (context, menu, _) => IconButton(
-        tooltip: active ? 'Filtro: ${value.kinds.map((k) => k.label).join(', ')}' : 'Filtra le attività',
+        tooltip: active
+            ? tr(
+                'Filtro: ${value.kinds.map((k) => k.label).join(', ')}',
+                'Filter: ${value.kinds.map((k) => k.label).join(', ')}',
+              )
+            : tr('Filtra le attività', 'Filter the activity'),
         onPressed: () => menu.isOpen ? menu.close() : menu.open(),
         iconSize: 19,
         color: active ? c.primary : null,
@@ -756,10 +792,23 @@ class _BlockHeading extends StatelessWidget {
         onTap: onTap,
         badge: _badge(outcome, c),
         stats: [
-          IconStat(Icons.bolt_rounded, '$invocations', invocations == 1 ? '1 invocazione' : '$invocations invocazioni'),
-          if (time.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(time), 'Durata totale'),
+          IconStat(
+            Icons.bolt_rounded,
+            '$invocations',
+            invocations == 1
+                ? tr('1 invocazione', '1 invocation')
+                : tr('$invocations invocazioni', '$invocations invocations'),
+          ),
+          if (time.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(time), tr('Durata totale', 'Total duration')),
           if (tokensIn + tokensOut > 0)
-            IconStat(Icons.toll_outlined, _k(tokensIn + tokensOut), 'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out'),
+            IconStat(
+              Icons.toll_outlined,
+              _k(tokensIn + tokensOut),
+              tr(
+                'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out',
+                'Tokens: ${_k(tokensIn)} in / ${_k(tokensOut)} out',
+              ),
+            ),
         ],
       ),
     );
@@ -807,12 +856,15 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
     final (tokensIn, tokensOut, cost) = group.usage;
     final badge = _badge(group.outcome(live: widget.live), c);
     final stats = <IconStat>[
-      if (duration.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(duration), 'Durata'),
+      if (duration.inSeconds > 0) IconStat(Icons.schedule_rounded, _span(duration), tr('Durata', 'Duration')),
       if (tokensIn + tokensOut > 0)
         IconStat(
           Icons.toll_outlined,
           _k(tokensIn + tokensOut),
-          'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out${cost == null ? '' : ' · $cost'}',
+          tr(
+            'Token: ${_k(tokensIn)} in / ${_k(tokensOut)} out${cost == null ? '' : ' · $cost'}',
+            'Tokens: ${_k(tokensIn)} in / ${_k(tokensOut)} out${cost == null ? '' : ' · $cost'}',
+          ),
         ),
     ];
 
@@ -849,7 +901,9 @@ class _InvocationHeaderState extends State<_InvocationHeader> {
                     ),
                   ),
                   Text(
-                    invocation == null ? 'Invocazione' : 'Invocazione $invocation',
+                    invocation == null
+                        ? tr('Invocazione', 'Invocation')
+                        : tr('Invocazione $invocation', 'Invocation $invocation'),
                     style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
                   ),
                   if (badge != null) ...[const SizedBox(width: 10), badge],
@@ -923,7 +977,10 @@ class _WorkingLine extends StatelessWidget {
             ),
           ),
           Text(
-            'Al lavoro · nessun output da ${_span(silent)} (limite $limitMinutes min)',
+            tr(
+              'Al lavoro · nessun output da ${_span(silent)} (limite $limitMinutes min)',
+              'Working · no output for ${_span(silent)} (limit $limitMinutes min)',
+            ),
             style: TextStyle(fontSize: 13.5, height: 1.5, color: Color.lerp(c.muted, c.text, 0.55)),
           ),
         ],
@@ -980,7 +1037,7 @@ class _LogLineState extends State<_LogLine> {
       LogKind.task || LogKind.result => MarkdownText(
         // Earlier versions put "Completato in …" before the summary; the
         // invocation header already shows those numbers.
-        e.text.startsWith('Completato in ') && e.text.contains('\n\n')
+        (e.text.startsWith('Completato in ') || e.text.startsWith('Completed in ')) && e.text.contains('\n\n')
             ? e.text.substring(e.text.indexOf('\n\n') + 2).trim()
             : e.text,
         style: body,
@@ -1058,7 +1115,7 @@ PlanBlock? _focusBlock(LoopEngine engine, List<_Group> groups) {
   if (current != null && current < plan.blocks.length) return plan.blocks[current];
   final last = groups.lastWhere((g) => g.header != null, orElse: () => _Group(null)).header;
   if (last == null) return null;
-  final n = int.tryParse(RegExp(r'Blocco (\d+)/').firstMatch(last.text)?.group(1) ?? '');
+  final n = int.tryParse(_headerBlock.firstMatch(last.text)?.group(1) ?? '');
   return n == null || n < 1 || n > plan.blocks.length ? null : plan.blocks[n - 1];
 }
 
@@ -1082,10 +1139,10 @@ class _BlockProgress extends StatelessWidget {
         ? s.stepsDone / s.stepsTotal
         : (s.attempts / max).clamp(0.0, 1.0);
     final label = steps
-        ? '${s.stepsDone} di ${s.stepsTotal} passi completati'
+        ? tr('${s.stepsDone} di ${s.stepsTotal} passi completati', '${s.stepsDone} of ${s.stepsTotal} steps completed')
         : done
-        ? 'Blocco completato'
-        : '${s.attempts} di $max invocazioni usate';
+        ? tr('Blocco completato', 'Block completed')
+        : tr('${s.attempts} di $max invocazioni usate', '${s.attempts} of $max invocations used');
     final color = switch (s.status) {
       BlockStatus.done => c.success,
       BlockStatus.blocked => c.danger,
@@ -1229,7 +1286,9 @@ class _ActivityMapState extends State<ActivityMap> {
   static const _icon = 22.0;
   static const _dot = 12.0;
 
-  static const _months = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+  static List<String> get _months => isEnglish
+      ? const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      : const ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
   static String _day(DateTime t) => '${t.day} ${_months[t.month - 1]}';
 
   static String _hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
@@ -1243,7 +1302,10 @@ class _ActivityMapState extends State<ActivityMap> {
     final logs = engine.logs;
     if (logs.isEmpty) {
       return Center(
-        child: Text('L\'attività apparirà qui', style: TextStyle(fontSize: 12.5, color: c.muted)),
+        child: Text(
+          tr('L\'attività apparirà qui', 'Activity will show here'),
+          style: TextStyle(fontSize: 12.5, color: c.muted),
+        ),
       );
     }
     final groups = _groupLogs(logs);
@@ -1269,10 +1331,12 @@ class _ActivityMapState extends State<ActivityMap> {
       if (header && firstHeaders.contains(e) && filter.kinds.contains(_Kind.events)) {
         final hasTask = shownLogs.skip(i + 1).takeWhile((x) => !isHeader(x)).any((x) => x.kind == LogKind.task);
         if (!hasTask) {
-          final m = RegExp(r'Blocco (\d+)/\d+ «(.*)»').firstMatch(e.text);
+          final m = _headerBlock.firstMatch(e.text);
           final flag = LogEntry(
             LogKind.task,
-            m == null ? 'Compito' : 'Compito del blocco ${m.group(1)}: ${m.group(2)}',
+            m == null
+                ? tr('Compito', 'Task')
+                : tr('Compito del blocco ${m.group(1)}: ${m.group(2)}', 'Task of block ${m.group(1)}: ${m.group(2)}'),
             at: e.at,
           );
           starts[flag] = e;
@@ -1297,7 +1361,7 @@ class _ActivityMapState extends State<ActivityMap> {
     return Row(
       children: [
         Tooltip(
-          message: 'Inizio: ${_day(t0)} alle ${_clock(t0)}',
+          message: tr('Inizio: ${_day(t0)} alle ${_clock(t0)}', 'Start: ${_day(t0)} at ${_clock(t0)}'),
           child: Text(_hm(t0), style: hm),
         ),
         const SizedBox(width: 10),
@@ -1359,7 +1423,7 @@ class _ActivityMapState extends State<ActivityMap> {
                 final left = icons.isEmpty ? xs[head]! - 6 : xs[icons.first]!;
                 var right = live ? liveEnd : (icons.isEmpty ? xs[head]! + 6 : xs[icons.last]!);
                 if (right < left + 6) right = left + 6;
-                final m = RegExp(r'Blocco (\d+)/\d+ «(.*)»').firstMatch(head.text);
+                final m = _headerBlock.firstMatch(head.text);
                 bands.add((
                   left,
                   right,
@@ -1367,7 +1431,7 @@ class _ActivityMapState extends State<ActivityMap> {
                   // between the last icon of one and the first of the next.
                   [for (final g in run.skip(1)) ?_between(items, g.header!, isHeader, xs)],
                   identical(sel.entry, head),
-                  m == null ? '' : 'Blocco ${m.group(1)}: ${m.group(2)}',
+                  m == null ? '' : tr('Blocco ${m.group(1)}: ${m.group(2)}', 'Block ${m.group(1)}: ${m.group(2)}'),
                 ));
                 for (final g in run.skip(1)) {
                   if (_between(items, g.header!, isHeader, xs) case final x?) invocationMarks.add((x, g.header!));
@@ -1484,7 +1548,8 @@ class _ActivityMapState extends State<ActivityMap> {
                                     height: 12,
                                     child: Tooltip(
                                       message:
-                                          'Invocazione ${RegExp(r'invocazione (\d+)').firstMatch(header.text)?.group(1) ?? ''}'
+                                          '${tr('Invocazione', 'Invocation')} '
+                                          '${_headerLine.firstMatch(header.text.substring(1).trim())?.group(4) ?? ''}'
                                           ' · ${_clock(header.at)}',
                                       child: Icon(Icons.bolt_rounded, size: 11, color: c.muted),
                                     ),
@@ -1577,8 +1642,10 @@ class _ActivityMapState extends State<ActivityMap> {
         ),
         const SizedBox(width: 10),
         Tooltip(
-          message: engine.isActive ? 'Il loop è in corso' : 'Fine: ${_day(t1)} alle ${_clock(t1)}',
-          child: Text(engine.isActive ? 'adesso' : _hm(t1), style: hm),
+          message: engine.isActive
+              ? tr('Il loop è in corso', 'The loop is running')
+              : tr('Fine: ${_day(t1)} alle ${_clock(t1)}', 'End: ${_day(t1)} at ${_clock(t1)}'),
+          child: Text(engine.isActive ? tr('adesso', 'now') : _hm(t1), style: hm),
         ),
       ],
     );

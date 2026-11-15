@@ -11,10 +11,11 @@ import '../engine/settings.dart';
 import 'agent_badge.dart';
 import 'app_theme.dart';
 import 'logo.dart';
+import '../l10n.dart';
 
 /// What the setup needs from the main window.
 class SetupHooks {
-  const SetupHooks({
+  SetupHooks({
     required this.settings,
     required this.onSettingsChanged,
     required this.pickPlan,
@@ -66,7 +67,13 @@ class _Cli {
 }
 
 class _SetupWizardState extends State<_SetupWizard> {
-  static const _steps = ['Benvenuto', 'Agente', 'CLI', 'Accesso', 'Progetto'];
+  static final _steps = [
+    tr('Benvenuto', 'Welcome'),
+    tr('Agente', 'Agent'),
+    'CLI',
+    tr('Accesso', 'Sign-in'),
+    tr('Progetto', 'Project'),
+  ];
 
   late int _step = widget.initialStep;
   final _cli = {for (final k in AgentKind.values) k: _Cli()};
@@ -141,7 +148,7 @@ class _SetupWizardState extends State<_SetupWizard> {
       builder: (context) => AlertDialog(
         backgroundColor: c.surface,
         surfaceTintColor: Colors.transparent,
-        title: Text('Installare ${installer.product}?'),
+        title: Text(tr('Installare ${installer.product}?', 'Install ${installer.product}?')),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
           child: Column(
@@ -149,8 +156,11 @@ class _SetupWizardState extends State<_SetupWizard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Si apre una finestra che esegue l\'installazione da ${installer.source}. '
-                'Puoi seguirla e chiuderla quando ha finito.',
+                tr(
+                  'Si apre una finestra che esegue l\'installazione da ${installer.source}. '
+                      'Puoi seguirla e chiuderla quando ha finito.',
+                  'A window opens and runs the installation from ${installer.source}. You can follow it and close it when it is done.',
+                ),
                 style: TextStyle(color: c.text, height: 1.45),
               ),
               const SizedBox(height: 12),
@@ -171,8 +181,8 @@ class _SetupWizardState extends State<_SetupWizard> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Installa')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Annulla', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Installa', 'Install'))),
         ],
       ),
     );
@@ -187,7 +197,7 @@ class _SetupWizardState extends State<_SetupWizard> {
   Future<void> _browseCli() async {
     final name = _s.agent == AgentKind.codex ? 'codex' : 'claude';
     final file = await FilePicker.pickFile(
-      dialogTitle: 'Dov\'è $name.exe?',
+      dialogTitle: tr('Dov\'è $name.exe?', 'Where is $name.exe?'),
       type: FileType.custom,
       allowedExtensions: const ['exe', 'cmd'],
     );
@@ -257,7 +267,11 @@ class _SetupWizardState extends State<_SetupWizard> {
                     TextButton(
                       onPressed: _busy ? null : _finish,
                       style: TextButton.styleFrom(foregroundColor: c.muted),
-                      child: Text(_step == 0 ? 'Salta, faccio da solo' : 'Finisco dopo'),
+                      child: Text(
+                        _step == 0
+                            ? tr('Salta, faccio da solo', 'Skip, I\'ll do it myself')
+                            : tr('Finisco dopo', 'Finish later'),
+                      ),
                     ),
                   const Spacer(),
                   if (_step > 0) ...[
@@ -268,16 +282,16 @@ class _SetupWizardState extends State<_SetupWizard> {
                         side: BorderSide(color: c.border),
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                       ),
-                      child: const Text('Indietro'),
+                      child: Text(tr('Indietro', 'Back')),
                     ),
                     const SizedBox(width: 10),
                   ],
                   FilledButton(
                     onPressed: _busy ? null : (last ? _finish : () => setState(() => _step++)),
                     child: Text(switch (_step) {
-                      0 => 'Inizia',
-                      _ when last => 'Fine',
-                      _ => 'Avanti',
+                      0 => tr('Inizia', 'Get started'),
+                      _ when last => tr('Fine', 'Done'),
+                      _ => tr('Avanti', 'Next'),
                     }),
                   ),
                 ],
@@ -306,22 +320,51 @@ class _SetupWizardState extends State<_SetupWizard> {
       children: [
         LogoMark(size: 52, color: c.primary),
         const SizedBox(height: 18),
-        _Title('Benvenuto in AutoLoop', 'Bastano pochi passi per preparare tutto.'),
+        _Title(
+          tr('Benvenuto in AutoLoop', 'Welcome to AutoLoop'),
+          tr('Bastano pochi passi per preparare tutto.', 'A few steps and everything is ready.'),
+        ),
         const SizedBox(height: 22),
-        const _Point(
+        _Point(
           Icons.description_outlined,
-          'Scrivi il piano',
-          'Un file Markdown o di testo: AutoLoop lo divide in blocchi da solo.',
+          tr('Scrivi il piano', 'Write the plan'),
+          tr(
+            'Un file Markdown o di testo: AutoLoop lo divide in blocchi da solo.',
+            'A Markdown or text file: AutoLoop splits it into blocks by itself.',
+          ),
         ),
-        const _Point(
+        _Point(
           Icons.bolt_rounded,
-          'L\'agente lo porta a termine',
-          'Codex o Claude lavorano un blocco alla volta, e vengono richiamati quando si fermano.',
+          tr('L\'agente lo porta a termine', 'The agent sees it through'),
+          tr(
+            'Codex o Claude lavorano un blocco alla volta, e vengono richiamati quando si fermano.',
+            'Codex or Claude work one block at a time, and are relaunched when they stop.',
+          ),
         ),
-        const _Point(
+        _Point(
           Icons.verified_outlined,
-          'Tu controlli il risultato',
-          'Verifica e commit a ogni blocco, e la pausa quando vuoi controllare.',
+          tr('Tu controlli il risultato', 'You check the result'),
+          tr(
+            'Verifica e commit a ogni blocco, e la pausa quando vuoi controllare.',
+            'Check and commit for every block, and a pause when you want to review.',
+          ),
+        ),
+        const SizedBox(height: 6),
+        // The language, first of all: the whole app follows it.
+        Row(
+          children: [
+            Icon(Icons.translate_rounded, size: 18, color: c.muted),
+            const SizedBox(width: 10),
+            for (final l in AppLang.values) ...[
+              ChoiceChip(
+                label: Text(l.label),
+                selected: appLang.value == l,
+                showCheckmark: false,
+                onSelected: (_) => appLang.value = l,
+              ),
+              const SizedBox(width: 8),
+            ],
+          ],
         ),
       ],
     );
@@ -331,14 +374,22 @@ class _SetupWizardState extends State<_SetupWizard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Title('Quale agente usi?', 'Serve la sua CLI su questo computer. Puoi cambiarlo quando vuoi.'),
+        _Title(
+          tr('Quale agente usi?', 'Which agent do you use?'),
+          tr(
+            'Serve la sua CLI su questo computer. Puoi cambiarlo quando vuoi.',
+            'Its CLI is needed on this computer. You can change it any time.',
+          ),
+        ),
         const SizedBox(height: 20),
         for (final k in AgentKind.values) ...[
           _AgentCard(
             kind: k,
             selected: _s.agent == k,
             title: k == AgentKind.codex ? 'Codex' : 'Claude',
-            subtitle: k == AgentKind.codex ? 'Codex CLI, di OpenAI' : 'Claude Code, di Anthropic',
+            subtitle: k == AgentKind.codex
+                ? tr('Codex CLI, di OpenAI', 'Codex CLI, by OpenAI')
+                : tr('Claude Code, di Anthropic', 'Claude Code, by Anthropic'),
             status: _statusText(_cli[k]!),
             ready: _cli[k]!.version != null,
             onTap: () {
@@ -353,10 +404,12 @@ class _SetupWizardState extends State<_SetupWizard> {
   }
 
   String _statusText(_Cli cli) {
-    if (cli.searching) return 'Cerco la CLI…';
-    if (cli.version == null) return 'Non installata';
-    final who = cli.account?.loggedIn == true ? ' · ${cli.account?.email ?? 'connesso'}' : '';
-    return 'Installata$who';
+    if (cli.searching) return tr('Cerco la CLI…', 'Looking for the CLI…');
+    if (cli.version == null) return tr('Non installata', 'Not installed');
+    final who = cli.account?.loggedIn == true
+        ? tr(' · ${cli.account?.email ?? 'connesso'}', ' · ${cli.account?.email ?? 'signed in'}')
+        : '';
+    return tr('Installata$who', 'Installed$who');
   }
 
   Widget _cliStep(BuildContext context) {
@@ -366,26 +419,45 @@ class _SetupWizardState extends State<_SetupWizard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Title(installer.product, 'AutoLoop la avvia a ogni invocazione, come faresti tu dal terminale.'),
+        _Title(
+          installer.product,
+          tr(
+            'AutoLoop la avvia a ogni invocazione, come faresti tu dal terminale.',
+            'AutoLoop starts it for every invocation, as you would from the terminal.',
+          ),
+        ),
         const SizedBox(height: 20),
         if (cli.searching || _busy)
           _StatusBox(
             icon: const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            title: _busy ? 'Installazione in corso…' : 'Cerco ${installer.product}…',
-            body: _busy ? 'Segui la finestra che si è aperta, e chiudila quando ha finito.' : '',
+            title: _busy
+                ? tr('Installazione in corso…', 'Installing…')
+                : tr('Cerco ${installer.product}…', 'Looking for ${installer.product}…'),
+            body: _busy
+                ? tr(
+                    'Segui la finestra che si è aperta, e chiudila quando ha finito.',
+                    'Follow the window that opened, and close it when it is done.',
+                  )
+                : '',
           )
         else if (cli.version != null)
           _StatusBox(
             icon: Icon(Icons.check_circle_rounded, color: c.success, size: 22),
-            title: 'Trovata: versione ${cli.version}',
+            title: tr('Trovata: versione ${cli.version}', 'Found: version ${cli.version}'),
             body: cli.path ?? '',
             monospace: true,
           )
         else ...[
           _StatusBox(
             icon: Icon(Icons.info_outline_rounded, color: c.warning, size: 22),
-            title: 'Non trovo ${installer.product} su questo computer',
-            body: 'Posso installarla io con il suo installer ufficiale, dopo averti mostrato cosa esegue.',
+            title: tr(
+              'Non trovo ${installer.product} su questo computer',
+              '${installer.product} is not on this computer',
+            ),
+            body: tr(
+              'Posso installarla io con il suo installer ufficiale, dopo averti mostrato cosa esegue.',
+              'I can install it with its official installer, after showing you what it runs.',
+            ),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -395,10 +467,10 @@ class _SetupWizardState extends State<_SetupWizard> {
               FilledButton.icon(
                 onPressed: _install,
                 icon: const Icon(Icons.download_rounded, size: 18),
-                label: Text('Installa ${installer.product}'),
+                label: Text(tr('Installa ${installer.product}', 'Install ${installer.product}')),
               ),
-              _Ghost(Icons.refresh_rounded, 'Cerca di nuovo', () => _find(_s.agent, fresh: true)),
-              _Ghost(Icons.folder_open_outlined, 'Indica il file…', _browseCli),
+              _Ghost(Icons.refresh_rounded, tr('Cerca di nuovo', 'Look again'), () => _find(_s.agent, fresh: true)),
+              _Ghost(Icons.folder_open_outlined, tr('Indica il file…', 'Choose the file…'), _browseCli),
             ],
           ),
         ],
@@ -414,33 +486,48 @@ class _SetupWizardState extends State<_SetupWizard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Title('Accesso a $name', 'L\'agente lavora con il tuo account e la sua quota.'),
+        _Title(
+          tr('Accesso a $name', 'Sign in to $name'),
+          tr('L\'agente lavora con il tuo account e la sua quota.', 'The agent works with your account and its quota.'),
+        ),
         const SizedBox(height: 20),
         if (cli.version == null)
           _StatusBox(
             icon: Icon(Icons.info_outline_rounded, color: c.warning, size: 22),
-            title: 'Prima serve la CLI',
-            body: 'Torna indietro per installarla o indicarla.',
+            title: tr('Prima serve la CLI', 'The CLI comes first'),
+            body: tr('Torna indietro per installarla o indicarla.', 'Go back to install it or point to it.'),
           )
         else if (cli.checkingAccount || _busy)
           _StatusBox(
             icon: const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            title: _busy ? 'Accesso in corso…' : 'Controllo l\'accesso…',
-            body: _busy ? 'Completa la procedura nella finestra e nel browser che si sono aperti.' : '',
+            title: _busy
+                ? tr('Accesso in corso…', 'Signing in…')
+                : tr('Controllo l\'accesso…', 'Checking the sign-in…'),
+            body: _busy
+                ? tr(
+                    'Completa la procedura nella finestra e nel browser che si sono aperti.',
+                    'Finish in the window and the browser that opened.',
+                  )
+                : '',
           )
         else if (account?.loggedIn == true)
           _StatusBox(
             icon: Icon(Icons.check_circle_rounded, color: c.success, size: 22),
-            title: account?.email ?? 'Accesso fatto',
-            body: [if (account?.plan != null) 'Piano ${account!.plan}', 'Account: ${_s.profile.name}'].join(' · '),
+            title: account?.email ?? tr('Accesso fatto', 'Signed in'),
+            body: [
+              if (account?.plan case final plan?) tr('Piano $plan', '$plan plan'),
+              'Account: ${_s.profile.name}',
+            ].join(' · '),
           )
         else ...[
           _StatusBox(
             icon: Icon(Icons.login_rounded, color: c.primary, size: 22),
-            title: 'Non hai ancora fatto l\'accesso',
-            body:
-                'L\'accesso si fa con la procedura ufficiale di $name: si apre una finestra e poi il browser. '
-                'AutoLoop non vede né conserva la tua password.',
+            title: tr('Non hai ancora fatto l\'accesso', 'You are not signed in yet'),
+            body: tr(
+              'L\'accesso si fa con la procedura ufficiale di $name: si apre una finestra e poi il browser. '
+                  'AutoLoop non vede né conserva la tua password.',
+              'Signing in uses $name\'s official flow: a window opens, then the browser. AutoLoop never sees or keeps your password.',
+            ),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -450,9 +537,9 @@ class _SetupWizardState extends State<_SetupWizard> {
               FilledButton.icon(
                 onPressed: _signIn,
                 icon: const Icon(Icons.login_rounded, size: 18),
-                label: const Text('Accedi'),
+                label: Text(tr('Accedi', 'Sign in')),
               ),
-              _Ghost(Icons.refresh_rounded, 'Controlla di nuovo', () => _checkAccount(_s.agent)),
+              _Ghost(Icons.refresh_rounded, tr('Controlla di nuovo', 'Check again'), () => _checkAccount(_s.agent)),
             ],
           ),
         ],
@@ -466,14 +553,23 @@ class _SetupWizardState extends State<_SetupWizard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Title('Il primo piano', 'Scegli il file con il piano e la cartella in cui l\'agente lavora.'),
+        _Title(
+          tr('Il primo piano', 'The first plan'),
+          tr(
+            'Scegli il file con il piano e la cartella in cui l\'agente lavora.',
+            'Choose the plan file and the folder the agent works in.',
+          ),
+        ),
         const SizedBox(height: 20),
         _PickRow(
           icon: Icons.description_outlined,
-          label: 'Piano',
-          value: plan == null ? 'Nessun piano' : p.basename(plan),
-          hint: 'Un file .md o .txt. I titoli, gli elenchi numerati o le caselle diventano i blocchi.',
-          button: plan == null ? 'Scegli il piano' : 'Cambia',
+          label: tr('Piano', 'Plan'),
+          value: plan == null ? tr('Nessun piano', 'No plan') : p.basename(plan),
+          hint: tr(
+            'Un file .md o .txt. I titoli, gli elenchi numerati o le caselle diventano i blocchi.',
+            'A .md or .txt file. Headings, numbered lists or checkboxes become the blocks.',
+          ),
+          button: plan == null ? tr('Scegli il piano', 'Choose the plan') : tr('Cambia', 'Change'),
           onTap: () async {
             await widget.hooks.pickPlan();
             if (mounted) setState(() {});
@@ -482,10 +578,13 @@ class _SetupWizardState extends State<_SetupWizard> {
         const SizedBox(height: 10),
         _PickRow(
           icon: Icons.folder_outlined,
-          label: 'Cartella di lavoro',
-          value: dir == null ? 'Quella del piano' : p.basename(dir),
-          hint: 'Dove l\'agente crea e modifica i file. Meglio se è un repository git.',
-          button: 'Cambia',
+          label: tr('Cartella di lavoro', 'Working folder'),
+          value: dir == null ? tr('Quella del piano', 'The plan\'s folder') : p.basename(dir),
+          hint: tr(
+            'Dove l\'agente crea e modifica i file. Meglio se è un repository git.',
+            'Where the agent creates and edits files. Best if it is a git repository.',
+          ),
+          button: tr('Cambia', 'Change'),
           onTap: () async {
             await widget.hooks.pickWorkDir();
             if (mounted) setState(() {});
@@ -493,7 +592,10 @@ class _SetupWizardState extends State<_SetupWizard> {
         ),
         const SizedBox(height: 14),
         Text(
-          'Il resto (verifica, commit, quota) ha già valori pensati per partire: li trovi nel pannello di controllo.',
+          tr(
+            'Il resto (verifica, commit, quota) ha già valori pensati per partire: li trovi nel pannello di controllo.',
+            'The rest (check, commit, quota) already has values meant to get started: you find them in the control panel.',
+          ),
           style: TextStyle(color: context.colors.muted, fontSize: 13),
         ),
       ],

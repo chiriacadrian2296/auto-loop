@@ -6,8 +6,9 @@ const fs = require('fs');
 let input = '';
 process.stdin.on('data', d => (input += d));
 process.stdin.on('end', () => {
-  const block = Number(/Blocco corrente: (\d+)/.exec(input)[1]);
-  const attempt = Number(/Invocazione n\. (\d+)/.exec(input)[1]);
+  // The prompt is in Italian or English, like the app.
+  const block = Number(/(?:Blocco corrente|Current block): (\d+)/.exec(input)[1]);
+  const attempt = Number(/(?:Invocazione n\.|Invocation no\.) (\d+)/.exec(input)[1]);
   const title = /«([^»]*)»\n/.exec(input)[1];
   const emit = o => console.log(JSON.stringify(o));
   emit({ type: 'system', subtype: 'init', model: 'fake' });

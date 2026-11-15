@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import 'accounts.dart';
 import 'plan_parser.dart';
+import '../l10n.dart';
 
 enum AgentKind {
   codex('Codex'),
@@ -15,21 +16,27 @@ enum AgentKind {
 }
 
 enum QuotaBehavior {
-  stop('Fermati'),
+  stop('Fermati', 'Stop'),
   // Name kept for saved settings: it now waits for the renewal when known.
-  wait('Riprendi da solo');
+  wait('Riprendi da solo', 'Resume by itself');
 
-  const QuotaBehavior(this.label);
-  final String label;
+  const QuotaBehavior(this._it, this._en);
+  final String _it, _en;
+
+  /// The label in the language in use.
+  String get label => tr(_it, _en);
 }
 
 /// How much freedom the agent gets. Mapped to each CLI's own flags.
 enum Autonomy {
-  sandboxed('Protetta (azioni sicure approvate in automatico)'),
-  full('Accesso completo (nessuna conferma)');
+  sandboxed('Protetta (azioni sicure approvate in automatico)', 'Protected (safe actions approved automatically)'),
+  full('Accesso completo (nessuna conferma)', 'Full access (no confirmation)');
 
-  const Autonomy(this.label);
-  final String label;
+  const Autonomy(this._it, this._en);
+  final String _it, _en;
+
+  /// The label in the language in use.
+  String get label => tr(_it, _en);
 }
 
 class LoopSettings {

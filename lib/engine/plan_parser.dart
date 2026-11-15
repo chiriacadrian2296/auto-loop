@@ -6,16 +6,21 @@
 /// single block and the agent decides how to proceed.
 library;
 
-enum SplitStrategy {
-  auto('Automatico'),
-  headings('Titoli Markdown'),
-  numbered('Elenco numerato'),
-  checkboxes('Checkbox'),
-  bullets('Elenco puntato'),
-  whole('Piano unico');
+import '../l10n.dart';
 
-  const SplitStrategy(this.label);
-  final String label;
+enum SplitStrategy {
+  auto('Automatico', 'Automatic'),
+  headings('Titoli Markdown', 'Markdown headings'),
+  numbered('Elenco numerato', 'Numbered list'),
+  checkboxes('Checkbox', 'Checkboxes'),
+  bullets('Elenco puntato', 'Bulleted list'),
+  whole('Piano unico', 'Single block');
+
+  const SplitStrategy(this._it, this._en);
+  final String _it, _en;
+
+  /// The label in the language in use.
+  String get label => tr(_it, _en);
 }
 
 class PlanBlock {
@@ -124,7 +129,10 @@ ParsedPlan parsePlan(String raw, {SplitStrategy strategy = SplitStrategy.auto}) 
 }
 
 ParsedPlan _whole(String text) {
-  final firstLine = text.split('\n').map((l) => l.trim()).firstWhere((l) => l.isNotEmpty, orElse: () => 'Piano');
+  final firstLine = text
+      .split('\n')
+      .map((l) => l.trim())
+      .firstWhere((l) => l.isNotEmpty, orElse: () => tr('Piano', 'Plan'));
   return ParsedPlan(
     raw: text,
     preamble: '',
@@ -192,5 +200,5 @@ ParsedPlan? _splitByPattern(
 String _clean(String title) {
   var t = title.replaceAll(RegExp(r'[*_`]'), '').trim();
   if (t.length > 120) t = '${t.substring(0, 117)}...';
-  return t.isEmpty ? 'Blocco' : t;
+  return t.isEmpty ? tr('Blocco', 'Block') : t;
 }

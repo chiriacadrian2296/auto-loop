@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import 'accounts.dart';
 import 'settings.dart';
+import '../l10n.dart';
 
 /// Finds the agent CLIs even when they are not on PATH (desktop apps and the
 /// VS Code extension ship their own copies in versioned folders).
@@ -175,7 +176,7 @@ AgentCatalog parseCodexCatalog(String json) {
     ));
   }
   models.sort((a, b) => a.$1.compareTo(b.$1));
-  return AgentCatalog(models: [for (final m in models) m.$2], source: 'catalogo di Codex');
+  return AgentCatalog(models: [for (final m in models) m.$2], source: tr('catalogo di Codex', 'Codex catalog'));
 }
 
 Future<AgentCatalog> _claudeCatalog(String exe) async {
@@ -202,9 +203,13 @@ AgentCatalog parseClaudeHelp(String help) {
   return AgentCatalog(
     models: [
       for (final a in aliases)
-        ModelOption(id: a, label: a[0].toUpperCase() + a.substring(1), description: 'Ultima versione di $a'),
+        ModelOption(
+          id: a,
+          label: a[0].toUpperCase() + a.substring(1),
+          description: tr('Ultima versione di $a', 'Latest version of $a'),
+        ),
     ],
     efforts: efforts,
-    source: 'alias di Claude Code',
+    source: tr('alias di Claude Code', 'Claude Code alias'),
   );
 }

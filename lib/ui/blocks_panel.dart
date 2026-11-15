@@ -5,8 +5,9 @@ import '../engine/loop_state.dart';
 import '../engine/plan_parser.dart';
 import 'app_theme.dart';
 import 'section_title.dart';
+import '../l10n.dart';
 
-String _invocations(int n) => n == 1 ? '1 invocazione' : '$n invocazioni';
+String _invocations(int n) => n == 1 ? tr('1 invocazione', '1 invocation') : tr('$n invocazioni', '$n invocations');
 
 String _duration(int seconds) {
   if (seconds <= 0) return '';
@@ -31,9 +32,9 @@ int _blockSeconds(LoopEngine engine, PlanBlock b) {
 
 /// The status-changing actions available for a block in its current state.
 List<(String, IconData, BlockStatus)> _actionsFor(BlockStatus status) => [
-  if (status != BlockStatus.pending) ('Rimetti in coda', Icons.replay_rounded, BlockStatus.pending),
-  if (status != BlockStatus.done) ('Segna completato', Icons.check_rounded, BlockStatus.done),
-  if (status == BlockStatus.pending) ('Salta', Icons.redo_rounded, BlockStatus.skipped),
+  if (status != BlockStatus.pending) (tr('Rimetti in coda', 'Queue again'), Icons.replay_rounded, BlockStatus.pending),
+  if (status != BlockStatus.done) (tr('Segna completato', 'Mark done'), Icons.check_rounded, BlockStatus.done),
+  if (status == BlockStatus.pending) (tr('Salta', 'Skip'), Icons.redo_rounded, BlockStatus.skipped),
 ];
 
 class BlocksPanel extends StatefulWidget {
@@ -63,14 +64,17 @@ class BlocksPanel extends StatefulWidget {
 
 /// The groups the blocks are shown in, in this order.
 enum _Bucket {
-  done('Completati'),
-  active('In corso'),
-  blocked('Bloccati'),
-  todo('Da fare'),
-  skipped('Saltati');
+  done('Completati', 'Done'),
+  active('In corso', 'In progress'),
+  blocked('Bloccati', 'Blocked'),
+  todo('Da fare', 'To do'),
+  skipped('Saltati', 'Skipped');
 
-  const _Bucket(this.label);
-  final String label;
+  const _Bucket(this._it, this._en);
+  final String _it, _en;
+
+  /// The label in the language in use.
+  String get label => tr(_it, _en);
 }
 
 class _BlocksPanelState extends State<BlocksPanel> {
@@ -138,15 +142,18 @@ class _BlocksPanelState extends State<BlocksPanel> {
           IconStat(
             Icons.view_day_outlined,
             '${blocks.length}',
-            blocks.length == 1 ? '1 blocco' : '${blocks.length} blocchi',
+            blocks.length == 1 ? tr('1 blocco', '1 block') : tr('${blocks.length} blocchi', '${blocks.length} blocks'),
           ),
           if (invocations > 0) IconStat(Icons.bolt_rounded, '$invocations', _invocations(invocations)),
-          if (seconds > 0) IconStat(Icons.schedule_rounded, _duration(seconds), 'Durata totale'),
+          if (seconds > 0) IconStat(Icons.schedule_rounded, _duration(seconds), tr('Durata totale', 'Total duration')),
           if (input + output > 0)
             IconStat(
               Icons.toll_outlined,
               _tokens(input + output),
-              'Token: ${_tokens(input)} in / ${_tokens(output)} out',
+              tr(
+                'Token: ${_tokens(input)} in / ${_tokens(output)} out',
+                'Tokens: ${_tokens(input)} in / ${_tokens(output)} out',
+              ),
             ),
         ],
       ),
@@ -176,7 +183,9 @@ class _BlocksPanelState extends State<BlocksPanel> {
             height: 40,
             child: _MenuRow(
               Icons.pan_tool_outlined,
-              pause ? 'Non fermarti dopo questo blocco' : 'Fermati dopo questo blocco',
+              pause
+                  ? tr('Non fermarti dopo questo blocco', 'Don\'t stop after this block')
+                  : tr('Fermati dopo questo blocco', 'Stop after this block'),
             ),
           ),
       ],
@@ -202,7 +211,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
         ProgressSummary(
           title: widget.planName,
           ratio: ratio,
-          label: '$done di $total blocchi completati',
+          label: tr('$done di $total blocchi completati', '$done of $total blocks completed'),
           color: finished ? c.success : null,
         ),
         Expanded(
@@ -314,27 +323,30 @@ Future<void> showPlanCompleted(BuildContext context, LoopEngine engine) {
               ),
               const SizedBox(height: 14),
               Text(
-                'Piano completato',
+                tr('Piano completato', 'Plan completed'),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text),
               ),
               const SizedBox(height: 4),
               Text(
-                'Tutti i ${engine.plan!.blocks.length} blocchi sono stati svolti.',
+                tr(
+                  'Tutti i ${engine.plan!.blocks.length} blocchi sono stati svolti.',
+                  'All ${engine.plan!.blocks.length} blocks are done.',
+                ),
                 style: TextStyle(fontSize: 13, color: c.muted),
               ),
               const SizedBox(height: 20),
               Row(
                 children: [
-                  stat(_duration(engine.totalTime.inSeconds), 'tempo'),
-                  stat(_tokens(s.totalTokens), 'token'),
-                  stat('${s.runs}', s.runs == 1 ? 'invocazione' : 'invocazioni'),
-                  stat('${s.commits}', 'commit'),
+                  stat(_duration(engine.totalTime.inSeconds), tr('tempo', 'time')),
+                  stat(_tokens(s.totalTokens), tr('token', 'tokens')),
+                  stat('${s.runs}', s.runs == 1 ? tr('invocazione', 'invocation') : tr('invocazioni', 'invocations')),
+                  stat('${s.commits}', s.commits == 1 ? 'commit' : tr('commit', 'commits')),
                 ],
               ),
               const SizedBox(height: 22),
               Align(
                 alignment: Alignment.centerRight,
-                child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Chiudi')),
+                child: FilledButton(onPressed: () => Navigator.pop(context), child: Text(tr('Chiudi', 'Close'))),
               ),
             ],
           ),
@@ -383,12 +395,15 @@ class _TimelineItemState extends State<_TimelineItem> {
     // disc, the numbers and the group the block sits in already say it.
     final stats = <IconStat>[
       if (state.attempts > 0) IconStat(Icons.bolt_rounded, '${state.attempts}', _invocations(state.attempts)),
-      if (seconds > 0) IconStat(Icons.schedule_rounded, _duration(seconds), 'Durata'),
+      if (seconds > 0) IconStat(Icons.schedule_rounded, _duration(seconds), tr('Durata', 'Duration')),
       if (state.totalTokens > 0)
         IconStat(
           Icons.toll_outlined,
           _tokens(state.totalTokens),
-          'Token: ${_tokens(state.inputTokens)} in / ${_tokens(state.outputTokens)} out',
+          tr(
+            'Token: ${_tokens(state.inputTokens)} in / ${_tokens(state.outputTokens)} out',
+            'Tokens: ${_tokens(state.inputTokens)} in / ${_tokens(state.outputTokens)} out',
+          ),
         ),
     ];
     final Widget? subtitle = stats.isEmpty
@@ -423,19 +438,19 @@ class _TimelineItemState extends State<_TimelineItem> {
     final pause = state.pauseAfter;
     // The stop asked for after this block: a plain red hand, no background.
     final pauseMark = Tooltip(
-      message: 'Si fermerà dopo questo blocco',
+      message: tr('Si fermerà dopo questo blocco', 'Will stop after this block'),
       child: Icon(Icons.pan_tool_outlined, size: 16, color: c.danger),
     );
     final skipped = state.status == BlockStatus.skipped;
     final skipMark = Tooltip(
-      message: 'Saltato',
+      message: tr('Saltato', 'Skipped'),
       child: Icon(Icons.redo_rounded, size: 17, color: c.primary),
     );
     final marks = [if (skipped) skipMark, if (pause) pauseMark];
     // One button for all the block's options, in a menu.
     final more = Builder(
       builder: (context) => IconButton(
-        tooltip: 'Opzioni del blocco',
+        tooltip: tr('Opzioni del blocco', 'Block options'),
         iconSize: 18,
         visualDensity: VisualDensity.compact,
         color: c.muted,

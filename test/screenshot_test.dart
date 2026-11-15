@@ -10,6 +10,7 @@ import 'package:auto_loop/engine/loop_state.dart';
 import 'package:auto_loop/engine/settings.dart';
 import 'package:auto_loop/engine/accounts.dart';
 import 'package:auto_loop/engine/cli_locator.dart';
+import 'package:auto_loop/l10n.dart';
 import 'package:auto_loop/main.dart';
 import 'package:auto_loop/ui/accounts_dialog.dart';
 import 'package:auto_loop/ui/agent_badge.dart';
@@ -37,6 +38,8 @@ void main() {
 
   setUpAll(() async {
     if (out == null) return;
+    // SCREENSHOT_LANG=en: the window, the plan and the activity in English.
+    if (Platform.environment['SCREENSHOT_LANG'] == 'en') appLang.value = AppLang.en;
     const fonts = r'C:\Windows\Fonts';
     final ui = ['segoeui.ttf', 'seguisb.ttf', 'segoeuib.ttf'].map((f) => p.join(fonts, f)).toList();
     await _loadFont('Segoe UI Variable Text', ui);
@@ -52,14 +55,22 @@ void main() {
   for (final dark in [false, true]) {
     testWidgets('screenshot ${dark ? 'dark' : 'light'}', (tester) async {
       final dir = Directory.systemTemp.createTempSync('autoloop_shot_');
-      final plan = File(p.join(dir.path, 'piano-todo-app.md'))
+      final plan = File(p.join(dir.path, tr('piano-todo-app.md', 'todo-app-plan.md')))
         ..writeAsStringSync(
-          '# Todo app\n\nObiettivo.\n\n'
-          '## Struttura del progetto\nCrea il progetto Flutter.\n'
-          '## Modello e persistenza\nModello Todo con JSON.\n'
-          '## Interfaccia principale con lista, filtri e swipe per eliminare\nUI.\n'
-          '## Tema chiaro e scuro\nTema.\n'
-          '## README e rifinitura finale\nDocs.\n',
+          tr(
+            '# Todo app\n\nObiettivo.\n\n'
+                '## Struttura del progetto\nCrea il progetto Flutter.\n'
+                '## Modello e persistenza\nModello Todo con JSON.\n'
+                '## Interfaccia principale con lista, filtri e swipe per eliminare\nUI.\n'
+                '## Tema chiaro e scuro\nTema.\n'
+                '## README e rifinitura finale\nDocs.\n',
+            '# Todo app\n\nGoal.\n\n'
+                '## Project structure\nCreate the Flutter project.\n'
+                '## Model and storage\nTodo model with JSON.\n'
+                '## Main screen with list, filters and swipe to delete\nUI.\n'
+                '## Light and dark theme\nTheme.\n'
+                '## README and final polish\nDocs.\n',
+          ),
         );
       SharedPreferences.setMockInitialValues({
         'workDir': dir.path,
@@ -110,73 +121,109 @@ void main() {
         ..currentBlock = 2
         ..runStartedAt = DateTime.now().subtract(const Duration(minutes: 3, seconds: 12))
         ..sessionStartedAt = DateTime.now().subtract(const Duration(minutes: 31))
-        ..statusMessage = 'Blocco 3: Interfaccia principale con lista, filtri e swipe per eliminare';
+        ..statusMessage = tr(
+          'Blocco 3: Interfaccia principale con lista, filtri e swipe per eliminare',
+          'Block 3: Main screen with list, filters and swipe to delete',
+        );
       // Realistic times, so the activity map shows its shape.
       final t = DateTime.now().subtract(const Duration(minutes: 31));
       engine.logs.addAll([
         LogEntry(
           LogKind.info,
-          'Avvio del loop con Claude Code su piano-todo-app.md.',
+          tr(
+            'Avvio del loop con Claude Code su piano-todo-app.md.',
+            'Starting the loop with Claude Code on todo-app-plan.md.',
+          ),
           at: t.add(const Duration(seconds: 0)),
         ),
         LogEntry(
           LogKind.info,
-          '▶ Blocco 2/5 «Modello e persistenza» — invocazione 2',
+          tr('▶ Blocco 2/5 «Modello e persistenza» — invocazione 2', '▶ Block 2/5 «Model and storage» — invocation 2'),
           at: t.add(const Duration(seconds: 5)),
         ),
-        LogEntry(LogKind.system, 'Sessione Claude avviata (claude-sonnet-5-5)', at: t.add(const Duration(seconds: 6))),
+        LogEntry(
+          LogKind.system,
+          tr('Sessione Claude avviata (claude-sonnet-5-5)', 'Claude session started (claude-sonnet-5-5)'),
+          at: t.add(const Duration(seconds: 6)),
+        ),
         LogEntry(LogKind.tool, 'Read: lib/models/todo.dart', at: t.add(const Duration(seconds: 40))),
         LogEntry(LogKind.tool, 'Bash: flutter test test/models', at: t.add(const Duration(seconds: 120))),
         LogEntry(
           LogKind.agent,
-          'Ho completato il repository JSON e i test per serializzazione e caricamento. Tutti i 14 test passano.',
+          tr(
+            'Ho completato il repository JSON e i test per serializzazione e caricamento. Tutti i 14 test passano.',
+            'I finished the JSON repository and the tests for serialization and loading. All 14 tests pass.',
+          ),
           at: t.add(const Duration(seconds: 260)),
         ),
-        LogEntry(LogKind.tool, 'Verifica: flutter test', at: t.add(const Duration(seconds: 300))),
+        LogEntry(
+          LogKind.tool,
+          tr('Verifica: flutter test', 'Check: flutter test'),
+          at: t.add(const Duration(seconds: 300)),
+        ),
         LogEntry(
           LogKind.success,
-          'Verifica superata in 21 s · All tests passed!',
+          tr('Verifica superata in 21 s · All tests passed!', 'Check passed in 21 s · All tests passed!'),
           at: t.add(const Duration(seconds: 320)),
         ),
-        LogEntry(LogKind.success, 'Commit 9c41e07 · 4 file · +188 −2', at: t.add(const Duration(seconds: 330))),
+        LogEntry(
+          LogKind.success,
+          tr('Commit 9c41e07 · 4 file · +188 −2', 'Commit 9c41e07 · 4 files · +188 −2'),
+          at: t.add(const Duration(seconds: 330)),
+        ),
         LogEntry(
           LogKind.result,
-          'Blocco completato.',
+          tr('Blocco completato.', 'Block completed.'),
           at: t.add(const Duration(seconds: 331)),
           outcome: RunOutcome.done,
         ),
         LogEntry(
           LogKind.info,
-          '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 1',
+          tr(
+            '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 1',
+            '▶ Block 3/5 «Main screen with list, filters and swipe to delete» — invocation 1',
+          ),
           at: t.add(const Duration(seconds: 340)),
         ),
         LogEntry(
           LogKind.task,
-          'Lista dei todo con filtri tutti/attivi/completati e swipe per eliminare.',
+          tr(
+            'Lista dei todo con filtri tutti/attivi/completati e swipe per eliminare.',
+            'Todo list with all/active/completed filters and swipe to delete.',
+          ),
           at: t.add(const Duration(seconds: 342)),
         ),
         LogEntry(LogKind.tool, 'Edit: lib/ui/home_screen.dart', at: t.add(const Duration(seconds: 400))),
         LogEntry(
           LogKind.result,
-          'Terminata dal supervisore: nessun output per 10 minuti.',
+          tr(
+            'Terminata dal supervisore: nessun output per 10 minuti.',
+            'Stopped by the supervisor: no output for 10 minutes.',
+          ),
           at: t.add(const Duration(seconds: 1000)),
           outcome: RunOutcome.interrupted,
         ),
         LogEntry(
           LogKind.info,
-          '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 2',
+          tr(
+            '▶ Blocco 3/5 «Interfaccia principale con lista, filtri e swipe per eliminare» — invocazione 2',
+            '▶ Block 3/5 «Main screen with list, filters and swipe to delete» — invocation 2',
+          ),
           at: t.add(const Duration(seconds: 1030)),
         ),
         LogEntry(
           LogKind.agent,
-          'Riprendo da PROGRESS.md: manca il filtro "completati" e lo swipe per eliminare.',
+          tr(
+            'Riprendo da PROGRESS.md: manca il filtro "completati" e lo swipe per eliminare.',
+            'Picking up from PROGRESS.md: the "completed" filter and swipe to delete are missing.',
+          ),
           at: t.add(const Duration(seconds: 1400)),
         ),
         LogEntry(LogKind.tool, 'Write: lib/ui/widgets/todo_tile.dart', at: t.add(const Duration(seconds: 1700))),
       ]);
       engine.notifyListeners();
       await tester.pump(const Duration(milliseconds: 600));
-      await tester.tap(find.text('2. Modello e persistenza').first);
+      await tester.tap(find.text(tr('2. Modello e persistenza', '2. Model and storage')).first);
       for (var i = 0; i < 20; i++) {
         await tester.pump(const Duration(milliseconds: 20));
       }
@@ -188,7 +235,8 @@ void main() {
         final image = await boundary.toImage(pixelRatio: scale);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
         Directory(out!).createSync(recursive: true);
-        File(p.join(out, 'main_${dark ? 'dark' : 'light'}.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File(p.join(out, '${isEnglish ? 'en_' : ''}main_${dark ? 'dark' : 'light'}.png'))
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
       });
 
       engine.phase = LoopPhase.idle;
@@ -263,24 +311,24 @@ void main() {
         final image = await boundary.toImage();
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
         Directory(out!).createSync(recursive: true);
-        File(p.join(out, 'setup_$name.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
+        File(p.join(out, '${isEnglish ? 'en_' : ''}setup_$name.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
 
     await shot('1_welcome');
-    await tester.tap(find.text('Inizia'));
+    await tester.tap(find.text(tr('Inizia', 'Get started')));
     await shot('2_agent');
-    await tester.tap(find.text('Avanti'));
+    await tester.tap(find.text(tr('Avanti', 'Next')));
     await shot('3_cli_codex_missing');
-    await tester.tap(find.text('Indietro'));
+    await tester.tap(find.text(tr('Indietro', 'Back')));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('Claude').last);
     await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(find.text('Avanti'));
+    await tester.tap(find.text(tr('Avanti', 'Next')));
     await shot('4_cli_claude_found');
-    await tester.tap(find.text('Avanti'));
+    await tester.tap(find.text(tr('Avanti', 'Next')));
     await shot('5_login');
-    await tester.tap(find.text('Avanti'));
+    await tester.tap(find.text(tr('Avanti', 'Next')));
     await shot('6_project');
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(minutes: 5));

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'demo.dart';
 import 'engine/loop_engine.dart';
 import 'engine/settings.dart';
+import 'l10n.dart';
 import 'ui/app_theme.dart';
 import 'ui/home_page.dart';
 import 'ui/notifications.dart';
@@ -14,6 +15,9 @@ Future<void> main(List<String> args) async {
   setupWindow();
   await Notifier.setup();
   var prefs = await SharedPreferences.getInstance();
+
+  // The language chosen last time, or Windows' own.
+  appLang.value = AppLang.fromName(prefs.getString('lang'));
 
   // `--demo`: sample plan and history, in-memory preferences, no agent runs.
   DemoData? demo;
@@ -26,6 +30,7 @@ Future<void> main(List<String> args) async {
       'workDir': demo.workDir,
       'planPath': demo.planPath,
       'theme': ?prefs.getString('theme'),
+      'lang': appLang.value.name,
       'settings': ?prefs.getString('settings'),
     });
     prefs = await SharedPreferences.getInstance();
@@ -65,7 +70,27 @@ class _AutoLoopAppState extends State<AutoLoopApp> {
       });
 
   @override
+  void initState() {
+    super.initState();
+    appLang.addListener(_languageChanged);
+  }
+
+  @override
+  void dispose() {
+    appLang.removeListener(_languageChanged);
+    super.dispose();
+  }
+
+  /// A new language: saved, and the whole window is built again with it.
+  void _languageChanged() {
+    widget.prefs.setString('lang', appLang.value.name);
+    setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) => MaterialApp(
+    // Keyed by language: every page, popup and panel is built again in it.
+    key: ValueKey(appLang.value),
     title: 'AutoLoop',
     debugShowCheckedModeBanner: false,
     theme: buildTheme(Brightness.light),

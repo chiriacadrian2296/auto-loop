@@ -7,6 +7,7 @@ import '../engine/cli_locator.dart';
 import '../engine/settings.dart';
 import 'agent_badge.dart';
 import 'app_theme.dart';
+import '../l10n.dart';
 
 /// Profiles, CLI executables and the account each CLI is signed in with.
 Future<void> showAccountsDialog(
@@ -84,18 +85,23 @@ class _AccountsDialogState extends State<_AccountsDialog> {
 
   Future<bool> _confirmSystemLogout(AgentKind k) async {
     if (!s.profile.isDefault) return true;
-    final app = k == AgentKind.codex ? 'l\'app Codex e la sua CLI' : 'Claude (terminale, VS Code e app)';
+    final app = k == AgentKind.codex
+        ? tr('l\'app Codex e la sua CLI', 'the Codex app and its CLI')
+        : tr('Claude (terminale, VS Code e app)', 'Claude (terminal, VS Code and app)');
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Account di questo computer'),
+        title: Text(tr('Account di questo computer', 'This computer\'s account')),
         content: Text(
-          'Questo è lo stesso accesso usato da $app. Uscendo verrai scollegato anche lì.\n\n'
-          'Per usare un altro account senza toccare il tuo, crea un set di account separato.',
+          tr(
+            'Questo è lo stesso accesso usato da $app. Uscendo verrai scollegato anche lì.\n\n'
+                'Per usare un altro account senza toccare il tuo, crea un set di account separato.',
+            'This is the same sign-in used by $app. Signing out signs you out there too.\n\nTo use another account without touching yours, create a separate account set.',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continua')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Annulla', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Continua', 'Continue'))),
         ],
       ),
     );
@@ -103,7 +109,12 @@ class _AccountsDialogState extends State<_AccountsDialog> {
   }
 
   Future<void> _login(AgentKind k) async {
-    setState(() => _busy[k] = 'Completa l\'accesso nella finestra che si è aperta…');
+    setState(
+      () => _busy[k] = tr(
+        'Completa l\'accesso nella finestra che si è aperta…',
+        'Finish signing in in the window that opened…',
+      ),
+    );
     await startLogin(k, _path(k), s.profileId);
     if (!mounted) return;
     setState(() => _busy[k] = null);
@@ -112,12 +123,13 @@ class _AccountsDialogState extends State<_AccountsDialog> {
 
   Future<void> _logout(AgentKind k, {bool thenLogin = false}) async {
     if (!await _confirmSystemLogout(k)) return;
-    setState(() => _busy[k] = 'Uscita in corso…');
+    setState(() => _busy[k] = tr('Uscita in corso…', 'Signing out…'));
     final error = await logout(k, _path(k), s.profileId);
     if (!mounted) return;
     setState(() => _busy[k] = null);
     if (error != null) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('Uscita non riuscita: $error')));
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(tr('Uscita non riuscita: $error', 'Sign-out failed: $error'))));
     }
     if (thenLogin && error == null) {
       await _login(k);
@@ -137,20 +149,20 @@ class _AccountsDialogState extends State<_AccountsDialog> {
           child: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'es. Lavoro, Personale, Mario'),
+            decoration: InputDecoration(hintText: tr('es. Lavoro, Personale, Mario', 'e.g. Work, Personal, Mario')),
             onSubmitted: (v) => Navigator.pop(context, v),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annulla')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Salva')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Annulla', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: Text(tr('Salva', 'Save'))),
         ],
       ),
     );
   }
 
   Future<void> _newProfile() async {
-    final name = (await _askName('Nuovo set di account'))?.trim();
+    final name = (await _askName(tr('Nuovo set di account', 'New account set')))?.trim();
     if (name == null || name.isEmpty) return;
     final profile = AccountProfile(id: newProfileId(), name: name);
     setState(() {
@@ -162,7 +174,7 @@ class _AccountsDialogState extends State<_AccountsDialog> {
   }
 
   Future<void> _rename(AccountProfile profile) async {
-    final name = (await _askName('Rinomina set di account', profile.name))?.trim();
+    final name = (await _askName(tr('Rinomina set di account', 'Rename account set'), profile.name))?.trim();
     if (name == null || name.isEmpty) return;
     setState(() {
       final i = s.profiles.indexWhere((x) => x.id == profile.id);
@@ -175,17 +187,20 @@ class _AccountsDialogState extends State<_AccountsDialog> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Eliminare «${profile.name}»?'),
-        content: const Text(
-          'Gli accessi a Codex e Claude salvati in questo set verranno cancellati '
-          'da questo computer. Non si può annullare.',
+        title: Text(tr('Eliminare «${profile.name}»?', 'Delete «${profile.name}»?')),
+        content: Text(
+          tr(
+            'Gli accessi a Codex e Claude salvati in questo set verranno cancellati '
+                'da questo computer. Non si può annullare.',
+            'The Codex and Claude sign-ins saved in this set will be deleted from this computer. This cannot be undone.',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Annulla', 'Cancel'))),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: context.colors.danger),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Elimina'),
+            child: Text(tr('Elimina', 'Delete')),
           ),
         ],
       ),
@@ -235,12 +250,15 @@ class _AccountsDialogState extends State<_AccountsDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Account e CLI',
+                          tr('Account e CLI', 'Accounts and CLIs'),
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Con quali account lavorano gli agenti, e dove si trovano le loro CLI.',
+                          tr(
+                            'Con quali account lavorano gli agenti, e dove si trovano le loro CLI.',
+                            'Which accounts the agents work with, and where their CLIs are.',
+                          ),
                           style: TextStyle(fontSize: 12.5, color: c.muted),
                         ),
                       ],
@@ -263,7 +281,10 @@ class _AccountsDialogState extends State<_AccountsDialog> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  'Il loop è in esecuzione: fermalo per cambiare account.',
+                  tr(
+                    'Il loop è in esecuzione: fermalo per cambiare account.',
+                    'The loop is running: stop it to change account.',
+                  ),
                   style: TextStyle(color: c.warning, fontSize: 12.5, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -274,7 +295,11 @@ class _AccountsDialogState extends State<_AccountsDialog> {
                   shrinkWrap: true,
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                   children: [
-                    SectionLabel(s.profile.isDefault ? 'Account in uso' : 'Account in uso · set «${s.profile.name}»'),
+                    SectionLabel(
+                      s.profile.isDefault
+                          ? tr('Account in uso', 'Account in use')
+                          : tr('Account in uso · set «${s.profile.name}»', 'Account in use · set «${s.profile.name}»'),
+                    ),
                     const SizedBox(height: 10),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -304,13 +329,13 @@ class _AccountsDialogState extends State<_AccountsDialog> {
                     ),
                     const SizedBox(height: 24),
                     SectionLabel(
-                      'Altri account',
+                      tr('Altri account', 'Other accounts'),
                       trailing: s.profiles.isEmpty
                           ? null
                           : TextButton.icon(
                               onPressed: _newProfile,
                               icon: const Icon(Icons.add_rounded, size: 18),
-                              label: const Text('Nuovo set'),
+                              label: Text(tr('Nuovo set', 'New set')),
                             ),
                     ),
                     const SizedBox(height: 8),
@@ -318,7 +343,10 @@ class _AccountsDialogState extends State<_AccountsDialog> {
                       _ProfilesIntro(onCreate: _newProfile)
                     else ...[
                       Text(
-                        'Ogni set ha accessi propri a Codex e Claude. Scegli quale usare:',
+                        tr(
+                          'Ogni set ha accessi propri a Codex e Claude. Scegli quale usare:',
+                          'Every set has its own Codex and Claude sign-ins. Choose which one to use:',
+                        ),
                         style: TextStyle(fontSize: 12.5, color: c.muted),
                       ),
                       const SizedBox(height: 6),
@@ -364,20 +392,26 @@ class _ProfilesIntro extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'AutoLoop usa gli account con cui hai già fatto l\'accesso su questo computer.',
+                  tr(
+                    'AutoLoop usa gli account con cui hai già fatto l\'accesso su questo computer.',
+                    'AutoLoop uses the accounts you are already signed in with on this computer.',
+                  ),
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Per farlo lavorare con altri account, tuoi o di un\'altra persona, crea un set di account '
-                  'separato: avrà accessi propri e non toccherà quelli che usi normalmente.',
+                  tr(
+                    'Per farlo lavorare con altri account, tuoi o di un\'altra persona, crea un set di account '
+                        'separato: avrà accessi propri e non toccherà quelli che usi normalmente.',
+                    'To make it work with other accounts, yours or someone else\'s, create a separate account set: it will have its own sign-ins and will not touch the ones you normally use.',
+                  ),
                   style: TextStyle(fontSize: 12.5, height: 1.4, color: c.muted),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: onCreate,
                   icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Crea un set di account'),
+                  label: Text(tr('Crea un set di account', 'Create an account set')),
                 ),
               ],
             ),
@@ -431,8 +465,11 @@ class _ProfileRow extends StatelessWidget {
                       ),
                       Text(
                         profile.isDefault
-                            ? 'Gli account con cui hai già fatto l\'accesso su questo computer.'
-                            : 'Accessi propri, usati solo da AutoLoop.',
+                            ? tr(
+                                'Gli account con cui hai già fatto l\'accesso su questo computer.',
+                                'The accounts you are already signed in with on this computer.',
+                              )
+                            : tr('Accessi propri, usati solo da AutoLoop.', 'Its own sign-ins, used only by AutoLoop.'),
                         style: TextStyle(fontSize: 12, color: c.muted),
                       ),
                     ],
@@ -440,14 +477,14 @@ class _ProfileRow extends StatelessWidget {
                 ),
                 if (onRename != null)
                   IconButton(
-                    tooltip: 'Rinomina',
+                    tooltip: tr('Rinomina', 'Rename'),
                     onPressed: onRename,
                     iconSize: 18,
                     icon: const Icon(Icons.edit_outlined),
                   ),
                 if (onDelete != null)
                   IconButton(
-                    tooltip: 'Elimina',
+                    tooltip: tr('Elimina', 'Delete'),
                     onPressed: onDelete,
                     iconSize: 18,
                     icon: const Icon(Icons.delete_outline_rounded),
@@ -492,19 +529,33 @@ class _CliCard extends StatelessWidget {
     final loading = st == null || busy != null;
 
     final (Color dot, String headline, String detail) = !found
-        ? (c.danger, 'CLI non trovata', 'Indica il percorso o premi la lente per cercarla.')
+        ? (
+            c.danger,
+            tr('CLI non trovata', 'CLI not found'),
+            tr(
+              'Indica il percorso o premi la lente per cercarla.',
+              'Enter the path or press the magnifier to look for it.',
+            ),
+          )
         : st == null
-        ? (c.muted, 'Controllo in corso…', '')
+        ? (c.muted, tr('Controllo in corso…', 'Checking…'), '')
         : st.loggedIn
         ? (
             c.success,
-            st.email ?? 'Connesso',
+            st.email ?? tr('Connesso', 'Signed in'),
             [
-              if (planLabel(st.plan).isNotEmpty) 'Piano ${planLabel(st.plan)}',
+              if (planLabel(st.plan).isNotEmpty) tr('Piano ${planLabel(st.plan)}', '${planLabel(st.plan)} plan'),
               if (st.method != null) 'via ${st.method}',
             ].join(' · '),
           )
-        : (c.warning, 'Non connesso', 'Accedi per far lavorare ${kind.label} con questi account.');
+        : (
+            c.warning,
+            tr('Non connesso', 'Not signed in'),
+            tr(
+              'Accedi per far lavorare ${kind.label} con questi account.',
+              'Sign in to make ${kind.label} work with these accounts.',
+            ),
+          );
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -533,7 +584,7 @@ class _CliCard extends StatelessWidget {
                 const Spacer(),
               if (version != null) const Spacer(),
               IconButton(
-                tooltip: 'Cerca la CLI',
+                tooltip: tr('Cerca la CLI', 'Look for the CLI'),
                 onPressed: onDetect,
                 iconSize: 18,
                 visualDensity: VisualDensity.compact,
@@ -550,7 +601,7 @@ class _CliCard extends StatelessWidget {
             style: const TextStyle(fontSize: 11.5, fontFamily: mono, fontFamilyFallback: monoFallback),
             decoration: InputDecoration(
               fillColor: c.surface,
-              hintText: 'Percorso dell\'eseguibile',
+              hintText: tr('Percorso dell\'eseguibile', 'Path of the executable'),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(color: c.surface),
@@ -603,19 +654,19 @@ class _CliCard extends StatelessWidget {
                   onPressed: busy == null ? onLogin : null,
                   style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
                   icon: const Icon(Icons.login_rounded, size: 17),
-                  label: const Text('Accedi'),
+                  label: Text(tr('Accedi', 'Sign in')),
                 ),
               if (found && st != null && st.loggedIn) ...[
                 OutlinedButton.icon(
                   onPressed: busy == null ? onSwitch : null,
                   icon: const Icon(Icons.swap_horiz_rounded, size: 17),
-                  label: const Text('Cambia account'),
+                  label: Text(tr('Cambia account', 'Switch account')),
                 ),
                 TextButton.icon(
                   onPressed: busy == null ? onLogout : null,
                   style: TextButton.styleFrom(foregroundColor: c.danger),
                   icon: const Icon(Icons.logout_rounded, size: 17),
-                  label: const Text('Esci'),
+                  label: Text(tr('Esci', 'Sign out')),
                 ),
               ],
             ],

@@ -7,6 +7,7 @@ import 'package:auto_loop/engine/plan_parser.dart';
 import 'package:auto_loop/engine/process_runner.dart';
 import 'package:auto_loop/engine/quota_reset.dart';
 import 'package:auto_loop/engine/settings.dart';
+import 'package:auto_loop/l10n.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -284,6 +285,20 @@ testo
       expect(engine.phase, LoopPhase.finished, reason: engine.logs.map((l) => l.text).join('\n'));
       expect(engine.logs.map((l) => l.text), contains(startsWith('Connessione assente')));
       expect(engine.blockState(engine.plan!.blocks[0]).attempts, 2);
+    });
+
+    test('in English: the prompt, the log and the outcome lines', () async {
+      appLang.value = AppLang.en;
+      addTearDown(() => appLang.value = AppLang.it);
+      final plan = File(p.join(dir.path, 'plan.md'))..writeAsStringSync('## One\ndo one\n## Two\ndo two\n');
+      final engine = LoopEngine(settings())..load(workDir: dir.path, planPath: plan.path);
+      await engine.start();
+      expect(engine.phase, LoopPhase.finished, reason: engine.logs.map((l) => l.text).join('\n'));
+      expect(engine.phase.label, 'Plan completed');
+      final texts = engine.logs.map((l) => l.text).toList();
+      expect(texts, contains('▶ Block 1/2 «One» — invocation 1'));
+      expect(texts, contains(startsWith('Check passed in')));
+      expect(texts.where((t) => t.contains('Blocco') || t.contains('Verifica')), isEmpty);
     });
 
     test('quota stop pauses without consuming an attempt, then resumes', () async {

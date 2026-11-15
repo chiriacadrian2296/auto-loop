@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../l10n.dart';
+
 /// Hides the native Windows title bar: the app's own top bar takes its place.
 void setupWindow() {
   if (!Platform.isWindows) return;
@@ -156,6 +158,54 @@ class _ThemeCaptionButtonState extends State<ThemeCaptionButton> {
             color: bg,
             alignment: Alignment.center,
             child: Icon(icon, size: 15, color: fg),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Switches the language between Italian and English, styled like the
+/// window buttons: it shows the language in use.
+class LanguageCaptionButton extends StatefulWidget {
+  const LanguageCaptionButton({super.key});
+
+  @override
+  State<LanguageCaptionButton> createState() => _LanguageCaptionButtonState();
+}
+
+class _LanguageCaptionButtonState extends State<LanguageCaptionButton> {
+  bool _hover = false, _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final base = dark ? Colors.white : Colors.black;
+    final bg = _pressed
+        ? base.withValues(alpha: dark ? 0.0419 : 0.0241)
+        : _hover
+        ? base.withValues(alpha: dark ? 0.0605 : 0.0373)
+        : Colors.transparent;
+    final fg = dark
+        ? Colors.white.withValues(alpha: _pressed ? 0.786 : 1)
+        : Colors.black.withValues(alpha: _pressed ? 0.6063 : 0.8956);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTap: () => appLang.value = isEnglish ? AppLang.it : AppLang.en,
+        child: Container(
+          width: 46,
+          height: 32,
+          color: bg,
+          alignment: Alignment.center,
+          child: Text(
+            isEnglish ? 'EN' : 'IT',
+            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: fg),
           ),
         ),
       ),
