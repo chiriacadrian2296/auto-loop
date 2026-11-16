@@ -42,36 +42,28 @@
       <a class="link" href="#method">The method</a>
       <a class="lang" href="../" hreflang="it" lang="it" title="Versione italiana">IT</a>
       <a class="pill" href="https://github.com/chiriacadrian2296/auto-loop" aria-label="Source on GitHub"><svg><use href="#github"/></svg></a>
-      <a class="pill primary" href="https://github.com/chiriacadrian2296/auto-loop/releases/download/v0.1.0/AutoLoop-Setup-0.1.0.exe"><svg><use href="#download"/></svg><span>Download</span></a>
+      <a class="pill primary" href="https://github.com/chiriacadrian2296/auto-loop/releases/download/v0.1.1/AutoLoop-Setup-0.1.1.exe"><svg><use href="#download"/></svg><span>Download</span></a>
     </nav>
   </div>
 </header>
 
 <main>
   <div class="hero">
-    <svg class="rings" viewBox="0 0 980 520" aria-hidden="true">
-      <g fill="none" stroke="#5b8fff">
-        <circle cx="490" cy="260" r="180" stroke-opacity=".18"/>
-        <circle cx="490" cy="260" r="270" stroke-opacity=".11" stroke-dasharray="2 10"/>
-        <circle cx="490" cy="260" r="370" stroke-opacity=".07"/>
-      </g>
-    </svg>
     <div class="wrap">
-      <span class="eyebrow"><i></i>Windows app · Codex CLI and Claude Code</span>
       <h1>Write the plan.<br><em>The agent sees it through.</em></h1>
       <p class="lead">AutoLoop hands an AI agent a development plan one block at a time. It relaunches the agent whenever it stops, checks the work and commits it before moving on to the next block.</p>
       <div class="cta">
-        <a class="pill primary" href="https://github.com/chiriacadrian2296/auto-loop/releases/download/v0.1.0/AutoLoop-Setup-0.1.0.exe"><svg><use href="#download"/></svg>Download for Windows</a>
+        <a class="pill primary" href="https://github.com/chiriacadrian2296/auto-loop/releases/download/v0.1.1/AutoLoop-Setup-0.1.1.exe"><svg><use href="#download"/></svg>Download for Windows</a>
         <a class="pill" href="https://github.com/chiriacadrian2296/auto-loop"><svg><use href="#github"/></svg>Source on GitHub</a>
       </div>
-      <p class="meta">Version 0.1.0 · 11 MB · Windows 10 and 11 · Needs Codex CLI or Claude Code, already signed in · Interface in Italian</p>
+      <p class="meta">Version 0.1.1 · 11.5 MB · Windows 10 and 11 · Guided setup for Codex CLI and Claude Code · English and Italian</p>
     </div>
   </div>
 
   <div class="shot reveal">
     <div class="frame" id="frame">
-      <img src="../assets/app-dark.webp" width="1440" height="900" alt="The AutoLoop window during a run: the control panel on the left, block progress in the middle, the agent's activity on the right and the timeline map at the bottom. The interface is in Italian.">
-      <img class="light" src="../assets/app-light.webp" width="1440" height="900" alt="" loading="lazy">
+      <img src="../assets/en-app-dark.webp" width="1440" height="900" alt="The AutoLoop window during a run: the control panel on the left, block progress in the middle, the agent's activity on the right and the timeline map at the bottom.">
+      <img class="light" src="../assets/en-app-light.webp" width="1440" height="900" alt="" loading="lazy">
     </div>
     <div class="switch" role="group" aria-label="Screenshot theme">
       <button type="button" aria-pressed="true" data-theme="dark">Dark</button>
@@ -84,7 +76,7 @@
       <div class="kicker reveal">01 <b>/ The problem</b></div>
       <h2 class="reveal">Agents write code on their own.<br><em>But they stop at every step.</em></h2>
       <div class="quote">
-        <div class="card reveal">
+        <div class="card quote-card reveal">
           <p class="big-quote">“I had complete development plans, but the agent waited for me to tell it to continue. <em>I was the bottleneck.</em>”</p>
           <p class="who">Adrian Chiriac · creator of AutoLoop</p>
         </div>
@@ -106,8 +98,13 @@
         <div class="card step reveal"><div class="n">03</div><h3>Check and commit</h3><p>When the agent says it is done, your check command runs. Only if it passes does the commit happen, and the loop moves on.</p></div>
         <div class="card step reveal"><div class="n">04</div><h3>Relaunch and limits</h3><p>If it stops, it is relaunched. If it stays silent too long, it is stopped. If the quota runs out, it waits and tries again.</p></div>
       </div>
-      <div class="status-line reveal" aria-label="The three answers the agent can give">
-        AUTOLOOP_STATUS: <b>DONE</b> → check, commit, next block &nbsp;·&nbsp; <span class="c">CONTINUE</span> → relaunch on the same block &nbsp;·&nbsp; <span class="x">BLOCKED</span> → pause, or skip it
+      <div class="agent-outcomes reveal" aria-label="The three answers the agent can give">
+        <p class="outcomes-label">The agent reports an outcome after each invocation</p>
+        <div class="outcomes-grid">
+          <div class="outcome done"><h3>Done <code>DONE</code></h3><p>Check the work, commit and move to the next block.</p></div>
+          <div class="outcome continue"><h3>Keep going <code>CONTINUE</code></h3><p>Relaunch the agent on the same block.</p></div>
+          <div class="outcome blocked"><h3>Blocked <code>BLOCKED</code></h3><p>Pause to resolve the issue, or skip the block.</p></div>
+        </div>
       </div>
     </div>
   </section>
@@ -117,17 +114,33 @@
       <div class="kicker reveal">03 <b>/ The app</b></div>
       <h2 class="reveal">Hours of agent work,<br><em>readable at a glance.</em></h2>
       <div class="features">
+        <div class="card feature wide setup reveal">
+          <div class="txt">
+            <h3>AutoLoop guides you through the first launch</h3>
+            <p>Setup opens when you first launch the app. Choose your language, then prepare the agent, CLI, sign-in and project, one step at a time.</p>
+            <ul>
+              <li>English and Italian, with the whole interface in your chosen language</li>
+              <li>Checks whether the CLI is installed and helps you install it and sign in</li>
+              <li>Close the guide and pick up where you left off</li>
+            </ul>
+          </div>
+          <div class="pic">
+            <figure>
+              <img src="../assets/en-setup.webp" width="820" height="540" alt="Step 1 of AutoLoop setup: welcome and a vertical timeline through agent, CLI, sign-in and project." loading="lazy">
+            </figure>
+          </div>
+        </div>
         <div class="card feature reveal">
           <div class="txt">
             <h3>Progress</h3>
             <p>Blocks grouped by state, each with its invocations, duration and tokens.</p>
             <ul>
               <li>Done, In progress, Blocked, To do and Skipped</li>
-              <li><strong>Stop after this block</strong>, to review the work before resuming</li>
+              <li><strong>Pause after</strong>, to review the work before resuming</li>
               <li>Any block can be marked done, queued again or skipped</li>
             </ul>
           </div>
-          <div class="pic"><img src="../assets/progress.webp" width="360" height="752" alt="The Progress panel with the completed blocks, the one in progress and those still to do." loading="lazy"></div>
+          <div class="pic"><img src="../assets/en-progress.webp" width="360" height="752" alt="The Progress panel with the completed blocks, the one in progress and those still to do." loading="lazy"></div>
         </div>
         <div class="card feature flip reveal">
           <div class="txt">
@@ -136,17 +149,18 @@
             <ul>
               <li>Commands shown as the agent wrote them, with paths relative to the project</li>
               <li>Filters to show only messages, commands or events</li>
+              <li>Copy selected text, a message, an invocation, a block or the whole log</li>
               <li>Kept from one launch to the next</li>
             </ul>
           </div>
-          <div class="pic"><img src="../assets/activity.webp" width="686" height="752" alt="The Activity panel with the agent's invocations, a passed check and the commit." loading="lazy"></div>
+          <div class="pic"><img src="../assets/en-activity.webp" width="686" height="752" alt="The Activity panel with the agent's invocations, a passed check and the commit." loading="lazy"></div>
         </div>
         <div class="card feature wide reveal">
           <div class="txt">
             <h3>The timeline map</h3>
-            <p>At the bottom, the whole run on one line: each icon is a message, a command or an outcome, at the moment it happened. A click jumps to the matching line in Activity.</p>
+            <p>At the bottom, the whole run on one line: each icon is a message, a command or an outcome, at the moment it happened. A click jumps to the matching line in Activity. Below is the real history of <code>piano-esempio.md</code>.</p>
           </div>
-          <div class="pic map-scroll"><img src="../assets/map.webp" width="1388" height="128" alt="The activity map over time: task flags, commands, passed checks, a warning and the agent's messages along a line." loading="lazy"></div>
+          <div class="pic map-scroll" tabindex="0" role="region" aria-label="Execution timeline, scroll horizontally"><img src="../assets/en-map.webp" width="1386" height="67" alt="The real run of piano-esempio.md: messages, commands, passed checks, errors and warnings along the timeline." loading="lazy"></div>
         </div>
       </div>
       <div class="mini">
@@ -160,7 +174,7 @@
   <section id="story">
     <div class="wrap">
       <div class="kicker reveal">04 <b>/ The story</b></div>
-      <h2 class="reveal">From a script to an app,<br><em>in five days.</em></h2>
+      <h2 class="reveal">From a script to an app,<br><em>in one week.</em></h2>
       <p class="intro reveal">AutoLoop grew out of my Codex Autonomous Loop. The milestones come from the project's commit history.</p>
       <div class="timeline">
         <div class="tl first reveal"><time>Before</time><h3>Codex Autonomous Loop</h3><p>The Python script: JSON plan, Codex only, terminal only.</p></div>
@@ -168,12 +182,13 @@
         <div class="tl reveal"><time>11 November</time><h3>A control panel</h3><p>Per-project settings, warnings before starting, a demo mode.</p></div>
         <div class="tl reveal"><time>12 November</time><h3>Reading a run</h3><p>Activity by blocks and invocations, progress grouped by state.</p></div>
         <div class="tl reveal"><time>13–14 November</time><h3>The map and the polish</h3><p>On a trial branch: the timeline map, pause after a block, the ⓘ hints.</p></div>
-        <div class="tl last reveal"><time>14 November</time><h3>The first release</h3><p>Tested with the real Codex and Claude, installer, release 0.1.0.</p></div>
+        <div class="tl reveal"><time>14 November</time><h3>The first release</h3><p>Tested with the real Codex and Claude, installer, release 0.1.0.</p></div>
+        <div class="tl last reveal"><time>15–16 November</time><h3>The first launch</h3><p>Guided setup, Italian and English, automatic resume when the quota renews. Version 0.1.1.</p></div>
       </div>
       <div class="numbers">
-        <div class="card num reveal"><b>5</b><span>days of development</span></div>
-        <div class="card num reveal"><b>86</b><span>commits</span></div>
-        <div class="card num reveal"><b>~8,900</b><span>lines of Dart</span></div>
+        <div class="card num reveal"><b>7</b><span>days of development</span></div>
+        <div class="card num reveal"><b>93</b><span>commits</span></div>
+        <div class="card num reveal"><b>~11,700</b><span>lines of Dart</span></div>
         <div class="card num reveal"><b>2</b><span>supported agents</span></div>
       </div>
     </div>
@@ -210,9 +225,9 @@
 
       <div class="final reveal">
         <h2>Try AutoLoop <em>on your next plan.</em></h2>
-        <p>Free, for Windows. Needs Codex CLI or Claude Code, already signed in. The interface is in Italian.</p>
+        <p>Free, for Windows. Guided setup helps you prepare Codex CLI or Claude Code and sign in.</p>
         <div class="cta">
-          <a class="pill primary" href="https://github.com/chiriacadrian2296/auto-loop/releases/download/v0.1.0/AutoLoop-Setup-0.1.0.exe"><svg><use href="#download"/></svg>Download for Windows</a>
+          <a class="pill primary" href="https://github.com/chiriacadrian2296/auto-loop/releases/download/v0.1.1/AutoLoop-Setup-0.1.1.exe"><svg><use href="#download"/></svg>Download for Windows</a>
           <a class="pill" href="https://github.com/chiriacadrian2296/auto-loop"><svg><use href="#github"/></svg>Source on GitHub</a>
         </div>
       </div>
