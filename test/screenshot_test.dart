@@ -2,6 +2,7 @@
 // the design without launching the app. Skipped unless SCREENSHOT_DIR is set:
 //   $env:SCREENSHOT_DIR = 'shots'; flutter test test/screenshot_test.dart
 import 'dart:io';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:auto_loop/engine/agents.dart';
@@ -17,6 +18,7 @@ import 'package:auto_loop/ui/agent_badge.dart';
 import 'package:auto_loop/ui/app_theme.dart';
 import 'package:auto_loop/ui/choice_dialog.dart';
 import 'package:auto_loop/ui/home_page.dart';
+import 'package:auto_loop/ui/log_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -73,6 +75,7 @@ void main() {
           ),
         );
       SharedPreferences.setMockInitialValues({
+        'setupDone': true,
         'workDir': dir.path,
         'planPath': plan.path,
         'theme': dark ? 'dark' : 'light',
@@ -254,6 +257,7 @@ void main() {
       SharedPreferences.setMockInitialValues({
         'workDir': dir!,
         'planPath': p.join(dir, 'piano-collaudo.md'),
+        'setupDone': true,
         'theme': 'dark',
       });
       final prefs = await SharedPreferences.getInstance();
@@ -308,13 +312,16 @@ void main() {
       }
       await tester.runAsync(() async {
         final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-        final image = await boundary.toImage();
+        final scale = double.tryParse(Platform.environment['SCREENSHOT_SCALE'] ?? '') ?? 1;
+        final image = await boundary.toImage(pixelRatio: scale);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
         Directory(out!).createSync(recursive: true);
         File(p.join(out, '${isEnglish ? 'en_' : ''}setup_$name.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
 
+    await shot('0_language');
+    await tester.tap(find.text(tr('Continua', 'Continue')));
     await shot('1_welcome');
     await tester.tap(find.text(tr('Inizia', 'Get started')));
     await shot('2_agent');
@@ -334,8 +341,56 @@ void main() {
     await tester.pump(const Duration(minutes: 5));
   }, skip: out == null);
 
+  // Read the user's example history from an isolated copy: no probes, writes
+  // or changes to the real project's saved settings and progress.
+  testWidgets('screenshot real map', (tester) async {
+    final source = Directory(p.join(Directory.current.path, 'examples'));
+    final snapshot = Directory.systemTemp.createTempSync('autoloop_landing_map_');
+    final plan = File(p.join(source.path, 'piano-esempio.md')).copySync(p.join(snapshot.path, 'piano-esempio.md'));
+    final saved = Directory(p.join(snapshot.path, '.autoloop'))..createSync();
+    final state = jsonDecode(File(p.join(source.path, '.autoloop', 'state.json')).readAsStringSync()) as Map;
+    state['planPath'] = plan.path;
+    File(p.join(saved.path, 'state.json')).writeAsStringSync(jsonEncode(state));
+    File(p.join(source.path, '.autoloop', 'activity-piano-esempio.jsonl'))
+        .copySync(p.join(saved.path, 'activity-piano-esempio.jsonl'));
+    final engine = LoopEngine(LoopSettings(agent: AgentKind.claude));
+    expect(engine.load(workDir: snapshot.path, planPath: plan.path), isNull);
+    expect(engine.logs.length, greaterThan(100));
+    tester.view.physicalSize = const Size(1388, 128);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final key = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(Brightness.dark),
+        home: Scaffold(
+          body: RepaintBoundary(
+            key: key,
+            child: Panel(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ActivityMap(engine: engine, selection: ActivitySelection()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final scale = double.tryParse(Platform.environment['SCREENSHOT_SCALE'] ?? '') ?? 1;
+      final image = await boundary.toImage(pixelRatio: scale);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      Directory(out!).createSync(recursive: true);
+      File(p.join(out, '${isEnglish ? 'en_' : ''}real_map.png')).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
+    await tester.pumpWidget(const SizedBox());
+  }, skip: out == null);
+
   testWidgets('screenshot empty', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'setupDone': true});
     final prefs = await SharedPreferences.getInstance();
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
@@ -465,6 +520,7 @@ void main() {
       final dir = Directory.systemTemp.createTempSync('autoloop_side_');
       final plan = File(p.join(dir.path, 'piano-todo-app.md'))..writeAsStringSync('## Uno\nx\n## Due\ny\n');
       SharedPreferences.setMockInitialValues({
+        'setupDone': true,
         'workDir': dir.path,
         'planPath': plan.path,
         'theme': dark ? 'dark' : 'light',

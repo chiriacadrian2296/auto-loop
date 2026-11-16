@@ -11,6 +11,9 @@ import '../engine/plan_parser.dart';
 import '../engine/settings.dart';
 import 'agent_badge.dart';
 import 'app_theme.dart';
+import 'confirmation_dialog.dart';
+import 'dropdown_menu.dart';
+import 'activity_copy_menu.dart';
 import 'markdown_text.dart';
 import 'section_title.dart';
 import '../l10n.dart';
@@ -186,6 +189,16 @@ bool _shown(LogEntry e) =>
     !e.text.startsWith('Avvio del loop con') &&
     !e.text.startsWith('Starting the loop with');
 
+String _lineText(LogEntry entry) {
+  final text = entry.text;
+  if ((entry.kind == LogKind.task || entry.kind == LogKind.result) &&
+      (text.startsWith('Completato in ') || text.startsWith('Completed in ')) &&
+      text.contains('\n\n')) {
+    return text.substring(text.indexOf('\n\n') + 2).trim();
+  }
+  return text;
+}
+
 /// Consecutive invocations of the same block, shown under one heading.
 List<List<_Group>> _runs(List<_Group> groups) {
   final runs = <List<_Group>>[];
@@ -287,6 +300,7 @@ class LogPanel extends StatefulWidget {
 
 class _LogPanelState extends State<LogPanel> {
   final _scroll = ScrollController();
+  String? _selectedText;
   _Filter _ownFilter = _Filter.all;
 
   /// Shared with the strip at the bottom when there is a selection object.
@@ -431,26 +445,41 @@ class _LogPanelState extends State<LogPanel> {
   }
 
   Future<void> _confirmClear() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(tr('Svuotare l\'attività?', 'Clear the activity?')),
-        content: Text(
-          tr(
-            'Toglie le righe da questo pannello e cancella la loro copia salvata, quindi non '
-                'ricompariranno alla riapertura.\n\n'
-                'Restano: i log completi di ogni invocazione (.autoloop/logs), PROGRESS.md e '
-                'l\'avanzamento dei blocchi.',
-            'Removes the lines from this panel and deletes their saved copy, so they will not come back when you reopen it.\n\nKept: the full logs of every invocation (.autoloop/logs), PROGRESS.md and the blocks\' progress.',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Annulla', 'Cancel'))),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Svuota', 'Clear'))),
-        ],
+    final ok = await showConfirmationDialog(
+      context,
+      title: tr('Svuota attività', 'Clear activity'),
+      icon: Icons.delete_sweep_outlined,
+      message: tr(
+        'Toglie le righe da questo pannello e cancella la loro copia salvata, quindi non ricompariranno alla riapertura.',
+        'Removes the lines from this panel and deletes their saved copy, so they will not come back when you reopen it.',
       ),
+      detail: tr(
+        'Restano: i log completi di ogni invocazione (.autoloop/logs), PROGRESS.md e l\'avanzamento dei blocchi.',
+        'Kept: the full logs of every invocation (.autoloop/logs), PROGRESS.md and the blocks\' progress.',
+      ),
+      confirmLabel: tr('Svuota', 'Clear'),
     );
     if (ok == true) widget.engine.clearLogs();
+  }
+
+  void _copyMenu(Offset position, LogEntry? entry, _Group group, List<_Group> groups, {bool includeInvocation = true}) {
+    String invocation(_Group g) =>
+        [if (g.header != null) g.header!.text, for (final line in g.entries.where(_shown)) _lineText(line)].join('\n');
+    final block = group.header == null ? null : _headerBlock.firstMatch(group.header!.text)?.group(1);
+    final blockGroups = block == null
+        ? [group]
+        : groups.where((g) => g.header != null && _headerBlock.firstMatch(g.header!.text)?.group(1) == block);
+    showActivityCopyMenu(
+      context,
+      position: position,
+      content: {
+        if (_selectedText case final text? when text.isNotEmpty) ActivityCopyScope.selection: text,
+        if (entry != null) ActivityCopyScope.message: _lineText(entry),
+        if (includeInvocation) ActivityCopyScope.invocation: invocation(group),
+        ActivityCopyScope.block: blockGroups.map(invocation).join('\n\n'),
+        ActivityCopyScope.all: groups.map(invocation).join('\n\n'),
+      },
+    );
   }
 
   void _toBottom({bool animate = true}) {
@@ -515,23 +544,28 @@ class _LogPanelState extends State<LogPanel> {
         }
         _blockRowIndex[head] = rows.length;
         rows.add(
-          _BlockHeading(
-            key: _blockKeys.putIfAbsent(head, GlobalKey.new),
-            number: RegExp(r'\d+').firstMatch(block)?.group(0),
-            title: title ?? block,
-            invocations: run.length,
-            time: time,
-            tokensIn: input,
-            tokensOut: output,
-            open: blockOpen,
-            // Open blocks breathe; closed ones sit close together.
-            gap: rows.isEmpty ? 0 : (previousOpen || blockOpen ? 22 : 4),
-            start: run.first.start,
-            highlighted: identical(head, _flash) && _blockChosen,
-            // How the block ended here: as its latest invocation did.
-            outcome: run.last.outcome(live: lastRun && engine.isActive),
-            onTap: () =>
-                setState(() => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head)),
+          GestureDetector(
+            onSecondaryTapUp: (details) =>
+                _copyMenu(details.globalPosition, null, run.first, groups, includeInvocation: false),
+            child: _BlockHeading(
+              key: _blockKeys.putIfAbsent(head, GlobalKey.new),
+              number: RegExp(r'\d+').firstMatch(block)?.group(0),
+              title: title ?? block,
+              invocations: run.length,
+              time: time,
+              tokensIn: input,
+              tokensOut: output,
+              open: blockOpen,
+              // Open blocks breathe; closed ones sit close together.
+              gap: rows.isEmpty ? 0 : (previousOpen || blockOpen ? 22 : 4),
+              start: run.first.start,
+              highlighted: identical(head, _flash) && _blockChosen,
+              // How the block ended here: as its latest invocation did.
+              outcome: run.last.outcome(live: lastRun && engine.isActive),
+              onTap: () => setState(
+                () => _toggledBlocks.contains(head) ? _toggledBlocks.remove(head) : _toggledBlocks.add(head),
+              ),
+            ),
           ),
         );
       }
@@ -552,11 +586,15 @@ class _LogPanelState extends State<LogPanel> {
         if (header != null) {
           rows.add(
             tab(
-              _InvocationHeader(
-                group: g,
-                open: open,
-                live: last && engine.isActive,
-                onTap: () => setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
+              GestureDetector(
+                onSecondaryTapUp: (details) => _copyMenu(details.globalPosition, null, g, groups),
+                child: _InvocationHeader(
+                  group: g,
+                  open: open,
+                  live: last && engine.isActive,
+                  onTap: () =>
+                      setState(() => _toggled.contains(header) ? _toggled.remove(header) : _toggled.add(header)),
+                ),
               ),
             ),
           );
@@ -572,6 +610,7 @@ class _LogPanelState extends State<LogPanel> {
                 agent: engine.settings.agent,
                 highlighted: target,
                 onTap: () => widget.selection?.toggle(e, this),
+                onSecondaryTap: (position) => _copyMenu(position, e, g, groups),
                 indent: _indent * 2,
               ),
             );
@@ -644,6 +683,15 @@ class _LogPanelState extends State<LogPanel> {
                       behavior: HitTestBehavior.translucent,
                       onTap: () => _select(null),
                       child: SelectionArea(
+                        // Message rows provide their own menu. Headers still
+                        // reach SelectableRegion, which requires a builder.
+                        contextMenuBuilder: (_, region) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (region.mounted) region.hideToolbar(false);
+                          });
+                          return const SizedBox.shrink();
+                        },
+                        onSelectionChanged: (content) => _selectedText = content?.plainText,
                         child: ListView.builder(
                           controller: _scroll,
                           padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
@@ -681,7 +729,7 @@ class _LogPanelState extends State<LogPanel> {
 
 /// A compact pill showing the current filter; the choices open in a menu.
 /// An icon button like the others of the title bar: the icon of the one
-/// kind chosen, or the filter icon; the menu lets one pick several kinds.
+/// kind chosen, a partial-filter icon, or the all-filter icon.
 class _FilterBar extends StatelessWidget {
   const _FilterBar({required this.value, required this.onChanged});
   final _Filter value;
@@ -695,30 +743,12 @@ class _FilterBar extends StatelessWidget {
         MenuItemButton(
           closeOnActivate: false,
           onPressed: onTap,
-          style: MenuItemButton.styleFrom(
-            backgroundColor: on ? c.primarySoft : Colors.transparent,
-            foregroundColor: on ? c.primary : c.text,
-            iconColor: on ? c.primary : c.muted,
-            minimumSize: const Size(0, 36),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            textStyle: const TextStyle(fontSize: 13.5, fontFamily: uiFont, fontFamilyFallback: uiFallback),
-          ),
+          style: dropdownItemStyle(context, selected: on),
           leadingIcon: Icon(icon, size: 16),
           child: Text(label),
         );
     return MenuAnchor(
-      style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(c.surface),
-        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
-        padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: c.border),
-          ),
-        ),
-      ),
+      style: dropdownStyle(context),
       menuChildren: [
         item(
           icon: Icons.filter_list_rounded,
@@ -745,7 +775,13 @@ class _FilterBar extends StatelessWidget {
         onPressed: () => menu.isOpen ? menu.close() : menu.open(),
         iconSize: 19,
         color: active ? c.primary : null,
-        icon: Icon(value.kinds.length == 1 ? value.kinds.single.icon : Icons.filter_list_rounded),
+        icon: Icon(
+          value.isAll
+              ? Icons.filter_list_rounded
+              : value.kinds.length == 1
+              ? value.kinds.single.icon
+              : Icons.filter_alt_rounded,
+        ),
       ),
     );
   }
@@ -990,13 +1026,22 @@ class _WorkingLine extends StatelessWidget {
 }
 
 class _LogLine extends StatefulWidget {
-  const _LogLine(this.entry, {super.key, required this.agent, this.highlighted = false, this.onTap, this.indent = 0});
+  const _LogLine(
+    this.entry, {
+    super.key,
+    required this.agent,
+    this.highlighted = false,
+    this.onTap,
+    this.onSecondaryTap,
+    this.indent = 0,
+  });
   final LogEntry entry;
 
   /// Room on the left of the row: its highlight starts at its icon.
   final double indent;
   final bool highlighted;
   final VoidCallback? onTap;
+  final ValueChanged<Offset>? onSecondaryTap;
   final AgentKind agent;
 
   @override
@@ -1037,9 +1082,7 @@ class _LogLineState extends State<_LogLine> {
       LogKind.task || LogKind.result => MarkdownText(
         // Earlier versions put "Completato in …" before the summary; the
         // invocation header already shows those numbers.
-        (e.text.startsWith('Completato in ') || e.text.startsWith('Completed in ')) && e.text.contains('\n\n')
-            ? e.text.substring(e.text.indexOf('\n\n') + 2).trim()
-            : e.text,
+        _lineText(e),
         style: body,
       ),
       _ => Text(e.text, style: body),
@@ -1090,6 +1133,7 @@ class _LogLineState extends State<_LogLine> {
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         onTap: widget.onTap,
+        onSecondaryTapUp: (details) => widget.onSecondaryTap?.call(details.globalPosition),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           // The whole row greys on hover, as the progress tiles do.

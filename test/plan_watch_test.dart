@@ -12,7 +12,7 @@ void main() {
   testWidgets('the plan reloads by itself when its file changes', (tester) async {
     final dir = Directory.systemTemp.createTempSync('autoloop_watch_');
     final plan = File(p.join(dir.path, 'piano.md'))..writeAsStringSync('## Uno\nx\n## Due\ny\n');
-    SharedPreferences.setMockInitialValues({'workDir': dir.path, 'planPath': plan.path});
+    SharedPreferences.setMockInitialValues({'workDir': dir.path, 'planPath': plan.path, 'setupDone': true});
     final prefs = await SharedPreferences.getInstance();
     final engine = LoopEngine(LoopSettings());
     tester.view.physicalSize = const Size(1440, 900);

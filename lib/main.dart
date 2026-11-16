@@ -89,8 +89,6 @@ class _AutoLoopAppState extends State<AutoLoopApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    // Keyed by language: every page, popup and panel is built again in it.
-    key: ValueKey(appLang.value),
     title: 'AutoLoop',
     debugShowCheckedModeBanner: false,
     theme: buildTheme(Brightness.light),

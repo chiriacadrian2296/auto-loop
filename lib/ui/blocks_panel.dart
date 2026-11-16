@@ -4,6 +4,7 @@ import '../engine/loop_engine.dart';
 import '../engine/loop_state.dart';
 import '../engine/plan_parser.dart';
 import 'app_theme.dart';
+import 'dropdown_menu.dart';
 import 'section_title.dart';
 import '../l10n.dart';
 
@@ -32,8 +33,8 @@ int _blockSeconds(LoopEngine engine, PlanBlock b) {
 
 /// The status-changing actions available for a block in its current state.
 List<(String, IconData, BlockStatus)> _actionsFor(BlockStatus status) => [
-  if (status != BlockStatus.pending) (tr('Rimetti in coda', 'Queue again'), Icons.replay_rounded, BlockStatus.pending),
-  if (status != BlockStatus.done) (tr('Segna completato', 'Mark done'), Icons.check_rounded, BlockStatus.done),
+  if (status != BlockStatus.pending) (tr('Da fare', 'To do'), Icons.replay_rounded, BlockStatus.pending),
+  if (status != BlockStatus.done) (tr('Completato', 'Done'), Icons.check_rounded, BlockStatus.done),
   if (status == BlockStatus.pending) (tr('Salta', 'Skip'), Icons.redo_rounded, BlockStatus.skipped),
 ];
 
@@ -54,7 +55,7 @@ class BlocksPanel extends StatefulWidget {
     valueListenable: closed,
     builder: (context, value, _) => ExpandAllButton(
       allOpen: value.isEmpty,
-      onPressed: () => closed.value = value.isEmpty ? {for (final b in _Bucket.values) b.label} : {},
+      onPressed: () => closed.value = value.isEmpty ? {for (final b in _Bucket.values) b.name} : {},
     ),
   );
 
@@ -129,14 +130,13 @@ class _BlocksPanelState extends State<BlocksPanel> {
       _Bucket.todo => _greyDisc(c, Icons.more_horiz_rounded),
       _Bucket.skipped => _greyDisc(c, Icons.redo_rounded),
     };
-    final open = !_closed.contains(bucket.label);
+    final open = !_closed.contains(bucket.name);
     return Padding(
       padding: EdgeInsets.only(top: first ? 0 : 10, bottom: 2),
       child: SectionTitle(
         title: bucket.label,
         open: open,
-        onTap: () =>
-            BlocksPanel.closed.value = open ? {..._closed, bucket.label} : ({..._closed}..remove(bucket.label)),
+        onTap: () => BlocksPanel.closed.value = open ? {..._closed, bucket.name} : ({..._closed}..remove(bucket.name)),
         badge: badge,
         stats: [
           IconStat(
@@ -165,30 +165,27 @@ class _BlocksPanelState extends State<BlocksPanel> {
     final status = engine.blockState(block).status;
     final pause = engine.blockState(block).pauseAfter;
     final c = context.colors;
+    final items = <ActionMenuEntry<Object>>[
+      for (final (label, icon, target) in _actionsFor(status))
+        ActionMenuEntry(value: target, enabled: !engine.isActive, icon: icon, label: label),
+      if (status == BlockStatus.pending || status == BlockStatus.blocked)
+        ActionMenuEntry(
+          value: 'pause',
+          icon: Icons.pan_tool_outlined,
+          selected: pause,
+          label: pause ? tr('Togli pausa', 'Remove pause') : tr('Pausa dopo', 'Pause after'),
+        ),
+    ];
     final picked = await showMenu<Object>(
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
       color: c.surface,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: c.border),
-      ),
-      items: [
-        for (final (label, icon, target) in _actionsFor(status))
-          PopupMenuItem(value: target, height: 40, enabled: !engine.isActive, child: _MenuRow(icon, label)),
-        if (status == BlockStatus.pending || status == BlockStatus.blocked)
-          PopupMenuItem(
-            value: 'pause',
-            height: 40,
-            child: _MenuRow(
-              Icons.pan_tool_outlined,
-              pause
-                  ? tr('Non fermarti dopo questo blocco', 'Don\'t stop after this block')
-                  : tr('Fermati dopo questo blocco', 'Stop after this block'),
-            ),
-          ),
-      ],
+      elevation: 3,
+      menuPadding: dropdownPadding,
+      shape: dropdownShape(context),
+      constraints: BoxConstraints.tightFor(width: actionMenuWidth(context, items.map((item) => item.label))),
+      items: items,
     );
     if (!mounted || picked == null) return;
     if (picked is BlockStatus) engine.setBlockStatus(block, picked);
@@ -227,7 +224,7 @@ class _BlocksPanelState extends State<BlocksPanel> {
                     blocks,
                     first: bucket == _Bucket.values.firstWhere((x) => plan.blocks.any((b) => _bucketOf(b) == x)),
                   ),
-                  if (!_closed.contains(bucket.label))
+                  if (!_closed.contains(bucket.name))
                     for (final (k, b) in blocks.indexed)
                       _TimelineItem(
                         engine: engine,
@@ -252,30 +249,6 @@ class _BlocksPanelState extends State<BlocksPanel> {
                       ),
                 ],
             ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MenuRow extends StatelessWidget {
-  const _MenuRow(this.icon, this.label);
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Row(
-      children: [
-        Icon(icon, size: 17, color: c.muted),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13.5, color: c.text),
           ),
         ),
       ],
@@ -575,7 +548,7 @@ class _TimelineItemState extends State<_TimelineItem> {
       ),
     );
     // A click anywhere else drops the selection.
-    return selected ? TapRegion(onTapOutside: (_) => widget.onDeselect(), child: tile) : tile;
+    return selected ? TapRegion(groupId: BlocksPanel, onTapOutside: (_) => widget.onDeselect(), child: tile) : tile;
   }
 }
 

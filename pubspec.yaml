@@ -1,7 +1,7 @@
 name: auto_loop
 description: "AutoLoop: porta avanti un piano di sviluppo un blocco alla volta con Codex CLI o Claude Code."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.1.1+2
 
 environment:
   sdk: ^3.13.1

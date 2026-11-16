@@ -23,6 +23,7 @@ class SetupHooks {
     required this.planPath,
     required this.workDir,
     this.probe,
+    this.onStepChanged,
   });
 
   final LoopSettings settings;
@@ -31,20 +32,23 @@ class SetupHooks {
   final Future<void> Function() pickWorkDir;
   final String? Function() planPath;
   final String? Function() workDir;
+  final ValueChanged<int>? onStepChanged;
 
   /// Screenshots only: what the CLI checks find, without running anything
   /// (path, version, account).
   final (String?, String?, AccountStatus?) Function(AgentKind kind)? probe;
 }
 
-/// The first launch: choose the agent, find or install its CLI, sign in,
+/// The first launch: choose the language and agent, find or install its CLI, sign in,
 /// pick a plan. Every step can be skipped and done later from the panel.
-Future<void> showSetupWizard(BuildContext context, SetupHooks hooks, {int step = 0}) {
+Future<void> showSetupWizard(BuildContext context, SetupHooks hooks, {int step = -1}) {
   return showDialog<void>(
     context: context,
-    barrierDismissible: false,
-    barrierColor: Colors.black.withValues(alpha: 0.45),
-    builder: (_) => _SetupWizard(hooks: hooks, initialStep: step),
+    barrierColor: Colors.black.withValues(alpha: 0.35),
+    builder: (_) => ValueListenableBuilder(
+      valueListenable: appLang,
+      builder: (_, _, _) => _SetupWizard(hooks: hooks, initialStep: step),
+    ),
   );
 }
 
@@ -67,7 +71,7 @@ class _Cli {
 }
 
 class _SetupWizardState extends State<_SetupWizard> {
-  static final _steps = [
+  List<String> get _steps => [
     tr('Benvenuto', 'Welcome'),
     tr('Agente', 'Agent'),
     'CLI',
@@ -75,7 +79,7 @@ class _SetupWizardState extends State<_SetupWizard> {
     tr('Progetto', 'Project'),
   ];
 
-  late int _step = widget.initialStep;
+  late int _step = widget.initialStep.clamp(-1, _steps.length - 1);
   final _cli = {for (final k in AgentKind.values) k: _Cli()};
   bool _busy = false;
 
@@ -224,6 +228,11 @@ class _SetupWizardState extends State<_SetupWizard> {
 
   void _finish() => Navigator.of(context).pop();
 
+  void _goToStep(int step) {
+    setState(() => _step = step);
+    widget.hooks.onStepChanged?.call(step);
+  }
+
   // ------------------------------------------------------------ the frame
 
   @override
@@ -238,24 +247,63 @@ class _SetupWizardState extends State<_SetupWizard> {
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: c.border),
       ),
-      // One size for every step: the buttons stay where they are.
+      // The language choice is compact; the guided steps also fit the timeline.
       child: SizedBox(
-        width: 620,
+        width: _step < 0 ? 620 : 820,
         height: 540,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(28, 22, 28, 0),
-              child: _StepRail(steps: _steps, current: _step),
+              padding: const EdgeInsets.fromLTRB(28, 22, 28, 22),
+              child: Row(
+                children: [
+                  Icon(_step < 0 ? Icons.translate_rounded : Icons.tune_rounded, size: 26, color: c.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _step < 0 ? tr('Lingua', 'Language') : tr('Configurazione guidata', 'Guided setup'),
+                      style: TextStyle(color: c.text, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (_step >= 0)
+                    Text(
+                      tr('Passo ${_step + 1} di ${_steps.length}', 'Step ${_step + 1} of ${_steps.length}'),
+                      style: TextStyle(color: c.muted, fontSize: 12),
+                    ),
+                ],
+              ),
             ),
+            Divider(height: 1, color: c.border),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(28, 26, 28, 12),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: KeyedSubtree(key: ValueKey(_step), child: _body(context)),
-                ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_step >= 0) ...[
+                    SizedBox(
+                      width: 180,
+                      child: _SetupProgress(steps: _steps, current: _step),
+                    ),
+                    VerticalDivider(width: 1, color: c.border),
+                  ],
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeInOut,
+                      switchOutCurve: Curves.easeInOut,
+                      layoutBuilder: (currentChild, previousChildren) => Stack(
+                        alignment: Alignment.topLeft,
+                        fit: StackFit.expand,
+                        children: [...previousChildren, ?currentChild],
+                      ),
+                      child: SingleChildScrollView(
+                        key: ValueKey(_step),
+                        padding: const EdgeInsets.fromLTRB(28, 26, 28, 12),
+                        child: _body(context),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Divider(height: 1, color: c.border),
@@ -264,19 +312,29 @@ class _SetupWizardState extends State<_SetupWizard> {
               child: Row(
                 children: [
                   if (!last)
-                    TextButton(
-                      onPressed: _busy ? null : _finish,
-                      style: TextButton.styleFrom(foregroundColor: c.muted),
-                      child: Text(
-                        _step == 0
-                            ? tr('Salta, faccio da solo', 'Skip, I\'ll do it myself')
-                            : tr('Finisco dopo', 'Finish later'),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: _busy ? null : _finish,
+                          style: TextButton.styleFrom(foregroundColor: c.muted),
+                          child: Text(
+                            _step < 0
+                                ? tr('Chiudi', 'Close')
+                                : _step == 0
+                                ? tr('Salta, faccio da solo', 'Skip, I\'ll do it myself')
+                                : tr('Finisco dopo', 'Finish later'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ),
-                    ),
-                  const Spacer(),
-                  if (_step > 0) ...[
+                    )
+                  else
+                    const Spacer(),
+                  if (_step >= 0) ...[
                     OutlinedButton(
-                      onPressed: _busy ? null : () => setState(() => _step--),
+                      onPressed: _busy ? null : () => _goToStep(_step - 1),
                       style: OutlinedButton.styleFrom(
                         shape: const StadiumBorder(),
                         side: BorderSide(color: c.border),
@@ -287,8 +345,9 @@ class _SetupWizardState extends State<_SetupWizard> {
                     const SizedBox(width: 10),
                   ],
                   FilledButton(
-                    onPressed: _busy ? null : (last ? _finish : () => setState(() => _step++)),
+                    onPressed: _busy ? null : (last ? _finish : () => _goToStep(_step + 1)),
                     child: Text(switch (_step) {
+                      -1 => tr('Continua', 'Continue'),
                       0 => tr('Inizia', 'Get started'),
                       _ when last => tr('Fine', 'Done'),
                       _ => tr('Avanti', 'Next'),
@@ -304,6 +363,7 @@ class _SetupWizardState extends State<_SetupWizard> {
   }
 
   Widget _body(BuildContext context) => switch (_step) {
+    -1 => _language(context),
     0 => _welcome(context),
     1 => _agent(context),
     2 => _cliStep(context),
@@ -312,6 +372,20 @@ class _SetupWizardState extends State<_SetupWizard> {
   };
 
   // ------------------------------------------------------------ the steps
+
+  Widget _language(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Title(
+          tr('Scegli la lingua', 'Choose your language'),
+          tr('La useremo per guidarti nei prossimi passi.', 'We will use it to guide you through the next steps.'),
+        ),
+        const SizedBox(height: 20),
+        for (final language in AppLang.values) ...[_LanguageTile(language: language), const SizedBox(height: 10)],
+      ],
+    );
+  }
 
   Widget _welcome(BuildContext context) {
     final c = context.colors;
@@ -348,23 +422,6 @@ class _SetupWizardState extends State<_SetupWizard> {
             'Verifica e commit a ogni blocco, e la pausa quando vuoi controllare.',
             'Check and commit for every block, and a pause when you want to review.',
           ),
-        ),
-        const SizedBox(height: 6),
-        // The language, first of all: the whole app follows it.
-        Row(
-          children: [
-            Icon(Icons.translate_rounded, size: 18, color: c.muted),
-            const SizedBox(width: 10),
-            for (final l in AppLang.values) ...[
-              ChoiceChip(
-                label: Text(l.label),
-                selected: appLang.value == l,
-                showCheckmark: false,
-                onSelected: (_) => appLang.value = l,
-              ),
-              const SizedBox(width: 8),
-            ],
-          ],
         ),
       ],
     );
@@ -605,44 +662,175 @@ class _SetupWizardState extends State<_SetupWizard> {
 
 // ------------------------------------------------------------ pieces
 
-class _StepRail extends StatelessWidget {
-  const _StepRail({required this.steps, required this.current});
+class _SetupProgress extends StatelessWidget {
+  const _SetupProgress({required this.steps, required this.current});
   final List<String> steps;
   final int current;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Row(
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
       children: [
-        for (final (i, s) in steps.indexed) ...[
-          if (i > 0) Expanded(child: Container(height: 2, color: i <= current ? c.primary : c.border)),
-          Tooltip(
-            message: s,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 26,
-              height: 26,
-              alignment: Alignment.center,
+        for (final (index, title) in steps.indexed)
+          Semantics(
+            selected: index == current,
+            label: index < current ? tr('Completato', 'Completed') : null,
+            child: Container(
+              height: 64,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: i < current ? c.primary : (i == current ? c.primarySoft : c.field),
-                border: Border.all(color: i <= current ? c.primary : c.border, width: 1.5),
+                color: index == current ? c.primarySoft : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: i < current
-                  ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
-                  : Text(
-                      '${i + 1}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: i == current ? c.primary : c.muted,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 44,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Column(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                width: 2,
+                                color: index == 0
+                                    ? Colors.transparent
+                                    : index < current
+                                    ? c.success.withValues(alpha: 0.45)
+                                    : c.border,
+                              ),
+                            ),
+                            Expanded(
+                              child: Container(
+                                width: 2,
+                                color: index == steps.length - 1
+                                    ? Colors.transparent
+                                    : index < current
+                                    ? c.success.withValues(alpha: 0.45)
+                                    : c.border,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          width: index > current ? 29 : 26,
+                          height: index > current ? 29 : 26,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: index < current
+                                ? c.success
+                                : index == current
+                                ? c.surface
+                                : Color.alphaBlend(c.muted.withValues(alpha: 0.28), c.surface),
+                            border: index == current ? Border.all(color: c.primary, width: 2.4) : null,
+                          ),
+                          child: index < current
+                              ? Icon(Icons.check_rounded, size: 16, color: c.background)
+                              : Text(
+                                  '${index + 1}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    height: 1,
+                                    fontWeight: FontWeight.w700,
+                                    color: index == current ? c.primary : c.text.withValues(alpha: 0.8),
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4, right: 10),
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          height: 1.3,
+                          fontWeight: index == current ? FontWeight.w700 : FontWeight.w500,
+                          color: index > current ? c.muted : c.text,
+                        ),
                       ),
                     ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
       ],
+    );
+  }
+}
+
+class _LanguageTile extends StatelessWidget {
+  const _LanguageTile({required this.language});
+  final AppLang language;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final selected = appLang.value == language;
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+      side: BorderSide(color: selected ? c.primary : c.border, width: selected ? 1.5 : 1),
+    );
+    return Semantics(
+      selected: selected,
+      child: Material(
+        color: selected ? c.primarySoft : c.field,
+        shape: shape,
+        child: InkWell(
+          customBorder: shape,
+          onTap: () => appLang.value = language,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(10)),
+                  child: Text(
+                    language.name.toUpperCase(),
+                    style: TextStyle(color: c.primary, fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        language.label,
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.text),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        language == AppLang.it
+                            ? tr('Usa AutoLoop in italiano', 'Use AutoLoop in Italian')
+                            : tr('Usa AutoLoop in inglese', 'Use AutoLoop in English'),
+                        style: TextStyle(fontSize: 13, color: c.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                  size: 20,
+                  color: selected ? c.primary : c.muted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

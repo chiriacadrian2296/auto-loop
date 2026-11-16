@@ -8,6 +8,7 @@ import '../engine/plan_parser.dart';
 import '../engine/settings.dart';
 import 'app_theme.dart';
 import 'section_title.dart';
+import 'resizable_text_field.dart';
 import 'accounts_dialog.dart';
 import 'agent_badge.dart';
 import 'choice_dialog.dart';
@@ -52,8 +53,7 @@ class SettingsPanel extends StatelessWidget {
   /// When the loop starts: Piano, Agente and Account cannot change, so they
   /// close (they can still be opened to read them).
   static void collapseLocked() {
-    _Collapsible.open.value = {..._Collapsible.open.value}
-      ..removeAll([tr('Piano', 'Plan'), tr('Agente', 'Agent'), 'Account']);
+    _Collapsible.open.value = {..._Collapsible.open.value}..removeAll(['plan', 'agent', 'account']);
   }
 
   /// "Espandi tutto" / "Comprimi tutto" for the panel's title bar.
@@ -149,6 +149,7 @@ class SettingsPanel extends StatelessWidget {
                   // Expand/collapse-all is hidden for now; the button is kept below.
                   // Piano, Agente and Account cannot change while the loop runs.
                   _Collapsible(
+                    id: 'plan',
                     title: tr('Piano', 'Plan'),
                     summary: summaryPlan,
                     warning: issues.contains(tr('Piano', 'Plan')),
@@ -217,6 +218,7 @@ class SettingsPanel extends StatelessWidget {
                     ),
                   ),
                   _Collapsible(
+                    id: 'agent',
                     title: tr('Agente', 'Agent'),
                     summary: summaryAgent,
                     warning: issues.contains(tr('Agente', 'Agent')),
@@ -306,6 +308,7 @@ class SettingsPanel extends StatelessWidget {
                     ),
                   ),
                   _Collapsible(
+                    id: 'account',
                     title: 'Account',
                     summary: summaryAccount,
                     warning: issues.contains('Account'),
@@ -345,6 +348,7 @@ class SettingsPanel extends StatelessWidget {
                   if (locked) Padding(padding: EdgeInsets.only(top: 14), child: _RunningBanner()),
                   // Read again at every invocation: safe to change while running.
                   _Collapsible(
+                    id: 'relaunch',
                     title: tr('Richiamo', 'Relaunch'),
                     summary: summaryRecall,
                     child: Column(
@@ -357,6 +361,7 @@ class SettingsPanel extends StatelessWidget {
                             s.relaunchDelaySeconds,
                             (v) => s.relaunchDelaySeconds = v,
                             onChanged,
+                            id: 'relaunch-delay',
                           ),
                           _NumberField(
                             tr('Tentativi per blocco', 'Attempts per block'),
@@ -364,6 +369,7 @@ class SettingsPanel extends StatelessWidget {
                             s.maxAttemptsPerBlock,
                             (v) => s.maxAttemptsPerBlock = v,
                             onChanged,
+                            id: 'attempts',
                             min: 1,
                           ),
                         ),
@@ -374,6 +380,7 @@ class SettingsPanel extends StatelessWidget {
                             s.idleTimeoutMinutes,
                             (v) => s.idleTimeoutMinutes = v,
                             onChanged,
+                            id: 'idle-timeout',
                             min: 1,
                           ),
                           _NumberField(
@@ -382,6 +389,7 @@ class SettingsPanel extends StatelessWidget {
                             s.runTimeoutMinutes,
                             (v) => s.runTimeoutMinutes = v,
                             onChanged,
+                            id: 'run-timeout',
                             min: 1,
                           ),
                         ),
@@ -389,6 +397,7 @@ class SettingsPanel extends StatelessWidget {
                     ),
                   ),
                   _Collapsible(
+                    id: 'quota',
                     title: tr('Quota e budget', 'Quota and budget'),
                     summary: summaryQuota,
                     child: Column(
@@ -481,6 +490,7 @@ class SettingsPanel extends StatelessWidget {
                             s.quotaWaitMinutes,
                             (v) => s.quotaWaitMinutes = v,
                             onChanged,
+                            id: 'quota-retry',
                             min: 1,
                             enabled: s.quotaBehavior == QuotaBehavior.wait,
                           ),
@@ -490,12 +500,14 @@ class SettingsPanel extends StatelessWidget {
                             s.maxTotalTokens,
                             (v) => s.maxTotalTokens = v,
                             onChanged,
+                            id: 'token-budget',
                           ),
                         ),
                       ],
                     ),
                   ),
                   _Collapsible(
+                    id: 'end-of-block',
                     title: tr('Fine blocco', 'End of block'),
                     summary: summaryEnd,
                     child: Column(
@@ -503,9 +515,10 @@ class SettingsPanel extends StatelessWidget {
                       children: [
                         _Field(
                           label: tr('Comando di verifica', 'Check command'),
-                          child: TextFormField(
+                          child: ResizableTextField(
                             key: ValueKey('field-verify-$projectDir'),
                             initialValue: s.verifyCommand,
+                            minHeight: 54,
                             style: TextStyle(fontSize: 13, fontFamily: mono, fontFamilyFallback: monoFallback),
                             decoration: InputDecoration(hintText: tr('es. flutter test', 'e.g. flutter test')),
                             onChanged: (v) {
@@ -596,6 +609,7 @@ class SettingsPanel extends StatelessWidget {
                     ),
                   ),
                   _Collapsible(
+                    id: 'instructions',
                     title: tr('Istruzioni', 'Instructions'),
                     summary: summaryRules,
                     child: Column(
@@ -603,11 +617,10 @@ class SettingsPanel extends StatelessWidget {
                       children: [
                         _Field(
                           label: tr('Regole per ogni blocco', 'Rules for every block'),
-                          child: TextFormField(
+                          child: ResizableTextField(
                             key: ValueKey('field-instructions-$projectDir'),
                             initialValue: s.extraInstructions,
-                            minLines: 3,
-                            maxLines: 8,
+                            minHeight: 100,
                             style: TextStyle(fontSize: 13, height: 1.4),
                             decoration: InputDecoration(
                               hintText: tr('Stack, stile, cosa non toccare…', 'Stack, style, what not to touch…'),
@@ -642,17 +655,17 @@ String _shortPath(String path) {
 
 /// How far one click on a number field's arrows moves, chosen from the values
 /// people typically use for that field.
-final _fieldStep = <String, int>{
-  tr('Richiamo dopo', 'Relaunch after'): 10,
-  tr('Tentativi per blocco', 'Attempts per block'): 5,
-  tr('Silenzio max', 'Max silence'): 5,
-  tr('Durata max', 'Max duration'): 15,
-  tr('Riprova ogni', 'Retry every'): 15,
-  tr('Budget token', 'Token budget'): 500000,
+const _fieldStep = <String, int>{
+  'relaunch-delay': 10,
+  'attempts': 5,
+  'idle-timeout': 5,
+  'run-timeout': 15,
+  'quota-retry': 15,
+  'token-budget': 500000,
 };
 
 /// What the less obvious fields do, shown from the "i" next to their name.
-final _fieldInfo = <String, String>{
+Map<String, String> get _fieldInfo => {
   tr('Richiamo dopo', 'Relaunch after'): tr(
     'Pausa tra la fine di un\'invocazione dell\'agente e la successiva.',
     'Pause between the end of one agent invocation and the next.',
@@ -821,14 +834,15 @@ String _compactTokens(int n) => n >= 1000000
 /// A section that starts closed and shows a one-line summary of its
 /// settings; clicking the title opens it.
 class _Collapsible extends StatefulWidget {
-  const _Collapsible({
+  _Collapsible({
+    required this.id,
     required this.title,
     required this.summary,
     required this.child,
     this.warning = false,
     this.locked = false,
-  });
-  final String title, summary;
+  }) : super(key: ValueKey('settings-section-$id'));
+  final String id, title, summary;
   final Widget child;
 
   /// Something in this section prevents the loop from starting.
@@ -837,15 +851,7 @@ class _Collapsible extends StatefulWidget {
   /// The running loop cannot pick up changes here: shown dimmed, not editable.
   final bool locked;
 
-  static final all = [
-    tr('Piano', 'Plan'),
-    tr('Agente', 'Agent'),
-    'Account',
-    tr('Richiamo', 'Relaunch'),
-    tr('Quota e budget', 'Quota and budget'),
-    tr('Fine blocco', 'End of block'),
-    tr('Istruzioni', 'Instructions'),
-  ];
+  static const all = ['plan', 'agent', 'account', 'relaunch', 'quota', 'end-of-block', 'instructions'];
 
   // Shared by every section (and the expand/collapse-all button); survives
   // the list recycling sections that scroll out of view. Every section
@@ -857,11 +863,11 @@ class _Collapsible extends StatefulWidget {
 }
 
 class _CollapsibleState extends State<_Collapsible> {
-  bool get _isOpen => _Collapsible.open.value.contains(widget.title);
+  bool get _isOpen => _Collapsible.open.value.contains(widget.id);
 
   void _toggle() {
     final next = {..._Collapsible.open.value};
-    if (!next.remove(widget.title)) next.add(widget.title);
+    if (!next.remove(widget.id)) next.add(widget.id);
     _Collapsible.open.value = next;
   }
 
@@ -887,7 +893,7 @@ class _CollapsibleState extends State<_Collapsible> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: EdgeInsets.only(top: widget.title == _Collapsible.all.first ? 0 : 14),
+          padding: EdgeInsets.only(top: widget.id == _Collapsible.all.first ? 0 : 14),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -909,15 +915,17 @@ class _CollapsibleState extends State<_Collapsible> {
                             child: SectionChevron(open: open),
                           ),
                         ),
-                        // Section names are short: they keep their width and
-                        // the details on the right take what is left.
-                        Text(
-                          widget.title,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: widget.warning ? c.danger : c.text,
+                        Flexible(
+                          flex: 3,
+                          child: Text(
+                            widget.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: widget.warning ? c.danger : c.text,
+                            ),
                           ),
                         ),
                         if (widget.warning) ...[
@@ -990,7 +998,7 @@ class _AgentPicker extends StatelessWidget {
   static String? _short(String? version) =>
       version == null ? null : RegExp(r'\d+\.\d+\.\d+').firstMatch(version)?.group(0) ?? version;
 
-  static final _about = {
+  static Map<AgentKind, String> get _about => {
     AgentKind.codex: tr(
       'L\'agente di OpenAI, con il tuo account ChatGPT.',
       'OpenAI\'s agent, with your ChatGPT account.',
@@ -1228,7 +1236,7 @@ final _strategyIcon = {
   SplitStrategy.whole: Icons.article_outlined,
 };
 
-final _strategyInfo = <SplitStrategy, (String, String)>{
+Map<SplitStrategy, (String, String)> get _strategyInfo => {
   SplitStrategy.auto: (
     tr('Riconosce la struttura del file', 'Detects the file\'s structure'),
     tr(
@@ -1286,11 +1294,19 @@ class _Pair extends StatelessWidget {
 }
 
 class _NumberField extends StatefulWidget {
-  // Stable identity by label: fields appearing above (e.g. reasoning level)
+  // Stable identity across languages: fields appearing above (e.g. reasoning level)
   // must not hand this field another field's state.
-  _NumberField(this.label, this.unit, this.value, this.set, this.onChanged, {this.min = 0, this.enabled = true})
-    : super(key: ValueKey('number-$label'));
-  final String label, unit;
+  _NumberField(
+    this.label,
+    this.unit,
+    this.value,
+    this.set,
+    this.onChanged, {
+    required this.id,
+    this.min = 0,
+    this.enabled = true,
+  }) : super(key: ValueKey('number-$id'));
+  final String id, label, unit;
   final int value;
   final void Function(int) set;
   final VoidCallback onChanged;
@@ -1303,13 +1319,13 @@ class _NumberField extends StatefulWidget {
 
 class _NumberFieldState extends State<_NumberField> {
   late final _controller = TextEditingController(text: '${widget.value}');
-  String? _error;
+  bool _invalid = false;
 
   @override
   void didUpdateWidget(_NumberField old) {
     super.didUpdateWidget(old);
     // Follow external changes (e.g. per-project settings) unless mid-edit.
-    if (_error == null && int.tryParse(_controller.text) != widget.value) {
+    if (!_invalid && int.tryParse(_controller.text) != widget.value) {
       _controller.text = '${widget.value}';
     }
   }
@@ -1324,18 +1340,18 @@ class _NumberFieldState extends State<_NumberField> {
     final n = int.tryParse(text);
     setState(() {
       if (n == null) {
-        _error = tr('Inserisci un numero', 'Enter a number');
+        _invalid = true;
       } else if (n < widget.min) {
-        _error = tr('Minimo ${widget.min}', 'Minimum ${widget.min}');
+        _invalid = true;
       } else {
-        _error = null;
+        _invalid = false;
         widget.set(n);
         widget.onChanged();
       }
     });
   }
 
-  int get _increment => _fieldStep[widget.label] ?? 1;
+  int get _increment => _fieldStep[widget.id] ?? 1;
 
   /// Moves to the next multiple of the field's step (7 → 10 or 5 for a step
   /// of 5), never below the minimum.
@@ -1383,7 +1399,11 @@ class _NumberFieldState extends State<_NumberField> {
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         style: TextStyle(fontSize: 13.5, fontFeatures: [FontFeature.tabularFigures()]),
         decoration: InputDecoration(
-          errorText: _error,
+          errorText: !_invalid
+              ? null
+              : int.tryParse(_controller.text) == null
+              ? tr('Inserisci un numero', 'Enter a number')
+              : tr('Minimo ${widget.min}', 'Minimum ${widget.min}'),
           errorStyle: TextStyle(fontSize: 11, color: c.danger),
           suffixIcon: Padding(
             padding: EdgeInsets.only(right: 6),
@@ -1475,7 +1495,7 @@ class _ModelPicker extends StatelessWidget {
 }
 
 /// Plain-language meaning of each reasoning level, shared by both CLIs.
-final _effortInfo = <String, (String, String)>{
+Map<String, (String, String)> get _effortInfo => {
   'minimal': (
     tr('Minimo', 'Minimal'),
     tr('Quasi nessun ragionamento: il più veloce.', 'Almost no reasoning: the fastest.'),

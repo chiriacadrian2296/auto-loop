@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,6 +24,8 @@ import 'log_panel.dart';
 import 'logo.dart';
 import 'section_title.dart';
 import 'setup_wizard.dart';
+import 'reset_defaults_dialog.dart';
+import 'dropdown_menu.dart';
 import 'notifications.dart';
 import 'settings_panel.dart';
 import 'window_controls.dart';
@@ -72,7 +75,7 @@ class _HomePageState extends State<HomePage> {
     });
     if (_workDir != null && _planPath != null) _reload();
     // The first launch: a guided setup instead of an empty window.
-    if (!engine.demo && widget.prefs.getBool('setupDone') != true && _planPath == null) {
+    if (!engine.demo && widget.prefs.getBool('setupDone') != true) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _openSetup();
       });
@@ -189,7 +192,7 @@ class _HomePageState extends State<HomePage> {
     _saveSettings();
   }
 
-  /// The guided setup: agent, CLI, sign-in, plan.
+  /// The guided setup: language, agent, CLI, sign-in, plan.
   Future<void> _openSetup() async {
     await showSetupWizard(
       context,
@@ -203,6 +206,7 @@ class _HomePageState extends State<HomePage> {
         pickWorkDir: _pickWorkDir,
         planPath: () => _planPath,
         workDir: () => _workDir,
+        onStepChanged: (step) => widget.prefs.setInt('setupStep', step),
         probe: switch (HomePage.debugCliProbe) {
           final probe? => (kind) {
             final (version, account) = probe(kind);
@@ -211,6 +215,7 @@ class _HomePageState extends State<HomePage> {
           null => null,
         },
       ),
+      step: widget.prefs.getInt('setupStep') ?? -1,
     );
     await widget.prefs.setBool('setupDone', true);
     if (!mounted) return;
@@ -230,24 +235,7 @@ class _HomePageState extends State<HomePage> {
   /// Puts the project's settings back to their starting values, after
   /// asking. The agent and its account stay as they are.
   Future<void> _resetDefaults() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(tr('Ripristinare le impostazioni predefinite?', 'Restore the default settings?')),
-        content: Text(
-          tr(
-            'Modello, ragionamento, permessi, richiamo, quota, verifica, commit, suddivisione e istruzioni '
-                'tornano ai valori di partenza per questo progetto. Agente e account restano '
-                '${engine.settings.agent.label} e il profilo scelto.',
-            'Model, reasoning, permissions, relaunch, quota, check, commit, splitting and instructions go back to their starting values for this project. Agent and account stay ${engine.settings.agent.label} and the chosen profile.',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Annulla', 'Cancel'))),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Ripristina', 'Restore'))),
-        ],
-      ),
-    );
+    final ok = await showResetDefaultsDialog(context, agent: engine.settings.agent.label);
     if (ok != true || !mounted) return;
     final s = engine.settings;
     final keep = (s.agent, s.profileId);
@@ -451,6 +439,7 @@ class _HomePageState extends State<HomePage> {
 
   /// The line chosen in the activity panel or the strip at the bottom.
   final _selection = ActivitySelection();
+  final _languageButtonKey = GlobalKey();
 
   // The control panel no longer closes (the rail is kept for now).
   late bool _sidebarOpen = true;
@@ -525,10 +514,11 @@ class _HomePageState extends State<HomePage> {
   (String, String, VoidCallback)? _demoBlocker;
 
   /// Demo only: the state chosen in the demo menu.
-  String _demoState = tr('Pronto', 'Ready');
+  int _demoStateIndex = 0;
+  String get _demoState => _demoStates[_demoStateIndex].$1;
 
   /// The states the demo menu can show, all made up: nothing runs.
-  late final _demoStates = <(String, IconData, VoidCallback)>[
+  List<(String, IconData, VoidCallback)> get _demoStates => [
     (tr('Pronto', 'Ready'), Icons.play_circle_outline_rounded, () => engine.demoShow(LoopPhase.idle)),
     (
       tr('Primo avvio', 'First launch'),
@@ -622,9 +612,12 @@ class _HomePageState extends State<HomePage> {
   ];
 
   void _showDemoState(String name) {
-    final entry = _demoStates.firstWhere((e) => e.$1 == name);
+    final states = _demoStates;
+    final index = states.indexWhere((e) => e.$1 == name);
+    if (index < 0) return;
+    final entry = states[index];
     setState(() {
-      _demoState = name;
+      _demoStateIndex = index;
       _demoBlocker = null;
       entry.$3();
     });
@@ -672,12 +665,18 @@ class _HomePageState extends State<HomePage> {
     final active = engine.isActive;
     final blocker = active ? null : _blocker();
     return Scaffold(
-      // A click anywhere drops the chosen line; a click on a line (or on
+      // A primary click anywhere drops the chosen line; a click on a line (or on
       // the map) then chooses it again.
       body: Listener(
         behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) {
-          _selection.clearForClick();
+        onPointerDown: (event) {
+          final languageButton = _languageButtonKey.currentContext?.findRenderObject();
+          if (languageButton is RenderBox &&
+              languageButton.hasSize &&
+              (languageButton.localToGlobal(Offset.zero) & languageButton.size).contains(event.position)) {
+            return;
+          }
+          if ((event.buttons & kPrimaryMouseButton) != 0) _selection.clearForClick();
         },
         child: DropTarget(
           onDragEntered: (_) => setState(() => _dragging = true),
@@ -688,6 +687,7 @@ class _HomePageState extends State<HomePage> {
               Column(
                 children: [
                   _TopBar(
+                    languageButtonKey: _languageButtonKey,
                     themeMode: widget.themeMode.value,
                     onThemeChanged: (m) => widget.themeMode.value = m,
                     // In the demo, a menu to see the window in each state.
@@ -866,9 +866,10 @@ class _HomePageState extends State<HomePage> {
 
 /// The window's title bar: the app's name, and the window buttons.
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.themeMode, required this.onThemeChanged, this.demo});
+  const _TopBar({required this.themeMode, required this.onThemeChanged, required this.languageButtonKey, this.demo});
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final GlobalKey languageButtonKey;
 
   /// The demo's state menu, next to the name.
   final Widget? demo;
@@ -901,7 +902,13 @@ class _TopBar extends StatelessWidget {
         // Window frame: the theme switch sits with the window buttons.
         WindowButtons(
           leading: [
-            const LanguageCaptionButton(),
+            TapRegion(
+              groupId: SelectableRegion,
+              child: TapRegion(
+                groupId: BlocksPanel,
+                child: TextFieldTapRegion(child: LanguageCaptionButton(key: languageButtonKey)),
+              ),
+            ),
             ThemeCaptionButton(mode: themeMode, onChanged: onThemeChanged),
           ],
         ),
@@ -1311,30 +1318,12 @@ class _DemoMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return MenuAnchor(
-      style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(c.surface),
-        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
-        padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: c.border),
-          ),
-        ),
-      ),
+      style: dropdownStyle(context),
       menuChildren: [
         for (final (name, icon) in states)
           MenuItemButton(
             onPressed: () => onChanged(name),
-            style: MenuItemButton.styleFrom(
-              backgroundColor: name == current ? c.primarySoft : Colors.transparent,
-              foregroundColor: name == current ? c.primary : c.text,
-              iconColor: name == current ? c.primary : c.muted,
-              minimumSize: const Size(0, 36),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(fontSize: 13.5, fontFamily: uiFont, fontFamilyFallback: uiFallback),
-            ),
+            style: dropdownItemStyle(context, selected: name == current),
             leadingIcon: Icon(icon, size: 16),
             child: Text(name),
           ),
